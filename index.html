@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ColdCall — Never miss another service call</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#14202B;
+    --base:#EDEEE9;
+    --card:#FFFFFF;
+    --teal:#1F7A6C;
+    --teal-dark:#123B34;
+    --orange:#E8622C;
+    --steel:#7C8A93;
+    --steel-light:#C9D0D3;
+    --line: rgba(20,32,43,0.14);
+    --line-soft: rgba(20,32,43,0.08);
+    --display: 'Barlow Condensed', sans-serif;
+    --body: 'IBM Plex Sans', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--base);
+    color:var(--ink);
+    font-family:var(--body);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  img,svg{display:block; max-width:100%;}
+  a{color:inherit; text-decoration:none;}
+  ul{list-style:none;}
+  .wrap{max-width:1180px; margin:0 auto; padding:0 28px;}
+  h1,h2,h3,h4{font-family:var(--display); font-weight:700; letter-spacing:0.005em; line-height:1.02;}
+  .eyebrow{
+    font-family:var(--mono); font-size:12.5px; letter-spacing:0.14em; text-transform:uppercase;
+    color:var(--teal-dark); font-weight:500; display:inline-flex; align-items:center; gap:9px;
+  }
+  .eyebrow::before{content:""; width:16px; height:1.5px; background:var(--orange); display:inline-block;}
+  :focus-visible{outline:2.5px solid var(--orange); outline-offset:3px;}
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; scroll-behavior:auto !important;}
+  }
+
+  /* ---------- NAV ---------- */
+  header{
+    position:sticky; top:0; z-index:50;
+    background:rgba(237,238,233,0.92); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  nav{display:flex; align-items:center; justify-content:space-between; padding:18px 28px; max-width:1180px; margin:0 auto;}
+  .logo{font-family:var(--display); font-weight:800; font-size:24px; letter-spacing:0.01em; display:flex; align-items:center; gap:8px;}
+  .logo .dot{width:9px; height:9px; border-radius:50%; background:var(--orange);}
+  .nav-links{display:flex; gap:34px; font-size:14.5px; font-weight:500;}
+  .nav-links a{opacity:0.75; transition:opacity 0.15s;}
+  .nav-links a:hover{opacity:1;}
+  .btn{
+    font-family:var(--body); font-weight:600; font-size:14.5px;
+    padding:11px 22px; border-radius:3px; display:inline-block; cursor:pointer; border:none;
+    transition:transform 0.15s ease, background 0.15s ease;
+  }
+  .btn-primary{background:var(--ink); color:var(--base);}
+  .btn-primary:hover{background:var(--teal-dark);}
+  .btn-orange{background:var(--orange); color:#fff;}
+  .btn-orange:hover{transform:translateY(-1px);}
+  .btn-ghost{border:1.5px solid var(--ink); color:var(--ink);}
+
+  /* ---------- HERO ---------- */
+  .hero{padding:76px 0 90px;}
+  .hero-grid{display:grid; grid-template-columns:1.05fr 0.95fr; gap:56px; align-items:center;}
+  .hero h1{font-size:clamp(40px,5vw,64px); margin:18px 0 22px; color:var(--ink);}
+  .hero h1 em{font-style:normal; color:var(--teal-dark); position:relative;}
+  .hero p.lead{font-size:18px; color:#3B4650; max-width:480px; margin-bottom:32px;}
+  .hero-ctas{display:flex; gap:14px; align-items:center; flex-wrap:wrap;}
+  .hero-note{font-family:var(--mono); font-size:12.5px; color:var(--steel); margin-top:16px;}
+
+  /* ticket */
+  .ticket-wrap{position:relative;}
+  .ticket{
+    background:var(--card); border:1.5px dashed var(--steel-light); border-radius:2px;
+    padding:26px 26px 22px; position:relative; box-shadow:0 22px 50px -18px rgba(20,32,43,0.28);
+    transform:rotate(-1.1deg);
+  }
+  .ticket::before, .ticket::after{
+    content:""; position:absolute; width:20px; height:20px; background:var(--base);
+    border-radius:50%; top:50%; transform:translateY(-50%);
+  }
+  .ticket::before{left:-10px;}
+  .ticket::after{right:-10px;}
+  .ticket-head{display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1.5px dashed var(--steel-light); padding-bottom:14px; margin-bottom:16px;}
+  .ticket-head .tt{font-family:var(--mono); font-size:11.5px; color:var(--steel); letter-spacing:0.08em; text-transform:uppercase;}
+  .ticket-head .num{font-family:var(--mono); font-size:14px; font-weight:600; color:var(--ink);}
+  .msg-bubble{
+    background:var(--base); border-radius:12px 12px 12px 3px; padding:12px 14px; font-size:14.5px;
+    max-width:88%; margin-bottom:16px; min-height:20px; color:var(--ink);
+    font-family:var(--body);
+  }
+  .msg-bubble .caret{display:inline-block; width:2px; height:14px; background:var(--ink); vertical-align:middle; margin-left:2px; animation:blink 1s step-end infinite;}
+  @keyframes blink{50%{opacity:0;}}
+  .ticket-fields{display:grid; grid-template-columns:1fr 1fr; gap:10px 16px; margin-bottom:18px;}
+  .field{opacity:0; transform:translateY(6px); transition:opacity 0.4s ease, transform 0.4s ease;}
+  .field.show{opacity:1; transform:translateY(0);}
+  .field .k{font-family:var(--mono); font-size:10.5px; color:var(--steel); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:2px;}
+  .field .v{font-family:var(--mono); font-size:13.5px; font-weight:600; color:var(--ink);}
+  .stamp-row{display:flex; justify-content:flex-end; position:relative; height:46px;}
+  .stamp{
+    font-family:var(--display); font-weight:800; font-size:20px; letter-spacing:0.06em;
+    color:var(--orange); border:2.5px solid var(--orange); border-radius:4px; padding:5px 14px;
+    transform:rotate(-6deg) scale(0); opacity:0; transition:transform 0.35s cubic-bezier(.34,1.56,.64,1), opacity 0.25s;
+  }
+  .stamp.show{transform:rotate(-6deg) scale(1); opacity:1;}
+  .ticket-under{
+    position:absolute; inset:10px -10px -10px 10px; background:var(--steel-light);
+    border-radius:2px; z-index:-1;
+  }
+
+  /* ---------- PROBLEM ---------- */
+  .problem{padding:80px 0; background:var(--ink); color:var(--base);}
+  .problem .eyebrow{color:var(--orange);}
+  .problem .eyebrow::before{background:var(--orange);}
+  .problem h2{color:#fff; font-size:clamp(30px,3.6vw,44px); max-width:640px; margin:16px 0 46px;}
+  .log{border-top:1px solid rgba(237,238,233,0.18);}
+  .log-row{
+    display:grid; grid-template-columns:100px 1fr 160px; gap:20px; align-items:baseline;
+    padding:20px 0; border-bottom:1px solid rgba(237,238,233,0.18);
+  }
+  .log-row .tag{font-family:var(--mono); font-size:12px; color:var(--orange); letter-spacing:0.06em;}
+  .log-row .desc{font-size:17px; color:#DCE0DD;}
+  .log-row .cost{font-family:var(--mono); font-size:13px; color:var(--steel-light); text-align:right;}
+
+  /* ---------- HOW IT WORKS ---------- */
+  .how{padding:90px 0;}
+  .how-head{max-width:600px; margin-bottom:56px;}
+  .how h2{font-size:clamp(30px,3.6vw,44px); margin-top:16px;}
+  .steps{display:grid; grid-template-columns:repeat(5,1fr); gap:0; position:relative;}
+  .steps::before{
+    content:""; position:absolute; top:22px; left:0; right:0; height:1.5px;
+    background:repeating-linear-gradient(to right, var(--steel-light) 0 8px, transparent 8px 14px);
+  }
+  .step{position:relative; padding-right:18px;}
+  .step .n{
+    font-family:var(--mono); font-weight:600; font-size:13px; width:44px; height:44px; border-radius:50%;
+    background:var(--base); border:1.5px solid var(--ink); display:flex; align-items:center; justify-content:center;
+    margin-bottom:20px; position:relative; z-index:1;
+  }
+  .step h4{font-size:21px; margin-bottom:8px;}
+  .step p{font-size:14.5px; color:#4B5560;}
+
+  /* ---------- FEATURES ---------- */
+  .features{padding:90px 0; background:var(--card); border-top:1px solid var(--line); border-bottom:1px solid var(--line);}
+  .features-head{max-width:600px; margin-bottom:50px;}
+  .features-head h2{font-size:clamp(30px,3.6vw,44px); margin-top:16px;}
+  .fgrid{display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--line);}
+  .fcard{background:var(--card); padding:34px 32px;}
+  .fcard .mark{font-family:var(--mono); font-size:12px; color:var(--teal-dark); margin-bottom:14px;}
+  .fcard h4{font-size:22px; margin-bottom:10px;}
+  .fcard p{font-size:14.5px; color:#4B5560; max-width:420px;}
+
+  /* ---------- PRICING ---------- */
+  .pricing{padding:90px 0;}
+  .pricing-head{max-width:600px; margin-bottom:50px;}
+  .pricing-head h2{font-size:clamp(30px,3.6vw,44px); margin-top:16px;}
+  .ptiers{display:grid; grid-template-columns:repeat(3,1fr); gap:22px;}
+  .ptier{
+    background:var(--card); border:1.5px solid var(--line); border-radius:4px; padding:32px 28px;
+    display:flex; flex-direction:column;
+  }
+  .ptier.mid{border-color:var(--ink); box-shadow:0 18px 40px -22px rgba(20,32,43,0.35);}
+  .ptier .plabel{font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:0.1em; color:var(--steel); margin-bottom:14px;}
+  .ptier .pmid-flag{background:var(--orange); color:#fff; font-family:var(--mono); font-size:10.5px; padding:3px 9px; border-radius:2px; letter-spacing:0.06em; display:inline-block; margin-bottom:14px;}
+  .ptier .price{font-family:var(--display); font-weight:700; font-size:44px; margin-bottom:2px;}
+  .ptier .price span{font-family:var(--mono); font-weight:400; font-size:14px; color:var(--steel);}
+  .ptier .pdesc{font-size:14px; color:#4B5560; margin-bottom:22px;}
+  .ptier ul{margin-bottom:26px; flex-grow:1;}
+  .ptier li{font-size:14px; padding:9px 0; border-top:1px solid var(--line-soft); display:flex; gap:10px;}
+  .ptier li:first-child{border-top:none;}
+  .ptier li::before{content:"—"; color:var(--teal-dark); flex-shrink:0;}
+  .pricing-note{font-family:var(--mono); font-size:12.5px; color:var(--steel); margin-top:22px;}
+
+  /* ---------- FAQ ---------- */
+  .faq{padding:90px 0; background:var(--card); border-top:1px solid var(--line);}
+  .faq-inner{display:grid; grid-template-columns:0.8fr 1.2fr; gap:56px;}
+  .faq-head h2{font-size:clamp(30px,3.6vw,44px); margin-top:16px; margin-bottom:14px;}
+  .faq-head p{color:#4B5560; font-size:15px; max-width:340px;}
+  .qa{border-top:1px solid var(--line);}
+  .qa-item{border-bottom:1px solid var(--line);}
+  .qa-q{
+    width:100%; text-align:left; background:none; border:none; padding:22px 0; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center; gap:20px; font-family:var(--body);
+    font-size:16.5px; font-weight:600; color:var(--ink);
+  }
+  .qa-q .plus{font-family:var(--mono); font-size:20px; color:var(--orange); flex-shrink:0; transition:transform 0.2s;}
+  .qa-item.open .plus{transform:rotate(45deg);}
+  .qa-a{max-height:0; overflow:hidden; transition:max-height 0.3s ease;}
+  .qa-a p{font-size:14.5px; color:#4B5560; padding-bottom:22px; max-width:520px;}
+
+  /* ---------- CTA BAND ---------- */
+  .band{background:var(--teal-dark); color:#fff; padding:80px 0; text-align:center;}
+  .band h2{font-size:clamp(30px,4vw,46px); margin-bottom:16px;}
+  .band p{color:#C9D9D5; font-size:16px; max-width:480px; margin:0 auto 32px;}
+
+  /* ---------- FOOTER ---------- */
+  footer{background:var(--ink); color:var(--steel-light); padding:44px 0 30px;}
+  .foot-grid{display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px; padding-bottom:26px; border-bottom:1px solid rgba(237,238,233,0.14);}
+  .foot-logo{font-family:var(--display); font-weight:800; font-size:20px; color:#fff;}
+  .foot-links{display:flex; gap:26px; font-size:13.5px;}
+  .foot-links a:hover{color:#fff;}
+  .foot-bottom{padding-top:22px; font-family:var(--mono); font-size:11.5px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+
+  .reveal{opacity:0; transform:translateY(16px); transition:opacity 0.6s ease, transform 0.6s ease;}
+  .reveal.in{opacity:1; transform:translateY(0);}
+
+  /* ---------- RESPONSIVE ---------- */
+  @media (max-width:900px){
+    .hero-grid{grid-template-columns:1fr; gap:48px;}
+    .hero{padding:52px 0 60px;}
+    .steps{grid-template-columns:1fr 1fr; row-gap:36px;}
+    .steps::before{display:none;}
+    .fgrid{grid-template-columns:1fr;}
+    .ptiers{grid-template-columns:1fr;}
+    .faq-inner{grid-template-columns:1fr;}
+    .log-row{grid-template-columns:70px 1fr; grid-template-areas:"tag desc" ". cost";}
+    .log-row .cost{text-align:left;}
+    .nav-links{display:none;}
+  }
+  @media (max-width:560px){
+    .wrap{padding:0 20px;}
+    .ticket{transform:none;}
+    .ticket-fields{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <nav>
+    <div class="logo"><span class="dot"></span>ColdCall</div>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <a href="#get-started" class="btn btn-primary">Get started</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Built for AC service &amp; repair businesses</span>
+      <h1>The call that goes to voicemail<br>is <em>business for someone else.</em></h1>
+      <p class="lead">ColdCall answers every service request on WhatsApp, books the job, reminds the customer, and brings them back next season — while you're on a roof somewhere fixing a compressor.</p>
+      <div class="hero-ctas">
+        <a href="#get-started" class="btn btn-orange">Book a demo</a>
+        <a href="#how" class="btn btn-ghost">See how it works</a>
+      </div>
+      <p class="hero-note">NO APP FOR CUSTOMERS TO DOWNLOAD — RUNS WHERE THEY ALREADY MESSAGE YOU</p>
+    </div>
+    <div class="ticket-wrap">
+      <div class="ticket-under"></div>
+      <div class="ticket">
+        <div class="ticket-head">
+          <span class="tt">Service Ticket</span>
+          <span class="num" id="ticketNum">#00184</span>
+        </div>
+        <div class="msg-bubble" id="msgBubble"></div>
+        <div class="ticket-fields" id="ticketFields">
+          <div class="field" data-k="ISSUE" data-v="No cooling">
+            <div class="k">Issue</div><div class="v"></div>
+          </div>
+          <div class="field" data-k="TYPE" data-v="Split AC, 1.5T">
+            <div class="k">Type</div><div class="v"></div>
+          </div>
+          <div class="field" data-k="AREA" data-v="Kondapur">
+            <div class="k">Area</div><div class="v"></div>
+          </div>
+          <div class="field" data-k="SLOT" data-v="Today, 5–6 PM">
+            <div class="k">Slot</div><div class="v"></div>
+          </div>
+        </div>
+        <div class="stamp-row"><div class="stamp" id="stamp">CONFIRMED</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="problem">
+  <div class="wrap">
+    <span class="eyebrow">What it's costing you</span>
+    <h2 class="reveal">Every one of these is a real job. Most shops lose two or three a week without noticing.</h2>
+    <div class="log">
+      <div class="log-row reveal"><span class="tag">08:14 AM</span><span class="desc">Call from unknown number. Nobody free to pick up. No callback.</span><span class="cost">Lost booking</span></div>
+      <div class="log-row reveal"><span class="tag">11:40 AM</span><span class="desc">Customer messaged on WhatsApp. Seen at 4 PM. Already booked elsewhere.</span><span class="cost">Lost booking</span></div>
+      <div class="log-row reveal"><span class="tag">02:00 PM</span><span class="desc">Technician reached the address — customer forgot and stepped out.</span><span class="cost">Wasted visit</span></div>
+      <div class="log-row reveal"><span class="tag">6 months</span><span class="desc">Last year's AMC customer never got a reminder. Renewed with a competitor.</span><span class="cost">Lost renewal</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="how" id="how">
+  <div class="wrap">
+    <div class="how-head">
+      <span class="eyebrow">The loop</span>
+      <h2 class="reveal">One conversation, five things handled automatically.</h2>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><div class="n">01</div><h4>Capture</h4><p>Customer messages on WhatsApp — any language, any time. Nothing goes unanswered.</p></div>
+      <div class="step reveal"><div class="n">02</div><h4>Triage</h4><p>Bot asks what's wrong, AC type, and urgency — so the right technician brings the right parts.</p></div>
+      <div class="step reveal"><div class="n">03</div><h4>Schedule</h4><p>Checks technician availability and offers real slots. No back-and-forth calls.</p></div>
+      <div class="step reveal"><div class="n">04</div><h4>Remind</h4><p>Confirmation on booking, reminder before the visit. Fewer no-shows, fewer wasted trips.</p></div>
+      <div class="step reveal"><div class="n">05</div><h4>Renew</h4><p>Logs the service history and messages the customer when the next AMC or checkup is due.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="features" id="features">
+  <div class="wrap">
+    <div class="features-head">
+      <span class="eyebrow">What you get</span>
+      <h2 class="reveal">Not a chatbot. A booking desk that never clocks out.</h2>
+    </div>
+    <div class="fgrid">
+      <div class="fcard reveal">
+        <div class="mark">01 — INTAKE</div>
+        <h4>Runs on WhatsApp, not a new app</h4>
+        <p>Customers already message you there. ColdCall answers on your existing business number — nobody has to download anything.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="mark">02 — LANGUAGE</div>
+        <h4>Speaks Hindi, Telugu, Tamil, and English</h4>
+        <p>Customers write however they're comfortable. The bot understands and replies in kind.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="mark">03 — DISPATCH</div>
+        <h4>A simple board for your technicians</h4>
+        <p>Today's jobs, addresses, and issue notes in one place — no more relaying details over a phone call.</p>
+      </div>
+      <div class="fcard reveal">
+        <div class="mark">04 — RETENTION</div>
+        <h4>Service history that renews itself</h4>
+        <p>Every visit is logged automatically. When an AMC or checkup is due, the customer hears from you first — not a competitor.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="pricing">
+  <div class="wrap">
+    <div class="pricing-head">
+      <span class="eyebrow">Pricing</span>
+      <h2 class="reveal">Priced like a subscription, because your AMC business already is one.</h2>
+    </div>
+    <div class="ptiers">
+      <div class="ptier reveal">
+        <span class="plabel">Starter</span>
+        <div class="price">₹2,000<span>/month</span></div>
+        <p class="pdesc">One technician, one service area.</p>
+        <ul>
+          <li>WhatsApp booking &amp; triage</li>
+          <li>Slot scheduling &amp; reminders</li>
+          <li>Up to 150 conversations/month</li>
+          <li>Basic dispatch sheet</li>
+        </ul>
+        <a href="#get-started" class="btn btn-ghost">Get started</a>
+      </div>
+      <div class="ptier mid reveal">
+        <span class="pmid-flag">Most common</span>
+        <span class="plabel">Growth</span>
+        <div class="price">₹4,500<span>/month</span></div>
+        <p class="pdesc">Up to 5 technicians, full area coverage.</p>
+        <ul>
+          <li>Everything in Starter</li>
+          <li>AMC &amp; renewal reminders</li>
+          <li>Multi-technician dispatch board</li>
+          <li>Hindi, Telugu &amp; Tamil support</li>
+          <li>Up to 800 conversations/month</li>
+        </ul>
+        <a href="#get-started" class="btn btn-primary">Get started</a>
+      </div>
+      <div class="ptier reveal">
+        <span class="plabel">Multi-branch</span>
+        <div class="price">Custom</div>
+        <p class="pdesc">Multiple locations or franchise network.</p>
+        <ul>
+          <li>Everything in Growth</li>
+          <li>Branch-wise routing &amp; reporting</li>
+          <li>Priority setup &amp; support</li>
+        </ul>
+        <a href="#get-started" class="btn btn-ghost">Talk to us</a>
+      </div>
+    </div>
+    <p class="pricing-note">ONE-TIME SETUP: ₹5,000–10,000 DEPENDING ON WHATSAPP BUSINESS API CONFIGURATION</p>
+  </div>
+</section>
+
+<section class="faq" id="faq">
+  <div class="wrap faq-inner">
+    <div class="faq-head">
+      <span class="eyebrow">Questions</span>
+      <h2>Before you switch off your landline.</h2>
+      <p>Everything shop owners usually ask before onboarding.</p>
+    </div>
+    <div class="qa">
+      <div class="qa-item open">
+        <button class="qa-q"><span>Do I need to change my business number?</span><span class="plus">+</span></button>
+        <div class="qa-a"><p>No. ColdCall connects to your existing WhatsApp Business number through the official WhatsApp Business API — customers message the same number they already have saved.</p></div>
+      </div>
+      <div class="qa-item">
+        <button class="qa-q"><span>What happens if the bot can't handle a question?</span><span class="plus">+</span></button>
+        <div class="qa-a"><p>It hands the conversation to you or your staff directly, with the full context already captured — no customer has to repeat themselves.</p></div>
+      </div>
+      <div class="qa-item">
+        <button class="qa-q"><span>Does it work for pest control, RO, or appliance repair too?</span><span class="plus">+</span></button>
+        <div class="qa-a"><p>Yes — the same booking and renewal engine is built for any AMC-based service business. AC is where we started.</p></div>
+      </div>
+      <div class="qa-item">
+        <button class="qa-q"><span>How long does setup take?</span><span class="plus">+</span></button>
+        <div class="qa-a"><p>Typically 2–4 weeks, most of it spent on WhatsApp Business API approval rather than the bot itself.</p></div>
+      </div>
+      <div class="qa-item">
+        <button class="qa-q"><span>Can I see my team's bookings, or is it just for customers?</span><span class="plus">+</span></button>
+        <div class="qa-a"><p>Both. You and your technicians get a simple dispatch view of every job, while customers only ever see the WhatsApp conversation.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band" id="get-started">
+  <div class="wrap">
+    <h2>Stop losing jobs to a busy line.</h2>
+    <p>Tell us about your business and we'll set up a walkthrough with your actual service flow.</p>
+    <a href="#" class="btn btn-orange">Book a demo</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-logo">ColdCall</div>
+      <div class="foot-links">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>BUILT FOR AC, PEST CONTROL &amp; APPLIANCE SERVICE BUSINESSES</span>
+      <span>© 2026 COLDCALL</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Reveal on scroll
+  const revealEls = document.querySelectorAll('.reveal');
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
+  }, {threshold:0.15});
+  revealEls.forEach(el=>io.observe(el));
+
+  // FAQ accordion
+  document.querySelectorAll('.qa-item').forEach(item=>{
+    const q = item.querySelector('.qa-q');
+    const a = item.querySelector('.qa-a');
+    if(item.classList.contains('open')){ a.style.maxHeight = a.scrollHeight + 'px'; }
+    q.addEventListener('click', ()=>{
+      const isOpen = item.classList.contains('open');
+      document.querySelectorAll('.qa-item.open').forEach(o=>{
+        if(o !== item){ o.classList.remove('open'); o.querySelector('.qa-a').style.maxHeight = 0; }
+      });
+      if(isOpen){ item.classList.remove('open'); a.style.maxHeight = 0; }
+      else{ item.classList.add('open'); a.style.maxHeight = a.scrollHeight + 'px'; }
+    });
+  });
+
+  // Hero ticket animation sequence
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const bubble = document.getElementById('msgBubble');
+  const fields = document.querySelectorAll('#ticketFields .field');
+  const stamp = document.getElementById('stamp');
+  const fullMsg = "AC nahi thanda ho raha, please help";
+
+  function typeMessage(cb){
+    bubble.innerHTML = '<span class="txt"></span><span class="caret"></span>';
+    const txt = bubble.querySelector('.txt');
+    let i = 0;
+    const iv = setInterval(()=>{
+      txt.textContent = fullMsg.slice(0, i+1);
+      i++;
+      if(i >= fullMsg.length){ clearInterval(iv); setTimeout(cb, 500); }
+    }, 38);
+  }
+
+  function showFields(cb){
+    fields.forEach(f=>{ f.querySelector('.v').textContent = f.dataset.v; });
+    let i = 0;
+    const iv = setInterval(()=>{
+      if(fields[i]) fields[i].classList.add('show');
+      i++;
+      if(i >= fields.length){ clearInterval(iv); setTimeout(cb, 350); }
+    }, 260);
+  }
+
+  function resetTicket(){
+    bubble.innerHTML = '<span class="caret"></span>';
+    fields.forEach(f=>f.classList.remove('show'));
+    stamp.classList.remove('show');
+  }
+
+  function runSequence(){
+    resetTicket();
+    if(reduceMotion){
+      bubble.textContent = fullMsg;
+      fields.forEach(f=>{ f.querySelector('.v').textContent = f.dataset.v; f.classList.add('show'); });
+      stamp.classList.add('show');
+      return;
+    }
+    typeMessage(()=>{
+      showFields(()=>{
+        stamp.classList.add('show');
+        setTimeout(runSequence, 3200);
+      });
+    });
+  }
+  runSequence();
+</script>
+
+</body>
+</html>
