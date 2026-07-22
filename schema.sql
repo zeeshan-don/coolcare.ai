@@ -12,6 +12,24 @@ CREATE TABLE IF NOT EXISTS conversations (
 
 CREATE INDEX IF NOT EXISTS idx_conversations_customer ON conversations(customer_number, created_at);
 
+-- Conversation state: structured state per customer (the FIX for the hallucination bug)
+-- One row per customer. Tracks current conversation step and collected data.
+CREATE TABLE IF NOT EXISTS conversation_state (
+  id SERIAL PRIMARY KEY,
+  customer_number TEXT NOT NULL UNIQUE,
+  step TEXT NOT NULL DEFAULT 'appliance',  -- Current step: appliance, issue, name, address, area, urgency, confirm
+  appliance TEXT,                          -- Extracted appliance name
+  issue TEXT,                              -- Extracted issue description
+  customer_name TEXT,                      -- Extracted customer name
+  address TEXT,                            -- Extracted address
+  area TEXT,                               -- Extracted area/locality
+  urgency TEXT,                            -- Extracted urgency/time preference
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversation_state_customer ON conversation_state(customer_number);
+
 -- Bookings: stores service requests extracted from conversations
 CREATE TABLE IF NOT EXISTS bookings (
   id SERIAL PRIMARY KEY,

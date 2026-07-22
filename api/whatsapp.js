@@ -1,51 +1,81 @@
-// CoolCare's WhatsApp reply endpoint — powered by Groq, with conversation memory in Neon.
+// CoolCare WhatsApp bot — structured state management
+// State is stored in DB (conversation_state table), NOT inferred from raw history.
 const { neon } = require("@neondatabase/serverless");
 const sql = neon(process.env.DATABASE_URL);
 
-const SYSTEM_PROMPT = `You are CoolCare's WhatsApp assistant for a home appliance service and repair business.
+// ─── Steps in order ──────────────────────────────────────────────────────────
+const STEPS = ["appliance", "issue", "name", "address", "area", "urgency", "confirm"];
 
-Appliances you handle: AC, refrigerator, washing machine, geyser/water heater, microwave, TV, RO/water purifier, dishwasher, air cooler, ceiling/table fan, and all other electrical home appliances.
+// ─── What to ask at each step ────────────────────────────────────────────────
+const STEP_QUESTIONS = {
+  appliance: "Hi! 👋 Welcome to CoolCare. Which appliance needs repair? (AC, refrigerator, geyser, washing machine, microwave, TV, RO, fan, etc.)",
+  issue:     (state) => `What's the problem with your ${state.appliance}?`,
+  name:      "Got it! May I know your name?",
+  address:   (state) => `Thanks ${state.customer_name}! Please share your full address (flat/house number, street, locality).`,
+  area:      "Which area or locality are you in? (So we can assign the nearest technician.)",
+  urgency:   "When do you need the service? (Today, tomorrow, this week, or no rush?)",
+  confirm:   (state) =>
+    `Here's your booking summary:\n` +
+    `• Appliance: ${state.appliance}\n` +
+    `• Issue: ${state.issue}\n` +
+    `• Name: ${state.customer_name}\n` +
+    `• Address: ${state.address}, ${state.area}\n` +
+    `• When: ${state.urgency}\n\n` +
+    `Shall I confirm this booking? Reply *Yes* to confirm or *No* to cancel.`
+};
 
-Your job across the conversation:
-- First, find out WHICH appliance has the problem.
-- Then figure out what's wrong with it (e.g. AC — no cooling, water leakage, noise; Refrigerator — not cooling, ice buildup, compressor noise; Geyser — no hot water, leaking, not switching on; Washing Machine — not spinning, water not draining, error code; etc.)
-- Get their name.
-- Get their exact address (house/flat number, street, locality) — not just area.
-- Get their area/locality so a technician can be assigned.
-- Get urgency (today, this week, no rush).
-- Once you have name + appliance + issue + address + area, confirm you're booking a technician and ask if a time like "today evening" or "tomorrow morning" works.
-- You have the full conversation history below — do NOT ask for something the customer already told you earlier in this chat.
-
-Rules:
-- Keep replies short — 1 to 3 sentences, WhatsApp style, no long paragraphs.
-- Ask only ONE question at a time, never a checklist.
-- Reply in the same language/style the customer used (Hindi, Telugu, Hinglish, English — mirror them).
-- Never invent technician names, prices, or exact appointment times — only say a technician will be assigned or confirmed.
-- If the message is not about any home appliance repair or service, politely say you handle home appliance repairs and ask how you can help.`;
-
-const EXTRACTION_PROMPT = `You extract structured booking details from a customer support chat about home appliance repair.
-Return ONLY a JSON object, nothing else, in this exact shape:
-{"name": string|null, "address": string|null, "area": string|null, "service_type": string|null, "urgency": string|null, "ready_to_book": boolean}
-
-Rules:
-- Fill a field only if the customer clearly stated it anywhere in the conversation.
-- "service_type" is a short label that includes the appliance and issue, e.g. "AC no cooling", "Refrigerator not cooling", "Geyser no hot water", "Washing machine not spinning", "TV no display", "RO not working", "Fan not working", "Microwave not heating".
-- "ready_to_book" is true once you have at least service_type AND area.
-- Return valid JSON only — no markdown fences, no explanation.`;
-
-async function getConversationHistory(customerNumber) {
+// ─── Load state from DB ───────────────────────────────────────────────────────
+async function loadState(customerNumber) {
   const rows = await sql`
-    SELECT role, message FROM conversations
+    SELECT * FROM conversation_state
     WHERE customer_number = ${customerNumber}
-    ORDER BY created_at ASC
-    LIMIT 20
+    LIMIT 1
   `;
-  return rows.map((row) => ({
-    role: row.role === "bot" ? "assistant" : "user",
-    content: row.message
-  }));
+  if (rows.length === 0) return null;
+  return rows[0];
 }
 
+// ─── Save / update state ──────────────────────────────────────────────────────
+async function saveState(customerNumber, updates) {
+  const existing = await sql`
+    SELECT id FROM conversation_state WHERE customer_number = ${customerNumber}
+  `;
+  if (existing.length > 0) {
+    await sql`
+      UPDATE conversation_state SET
+        step          = COALESCE(${updates.step          ?? null}, step),
+        appliance     = COALESCE(${updates.appliance     ?? null}, appliance),
+        issue         = COALESCE(${updates.issue         ?? null}, issue),
+        customer_name = COALESCE(${updates.customer_name ?? null}, customer_name),
+        address       = COALESCE(${updates.address       ?? null}, address),
+        area          = COALESCE(${updates.area          ?? null}, area),
+        urgency       = COALESCE(${updates.urgency       ?? null}, urgency),
+        updated_at    = now()
+      WHERE customer_number = ${customerNumber}
+    `;
+  } else {
+    await sql`
+      INSERT INTO conversation_state
+        (customer_number, step, appliance, issue, customer_name, address, area, urgency)
+      VALUES
+        (${customerNumber},
+         ${updates.step          ?? "appliance"},
+         ${updates.appliance     ?? null},
+         ${updates.issue         ?? null},
+         ${updates.customer_name ?? null},
+         ${updates.address       ?? null},
+         ${updates.area          ?? null},
+         ${updates.urgency       ?? null})
+    `;
+  }
+}
+
+// ─── Reset state (new session) ────────────────────────────────────────────────
+async function resetState(customerNumber) {
+  await sql`DELETE FROM conversation_state WHERE customer_number = ${customerNumber}`;
+}
+
+// ─── Save chat message ────────────────────────────────────────────────────────
 async function saveMessage(customerNumber, role, message) {
   await sql`
     INSERT INTO conversations (customer_number, role, message)
@@ -53,6 +83,7 @@ async function saveMessage(customerNumber, role, message) {
   `;
 }
 
+// ─── Use LLM only for natural language extraction, never for logic ────────────
 async function callGroq(messages, jsonMode = false) {
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) return null;
@@ -60,8 +91,8 @@ async function callGroq(messages, jsonMode = false) {
   const body = {
     model: "llama-3.3-70b-versatile",
     messages,
-    temperature: jsonMode ? 0 : 0.4,
-    max_tokens: jsonMode ? 300 : 200
+    temperature: 0,
+    max_tokens: jsonMode ? 150 : 100
   };
   if (jsonMode) body.response_format = { type: "json_object" };
 
@@ -82,77 +113,189 @@ async function callGroq(messages, jsonMode = false) {
   return data?.choices?.[0]?.message?.content?.trim() || null;
 }
 
-async function getGroqReply(history, customerText) {
-  const reply = await callGroq([
-    { role: "system", content: SYSTEM_PROMPT },
-    ...history,
-    { role: "user", content: customerText }
-  ]);
-  return reply || "Thanks for messaging CoolCare! 👋 We repair AC, refrigerator, geyser, washing machine, microwave, TV, fan, RO, and all home appliances. Which appliance needs service, and what's the issue?";
-}
+// ─── Extract a single field from one user message ────────────────────────────
+// LLM is ONLY used to normalize free text. Business logic stays in code.
+async function extractField(step, userText, state) {
+  const prompts = {
+    appliance: `The user said: "${userText}"
+Extract the home appliance they want repaired. Reply with ONLY a JSON object: {"value": "appliance name or null"}
+Use a clean name like: AC, Refrigerator, Geyser, Washing Machine, Microwave, TV, RO, Fan, Dishwasher, Air Cooler.
+If no appliance is mentioned, return {"value": null}.`,
 
-async function extractAndSaveBooking(customerNumber, history, customerText) {
+    issue: `The user said: "${userText}"
+They have a ${state.appliance}. What is the problem/issue they described?
+Reply with ONLY a JSON: {"value": "short issue description or null"}
+Examples: "Not cooling", "Water leaking", "Not heating", "Making noise", "Not turning on".
+If no issue is clearly stated, return {"value": null}.`,
+
+    name: `The user said: "${userText}"
+Extract the person's name. Reply with ONLY a JSON: {"value": "name or null"}
+If no name is mentioned, return {"value": null}.`,
+
+    address: `The user said: "${userText}"
+Extract the full address (house/flat number, street, locality). Reply with ONLY a JSON: {"value": "address or null"}
+If no address is mentioned, return {"value": null}.`,
+
+    area: `The user said: "${userText}"
+Extract the area, locality, or neighborhood name. Reply with ONLY a JSON: {"value": "area name or null"}
+If no area is mentioned, return {"value": null}.`,
+
+    urgency: `The user said: "${userText}"
+Extract the urgency or preferred time for service. Reply with ONLY a JSON: {"value": "urgency or null"}
+Examples: "Today", "Tomorrow", "This week", "No rush", "Today evening", "Tomorrow morning".
+If not mentioned, return {"value": null}.`
+  };
+
+  const prompt = prompts[step];
+  if (!prompt) return null;
+
   try {
     const raw = await callGroq(
-      [
-        { role: "system", content: EXTRACTION_PROMPT },
-        ...history,
-        { role: "user", content: customerText }
-      ],
+      [{ role: "user", content: prompt }],
       true
     );
-    if (!raw) return;
-
-    const info = JSON.parse(raw);
-    if (!info.service_type && !info.area) return; // nothing useful yet
-
-    const existing = await sql`
-      SELECT id, technician_id FROM bookings
-      WHERE customer_number = ${customerNumber} AND status IN ('open', 'assigned')
-      ORDER BY created_at DESC LIMIT 1
-    `;
-
-    let bookingId;
-    if (existing.length > 0) {
-      await sql`
-        UPDATE bookings SET
-          customer_name = COALESCE(${info.name}, customer_name),
-          address = COALESCE(${info.address}, address),
-          service_type = COALESCE(${info.service_type}, service_type),
-          area = COALESCE(${info.area}, area),
-          urgency = COALESCE(${info.urgency}, urgency)
-        WHERE id = ${existing[0].id}
-      `;
-      bookingId = existing[0].id;
-    } else {
-      const inserted = await sql`
-        INSERT INTO bookings (customer_number, customer_name, address, service_type, area, urgency, status)
-        VALUES (${customerNumber}, ${info.name}, ${info.address}, ${info.service_type}, ${info.area}, ${info.urgency}, 'open')
-        RETURNING id
-      `;
-      bookingId = inserted[0].id;
-    }
-
-    // Auto-assign a technician once we know enough
-    if (info.ready_to_book && info.service_type) {
-      const techs = await sql`
-        SELECT id FROM technicians
-        WHERE active = true AND ${info.service_type} = ANY(services)
-        LIMIT 1
-      `;
-      if (techs.length > 0) {
-        await sql`
-          UPDATE bookings SET technician_id = ${techs[0].id}, status = 'assigned'
-          WHERE id = ${bookingId} AND technician_id IS NULL
-        `;
-      }
-    }
-  } catch (error) {
-    // Extraction is best-effort — never let it break the customer's actual reply
-    console.error("Booking extraction error:", error);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed.value || null;
+  } catch {
+    return null;
   }
 }
 
+// ─── Format a step question ───────────────────────────────────────────────────
+function getQuestion(step, state) {
+  const q = STEP_QUESTIONS[step];
+  return typeof q === "function" ? q(state) : q;
+}
+
+// ─── Create booking in DB ─────────────────────────────────────────────────────
+async function createBooking(customerNumber, state) {
+  try {
+    const inserted = await sql`
+      INSERT INTO bookings
+        (customer_number, customer_name, address, service_type, area, urgency, status)
+      VALUES
+        (${customerNumber},
+         ${state.customer_name},
+         ${state.address + ", " + state.area},
+         ${state.appliance + " — " + state.issue},
+         ${state.area},
+         ${state.urgency},
+         'open')
+      RETURNING id
+    `;
+    const bookingId = inserted[0].id;
+
+    // Try to assign a technician by matching appliance name (case-insensitive)
+    const techs = await sql`
+      SELECT id FROM technicians
+      WHERE active = true
+        AND EXISTS (
+          SELECT 1 FROM unnest(services) s
+          WHERE lower(s) LIKE lower(${"%" + state.appliance + "%"})
+        )
+      LIMIT 1
+    `;
+    if (techs.length > 0) {
+      await sql`
+        UPDATE bookings SET technician_id = ${techs[0].id}, status = 'assigned'
+        WHERE id = ${bookingId}
+      `;
+    }
+    return bookingId;
+  } catch (err) {
+    console.error("Booking creation error:", err);
+    return null;
+  }
+}
+
+// ─── Main message handler ─────────────────────────────────────────────────────
+async function handleMessage(customerNumber, userText) {
+  const text = userText.trim();
+  const lowerText = text.toLowerCase();
+
+  // Allow user to reset conversation at any time
+  if (
+    lowerText.includes("reset") ||
+    lowerText.includes("start over") ||
+    lowerText.includes("new complaint") ||
+    lowerText.includes("forget") ||
+    lowerText.includes("cancel")
+  ) {
+    await resetState(customerNumber);
+    return "Sure! Let's start fresh. 👋 Which appliance needs repair? (AC, refrigerator, geyser, washing machine, microwave, TV, RO, fan, etc.)";
+  }
+
+  let state = await loadState(customerNumber);
+
+  // New conversation
+  if (!state) {
+    await saveState(customerNumber, { step: "appliance" });
+    state = await loadState(customerNumber);
+    return getQuestion("appliance", state);
+  }
+
+  const currentStep = state.step;
+
+  // ── Confirmation step ────────────────────────────────────────────────────
+  if (currentStep === "confirm") {
+    if (lowerText === "yes" || lowerText === "y" || lowerText.includes("confirm") || lowerText.includes("ok")) {
+      const bookingId = await createBooking(customerNumber, state);
+      await resetState(customerNumber); // clear state after booking
+      if (bookingId) {
+        return `✅ Booking confirmed! (Ref #${bookingId})\nA CoolCare technician will be assigned for your ${state.appliance} repair (${state.issue}).\nWe'll contact you at this number to confirm the visit time. 🙏`;
+      } else {
+        return `✅ Booking received! A CoolCare technician will be assigned for your ${state.appliance} repair. We'll contact you shortly. 🙏`;
+      }
+    } else if (lowerText === "no" || lowerText === "n" || lowerText.includes("cancel")) {
+      await resetState(customerNumber);
+      return "No problem! Your booking has been cancelled. Type anything to start a new request. 👍";
+    } else {
+      // They said something else — re-ask
+      return `Please reply *Yes* to confirm or *No* to cancel your booking.`;
+    }
+  }
+
+  // ── All other steps: extract the field, move to next step ───────────────
+  const extracted = await extractField(currentStep, text, state);
+
+  if (!extracted) {
+    // Couldn't extract — re-ask with a gentle nudge
+    const retryMessages = {
+      appliance: `I didn't catch which appliance. Could you tell me which one needs repair? (e.g. AC, Geyser, Refrigerator, Washing Machine…)`,
+      issue:     `Could you describe the problem with your ${state.appliance}? (e.g. not cooling, water leaking, not turning on…)`,
+      name:      `Could you share your name please?`,
+      address:   `Please share your full address including flat/house number, street and locality.`,
+      area:      `Which area or locality are you in?`,
+      urgency:   `When would you like the service? (Today, tomorrow, this week…)`
+    };
+    return retryMessages[currentStep] || getQuestion(currentStep, state);
+  }
+
+  // Save the extracted value for this step
+  const fieldMap = {
+    appliance:  "appliance",
+    issue:      "issue",
+    name:       "customer_name",
+    address:    "address",
+    area:       "area",
+    urgency:    "urgency"
+  };
+  const fieldName = fieldMap[currentStep];
+  const nextStep = STEPS[STEPS.indexOf(currentStep) + 1];
+
+  await saveState(customerNumber, {
+    [fieldName]: extracted,
+    step: nextStep
+  });
+
+  // Reload state so next question has all filled values
+  const updatedState = await loadState(customerNumber);
+
+  return getQuestion(nextStep, updatedState);
+}
+
+// ─── Webhook handler ──────────────────────────────────────────────────────────
 module.exports = async (request, response) => {
   const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
 
@@ -189,14 +332,12 @@ module.exports = async (request, response) => {
       return response.status(500).json({ error: "WhatsApp is not configured" });
     }
 
+    // Save customer message BEFORE handling (for audit log only — NOT fed back to LLM)
     await saveMessage(customerNumber, "customer", customerText);
-    const history = await getConversationHistory(customerNumber);
 
-    const [reply] = await Promise.all([
-      getGroqReply(history, customerText),
-      extractAndSaveBooking(customerNumber, history, customerText)
-    ]);
+    const reply = await handleMessage(customerNumber, customerText);
 
+    // Save bot reply for audit log
     await saveMessage(customerNumber, "bot", reply);
 
     const metaResponse = await fetch(
