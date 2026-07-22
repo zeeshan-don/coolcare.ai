@@ -1,22 +1,25 @@
--- Migration: Add conversation_state table
--- Run this in your Neon SQL console to fix the conversation state bug.
+-- Migration: upgrade conversation_state table for the new state machine
+-- Run this in your Neon SQL console if you already have the old table.
 
-CREATE TABLE IF NOT EXISTS conversation_state (
-  id SERIAL PRIMARY KEY,
-  customer_number TEXT NOT NULL UNIQUE,
-  step TEXT NOT NULL DEFAULT 'appliance',  -- Current step: appliance, issue, name, address, area, urgency, confirm
-  appliance TEXT,                          -- Extracted appliance name
-  issue TEXT,                              -- Extracted issue description
-  customer_name TEXT,                      -- Extracted customer name
-  address TEXT,                            -- Extracted address
-  area TEXT,                               -- Extracted area/locality
-  urgency TEXT,                            -- Extracted urgency/time preference
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
+-- 1. Add status column (replaces the old 'step' column)
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS booking_id TEXT;
 
-CREATE INDEX IF NOT EXISTS idx_conversation_state_customer ON conversation_state(customer_number);
+-- 2. Backfill status from old 'step' values
+UPDATE conversation_state SET status = 'COLLECTING_APPLIANCE' WHERE step = 'appliance'  AND status IS NULL;
+UPDATE conversation_state SET status = 'COLLECTING_ISSUE'     WHERE step = 'issue'      AND status IS NULL;
+UPDATE conversation_state SET status = 'COLLECTING_NAME'      WHERE step = 'name'       AND status IS NULL;
+UPDATE conversation_state SET status = 'COLLECTING_ADDRESS'   WHERE step = 'address'    AND status IS NULL;
+UPDATE conversation_state SET status = 'COLLECTING_LOCALITY'  WHERE step = 'area'       AND status IS NULL;
+UPDATE conversation_state SET status = 'COLLECTING_DATE'      WHERE step = 'urgency'    AND status IS NULL;
+UPDATE conversation_state SET status = 'CONFIRMATION_PENDING' WHERE step = 'confirm'    AND status IS NULL;
+-- Catch-all for any remaining rows
+UPDATE conversation_state SET status = 'COLLECTING_APPLIANCE' WHERE status IS NULL;
 
--- Optional: Clear old broken conversation history to start fresh
--- TRUNCATE TABLE conversations;
--- (Uncomment the line above if you want to delete all old chat logs)
+-- 3. Set NOT NULL now that all rows have a value
+ALTER TABLE conversation_state ALTER COLUMN status SET NOT NULL;
+ALTER TABLE conversation_state ALTER COLUMN status SET DEFAULT 'COLLECTING_APPLIANCE';
+
+-- 4. Clear all in-progress conversations so users start fresh with the new flow
+--    (Comment this out if you want to preserve existing sessions)
+DELETE FROM conversation_state WHERE status NOT IN ('BOOKED', 'CANCELLED');
