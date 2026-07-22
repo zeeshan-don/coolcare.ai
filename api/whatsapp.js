@@ -2,15 +2,18 @@
 const { neon } = require("@neondatabase/serverless");
 const sql = neon(process.env.DATABASE_URL);
 
-const SYSTEM_PROMPT = `You are CoolCare's WhatsApp assistant for an AC service and repair business.
+const SYSTEM_PROMPT = `You are CoolCare's WhatsApp assistant for a home appliance service and repair business.
+
+Appliances you handle: AC, refrigerator, washing machine, geyser/water heater, microwave, TV, RO/water purifier, dishwasher, air cooler, ceiling/table fan, and all other electrical home appliances.
 
 Your job across the conversation:
-- Figure out what's wrong with the customer's AC (no cooling, water leakage, installation, AMC/service, noise, etc.)
+- First, find out WHICH appliance has the problem.
+- Then figure out what's wrong with it (e.g. AC — no cooling, water leakage, noise; Refrigerator — not cooling, ice buildup, compressor noise; Geyser — no hot water, leaking, not switching on; Washing Machine — not spinning, water not draining, error code; etc.)
 - Get their name.
 - Get their exact address (house/flat number, street, locality) — not just area.
 - Get their area/locality so a technician can be assigned.
 - Get urgency (today, this week, no rush).
-- Once you have name + issue + address + area, confirm you're booking a technician and ask if a time like "today evening" or "tomorrow morning" works.
+- Once you have name + appliance + issue + address + area, confirm you're booking a technician and ask if a time like "today evening" or "tomorrow morning" works.
 - You have the full conversation history below — do NOT ask for something the customer already told you earlier in this chat.
 
 Rules:
@@ -18,7 +21,7 @@ Rules:
 - Ask only ONE question at a time, never a checklist.
 - Reply in the same language/style the customer used (Hindi, Telugu, Hinglish, English — mirror them).
 - Never invent technician names, prices, or exact appointment times — only say a technician will be assigned or confirmed.
-- If the message isn't about AC service at all, politely redirect to how you can help with AC issues.`;
+- If the message is not about any home appliance repair or service, politely say you handle home appliance repairs and ask how you can help.`;
 
 const EXTRACTION_PROMPT = `You extract structured booking details from a customer support chat about home appliance repair.
 Return ONLY a JSON object, nothing else, in this exact shape:
@@ -26,7 +29,7 @@ Return ONLY a JSON object, nothing else, in this exact shape:
 
 Rules:
 - Fill a field only if the customer clearly stated it anywhere in the conversation.
-- "service_type" is a short label like "AC no cooling" or "AC installation".
+- "service_type" is a short label that includes the appliance and issue, e.g. "AC no cooling", "Refrigerator not cooling", "Geyser no hot water", "Washing machine not spinning", "TV no display", "RO not working", "Fan not working", "Microwave not heating".
 - "ready_to_book" is true once you have at least service_type AND area.
 - Return valid JSON only — no markdown fences, no explanation.`;
 
@@ -85,7 +88,7 @@ async function getGroqReply(history, customerText) {
     ...history,
     { role: "user", content: customerText }
   ]);
-  return reply || "Thanks for messaging CoolCare — could you tell us what AC issue you're facing and your area?";
+  return reply || "Thanks for messaging CoolCare! 👋 We repair AC, refrigerator, geyser, washing machine, microwave, TV, fan, RO, and all home appliances. Which appliance needs service, and what's the issue?";
 }
 
 async function extractAndSaveBooking(customerNumber, history, customerText) {
