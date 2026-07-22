@@ -201,8 +201,70 @@ Reply with ONLY a JSON object: {"intent": "<label>"}`;
   }
 }
 
+// ─── Name validation — pure regex, no LLM ────────────────────────────────────
+// Accepts any reasonable human name: single or multi-word, hyphens, apostrophes,
+// Unicode letters (covers Arabic, Hindi, Telugu, etc.)
+function validateName(raw) {
+  const trimmed = raw.trim();
+
+  console.log("[NAME] raw input    :", JSON.stringify(trimmed));
+
+  // Reject empty
+  if (!trimmed) {
+    console.log("[NAME] rejected: empty string");
+    return null;
+  }
+
+  // Reject if too short (single letter) or too long (spam)
+  if (trimmed.length < 2) {
+    console.log("[NAME] rejected: too short (< 2 chars)");
+    return null;
+  }
+  if (trimmed.length > 50) {
+    console.log("[NAME] rejected: too long (> 50 chars)");
+    return null;
+  }
+
+  // Reject URLs
+  if (/https?:\/\/|www\./i.test(trimmed)) {
+    console.log("[NAME] rejected: contains URL");
+    return null;
+  }
+
+  // Reject if it contains digits mixed in (phone numbers, spam)
+  if (/\d/.test(trimmed)) {
+    console.log("[NAME] rejected: contains digits");
+    return null;
+  }
+
+  // Must contain at least one Unicode letter (covers Latin, Arabic, Devanagari, etc.)
+  if (!/\p{L}/u.test(trimmed)) {
+    console.log("[NAME] rejected: no alphabetic characters");
+    return null;
+  }
+
+  // Allow: letters (any script), spaces, hyphens, apostrophes, dots (e.g. "Dr. Smith")
+  // Reject anything else (special chars, emoji spam, etc.)
+  if (!/^[\p{L}\s'\-\.]+$/u.test(trimmed)) {
+    console.log("[NAME] rejected: invalid characters in:", JSON.stringify(trimmed));
+    return null;
+  }
+
+  console.log("[NAME] accepted    :", JSON.stringify(trimmed));
+  return trimmed;
+}
+
 // ─── LLM: extract a single field from a user message ─────────────────────────
 async function extractField(step, userText, state) {
+  console.log(`[EXTRACT] step=${step} input=${JSON.stringify(userText)}`);
+
+  // ── Name step: skip LLM entirely, use regex validation ───────────────────
+  if (step === STATUS.COLLECTING_NAME) {
+    const result = validateName(userText);
+    console.log(`[EXTRACT] name result: ${JSON.stringify(result)}`);
+    return result;
+  }
+
   const prompts = {
     [STATUS.COLLECTING_APPLIANCE]: `User said: "${userText}"
 Extract the home appliance they want repaired.
@@ -216,11 +278,6 @@ What problem/issue did they describe?
 Reply ONLY as JSON: {"value": "short issue or null"}
 Examples: "Not cooling", "Water leaking", "Not heating", "Making noise", "Not turning on", "Dirty water".
 If no issue is clearly stated, return {"value": null}.`,
-
-    [STATUS.COLLECTING_NAME]: `User said: "${userText}"
-Extract the person's name.
-Reply ONLY as JSON: {"value": "name or null"}
-If no name is mentioned, return {"value": null}.`,
 
     [STATUS.COLLECTING_ADDRESS]: `User said: "${userText}"
 Extract the full address (flat/house number, street, locality).
@@ -240,14 +297,22 @@ If not mentioned, return {"value": null}.`,
   };
 
   const prompt = prompts[step];
-  if (!prompt) return null;
+  if (!prompt) {
+    console.log(`[EXTRACT] no prompt defined for step: ${step}`);
+    return null;
+  }
 
   try {
     const raw = await callGroq([{ role: "user", content: prompt }], true, 80);
+    console.log(`[EXTRACT] groq raw response for ${step}: ${JSON.stringify(raw)}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed.value || null;
-  } catch {
+    // Use ?? null so empty string "" is also treated as null
+    const value = parsed.value != null && parsed.value !== "" ? parsed.value : null;
+    console.log(`[EXTRACT] ${step} result: ${JSON.stringify(value)}`);
+    return value;
+  } catch (err) {
+    console.error(`[EXTRACT] parse error for ${step}:`, err.message);
     return null;
   }
 }
