@@ -1,3 +1,33 @@
 {
-  "regions": ["bom1"]
+  "regions": ["bom1"],
+  "rewrites": [
+    { "source": "/api/shop/booking/:id", "destination": "/api/shop/booking/[id]" },
+    { "source": "/api/shop/bookings/update", "destination": "/api/shop/bookings/update" },
+    { "source": "/api/shop/dashboard", "destination": "/api/shop/dashboard" },
+    { "source": "/api/shop/export", "destination": "/api/shop/export" },
+    { "source": "/api/payments/create-checkout", "destination": "/api/payments/create-checkout" },
+    { "source": "/api/payments/webhook", "destination": "/api/payments/webhook" },
+    { "source": "/api/payments/subscription", "destination": "/api/payments/subscription" },
+    { "source": "/api/admin/shops", "destination": "/api/admin/shops" },
+    { "source": "/api/auth/login", "destination": "/api/auth/login" },
+    { "source": "/api/auth/signup", "destination": "/api/auth/signup" },
+    { "source": "/api/auth/logout", "destination": "/api/auth/logout" },
+    { "source": "/api/health", "destination": "/api/health" },
+    { "source": "/api/currency", "destination": "/api/currency" },
+    { "source": "/api/book-service", "destination": "/api/book-service" },
+    { "source": "/api/bookings", "destination": "/api/bookings" },
+    { "source": "/api/dashboard", "destination": "/api/dashboard" },
+    { "source": "/api/whatsapp", "destination": "/api/whatsapp" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
 }

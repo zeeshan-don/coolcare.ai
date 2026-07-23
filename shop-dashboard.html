@@ -89,9 +89,17 @@
     <div class="stat-card accepted"><div class="label">Accepted</div><div class="value" id="count-accepted">—</div></div>
     <div class="stat-card assigned"><div class="label">Assigned</div><div class="value" id="count-assigned">—</div></div>
     <div class="stat-card completed"><div class="label">Completed</div><div class="value" id="count-completed">—</div></div>
+    <div class="stat-card" style="border-color:rgba(197,160,89,0.2)"><div class="label">Today's</div><div class="value" id="count-today" style="color:var(--blue2)">—</div></div>
+    <div class="stat-card" style="border-color:rgba(110,139,104,0.2)"><div class="label">Revenue</div><div class="value" id="count-revenue" style="color:var(--green);font-size:24px">—</div></div>
   </div>
 
-  <div class="section-header">Bookings <span class="badge" id="totalBadge">0</span></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
+    <div class="section-header" style="margin:0">Bookings <span class="badge" id="totalBadge">0</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input id="searchInput" type="text" placeholder="Search name or phone…" onkeyup="if(event.key==='Enter')searchBookings()" style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;width:200px;background:var(--bg2)">
+      <button onclick="exportCSV()" style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:600 12px inherit;cursor:pointer;color:var(--muted)">Export CSV</button>
+    </div>
+  </div>
 
   <div class="tabs">
     <div class="tab active" data-filter="all" onclick="filterBookings('all')">All</div>
@@ -104,6 +112,12 @@
   </div>
 
   <div class="bookings-grid" id="bookingsList"></div>
+
+  <div style="display:flex;gap:8px;justify-content:center;margin-top:20px">
+    <button id="prevBtn" onclick="changePage(-1)" disabled style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:600 12px inherit;cursor:pointer;color:var(--muted)">← Prev</button>
+    <span id="pageInfo" style="color:var(--muted);padding:8px;font-size:13px">Page 1</span>
+    <button id="nextBtn" onclick="changePage(1)" style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:600 12px inherit;cursor:pointer;color:var(--muted)">Next →</button>
+  </div>
 </div>
 
 <script>
@@ -112,6 +126,8 @@
 
   let allBookings = [];
   let currentFilter = 'all';
+  let currentPage = 1;
+  let searchQuery = '';
 
   const shopData = JSON.parse(localStorage.getItem('cc_shop') || '{}');
   if (shopData.shopName) document.getElementById('shopName').textContent = shopData.shopName;
@@ -126,9 +142,30 @@
     window.location.href = '/shop-login.html';
   }
 
+  function searchBookings() {
+    searchQuery = document.getElementById('searchInput').value.trim();
+    currentPage = 1;
+    loadDashboard();
+  }
+
+  function changePage(delta) {
+    currentPage += delta;
+    loadDashboard();
+  }
+
+  function exportCSV() {
+    const params = new URLSearchParams();
+    if (currentFilter !== 'all') params.set('status', currentFilter);
+    window.open(`/api/shop/export?${params}`, '_blank');
+  }
+
   async function loadDashboard() {
     try {
-      const res = await fetch('/api/shop/dashboard', {
+      const params = new URLSearchParams({ page: currentPage, limit: 20 });
+      if (currentFilter !== 'all') params.set('status', currentFilter);
+      if (searchQuery) params.set('search', searchQuery);
+
+      const res = await fetch(`/api/shop/dashboard?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) { logout(); return; }
@@ -141,9 +178,17 @@
         document.getElementById('count-assigned').textContent  = data.counts.assigned || 0;
         document.getElementById('count-completed').textContent = data.counts.completed || 0;
       }
+      if (data.stats) {
+        document.getElementById('count-today').textContent = data.stats.todayBookings || 0;
+        document.getElementById('count-revenue').textContent = '₹' + (data.stats.totalRevenue || 0).toLocaleString();
+      }
 
       allBookings = data.bookings || [];
-      document.getElementById('totalBadge').textContent = allBookings.length;
+      const total = data.pagination?.total || allBookings.length;
+      document.getElementById('totalBadge').textContent = total;
+      document.getElementById('pageInfo').textContent = `Page ${data.pagination?.page || 1} of ${data.pagination?.totalPages || 1}`;
+      document.getElementById('prevBtn').disabled = (data.pagination?.page || 1) <= 1;
+      document.getElementById('nextBtn').disabled = (data.pagination?.page || 1) >= (data.pagination?.totalPages || 1);
       renderBookings();
     } catch (err) {
       console.error('[dashboard] Load error:', err);
@@ -153,9 +198,10 @@
 
   function filterBookings(status) {
     currentFilter = status;
+    currentPage = 1;
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`.tab[data-filter="${status}"]`).classList.add('active');
-    renderBookings();
+    loadDashboard();
   }
 
   function renderBookings() {

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoolCare | Super Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#090A0F;--bg2:#121318;--bg3:#1A1B22;--border:rgba(197,160,89,0.12);--border2:rgba(197,160,89,0.25);--blue:#C5A059;--blue2:#D4AF37;--glow:rgba(197,160,89,0.15);--green:#A3B899;--ink:#F7F5F0;--ink2:#E1DED7;--muted:#8E8A82;--muted2:#5C5954;--red:#E87461}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--ink);font:15px/1.6 'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;min-height:100vh}
+    body::before{content:'';position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--blue),var(--blue2),transparent);z-index:100}
+    h1,h2,h3,.brand{font-family:'Playfair Display',Georgia,serif;font-weight:700}
+    a{color:inherit;text-decoration:none}
+    .nav{height:68px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 28px;border-bottom:1px solid var(--border)}
+    .brand{font-weight:700;letter-spacing:1px;font-size:22px;text-transform:uppercase}.brand b{color:var(--blue);font-weight:900}
+    .nav-right{display:flex;gap:12px;align-items:center}
+    .badge-admin{font-size:10px;font-weight:800;color:var(--blue2);background:rgba(197,160,89,0.1);border:1px solid var(--border2);border-radius:6px;padding:4px 8px;text-transform:uppercase;letter-spacing:0.5px}
+    .logout-btn{font-size:12px;font-weight:700;color:var(--muted);padding:8px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:transparent;transition:all .3s}
+    .logout-btn:hover{border-color:var(--blue);color:var(--blue)}
+    .wrap{max-width:1280px;margin:auto;padding:28px}
+    .header{margin-bottom:28px}.header h1{font-size:32px;margin:0 0 6px}.header p{color:var(--muted);font-size:14px}
+    .analytics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:28px}
+    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative;overflow:hidden}
+    .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue2),transparent);opacity:0.5}
+    .stat-label{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+    .stat-value{font-size:28px;font-weight:700;font-family:'Playfair Display',serif;color:var(--blue2)}
+    .search-bar{display:flex;gap:10px;margin-bottom:18px}
+    .search-bar input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:11px 16px;color:var(--ink);font:inherit}
+    .search-bar input:focus{outline:none;border-color:var(--blue)}
+    .search-bar button{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#090A0F;border:0;border-radius:10px;padding:11px 20px;font:700 13px inherit;cursor:pointer}
+    table{width:100%;border-collapse:collapse;background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+    th{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg3)}
+    td{padding:12px 16px;font-size:13px;border-bottom:1px solid var(--border)}
+    tr:last-child td{border:0}
+    tr:hover td{background:rgba(197,160,89,0.03)}
+    .shop-badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase}
+    .shop-badge.active{background:rgba(163,184,153,0.15);color:var(--green)}
+    .shop-badge.suspended{background:rgba(232,116,97,0.15);color:var(--red)}
+    .shop-badge.trial{background:rgba(197,160,89,0.1);color:var(--blue)}
+    .action-btn{font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--ink2);transition:all .2s;margin-right:4px}
+    .action-btn:hover{border-color:var(--blue);color:var(--blue)}
+    .action-btn.danger:hover{border-color:var(--red);color:var(--red)}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg2);color:var(--ink);padding:12px 24px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:opacity .3s;z-index:100;border:1px solid var(--border2)}
+    .toast.show{opacity:1}
+    .pagination{display:flex;gap:8px;justify-content:center;margin-top:20px}
+    .pagination button{background:var(--bg2);border:1px solid var(--border);color:var(--ink2);padding:8px 14px;border-radius:8px;cursor:pointer;font:600 12px inherit}
+    .pagination button:hover{border-color:var(--blue)}
+    .pagination button:disabled{opacity:.4;cursor:not-allowed}
+    @media(max-width:768px){.analytics{grid-template-columns:repeat(2,1fr)}table{font-size:12px}th,td{padding:8px 10px}}
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/admin.html">cool<b>care</b> <span class="badge-admin">Admin</span></a>
+  <div class="nav-right">
+    <button class="logout-btn" onclick="logout()">Log Out</button>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="header">
+    <h1>Platform Admin</h1>
+    <p>Manage shops, subscriptions, and platform analytics</p>
+  </div>
+
+  <div class="analytics" id="analytics">
+    <div class="stat-card"><div class="stat-label">Total Shops</div><div class="stat-value" id="totalShops">—</div></div>
+    <div class="stat-card"><div class="stat-label">Active Shops</div><div class="stat-value" id="activeShops">—</div></div>
+    <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value" id="totalBookings">—</div></div>
+    <div class="stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value" id="totalRevenue">—</div></div>
+    <div class="stat-card"><div class="stat-label">Active Subs</div><div class="stat-value" id="activeSubs">—</div></div>
+    <div class="stat-card"><div class="stat-label">Today's Bookings</div><div class="stat-value" id="todayBookings">—</div></div>
+  </div>
+
+  <div class="search-bar">
+    <input id="searchInput" type="text" placeholder="Search shops by name or email…" onkeyup="if(event.key==='Enter')searchShops()">
+    <button onclick="searchShops()">Search</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Shop</th><th>Owner</th><th>City</th><th>Plan</th>
+        <th>Bookings</th><th>Revenue</th><th>Status</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="shopsBody">
+      <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:40px">Loading…</td></tr>
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <button id="prevBtn" onclick="changePage(-1)" disabled>← Prev</button>
+    <span id="pageInfo" style="color:var(--muted);padding:8px">Page 1</span>
+    <button id="nextBtn" onclick="changePage(1)">Next →</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const token = localStorage.getItem('cc_token');
+  if (!token) window.location.href = '/shop-login.html';
+
+  // Check admin role
+  const shopData = JSON.parse(localStorage.getItem('cc_shop') || '{}');
+  if (shopData.role !== 'admin' && shopData.role !== 'super_admin') {
+    alert('Admin access required.');
+    window.location.href = '/shop-dashboard.html';
+  }
+
+  let currentPage = 1;
+  let totalShops = 0;
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg; t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  function logout() {
+    fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop');
+    window.location.href = '/shop-login.html';
+  }
+
+  async function loadShops(page = 1, search = '') {
+    currentPage = page;
+    try {
+      const params = new URLSearchParams({ page, limit: 20 });
+      if (search) params.set('search', search);
+      const res = await fetch(`/api/admin/shops?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { logout(); return; }
+      if (res.status === 403) { alert('Admin access required.'); return; }
+      const data = await res.json();
+
+      // Analytics
+      const a = data.analytics || {};
+      document.getElementById('totalShops').textContent = a.total_shops || 0;
+      document.getElementById('activeShops').textContent = a.active_shops || 0;
+      document.getElementById('totalBookings').textContent = a.total_bookings || 0;
+      document.getElementById('totalRevenue').textContent = '₹' + (a.total_revenue || 0).toLocaleString();
+      document.getElementById('activeSubs').textContent = a.active_subscriptions || 0;
+      document.getElementById('todayBookings').textContent = a.bookings_today || 0;
+
+      // Shops table
+      const tbody = document.getElementById('shopsBody');
+      if (!data.shops?.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:40px">No shops found</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.shops.map(s => {
+        const status = s.suspended_at ? 'suspended' : (s.subscription_status === 'active' ? 'active' : 'trial');
+        return `<tr>
+          <td><strong>${esc(s.shop_name)}</strong><br><small style="color:var(--muted)">${esc(s.email)}</small></td>
+          <td>${esc(s.owner_name)}</td>
+          <td>${esc(s.city || '—')}</td>
+          <td>${esc(s.plan_name || 'Trial')}</td>
+          <td>${s.total_bookings || 0}</td>
+          <td>₹${(parseFloat(s.total_revenue) || 0).toLocaleString()}</td>
+          <td><span class="shop-badge ${status}">${status}</span></td>
+          <td>
+            ${status === 'suspended'
+              ? `<button class="action-btn" onclick="shopAction(${s.id},'activate')">Activate</button>`
+              : `<button class="action-btn danger" onclick="shopAction(${s.id},'suspend')">Suspend</button>`
+            }
+            <button class="action-btn danger" onclick="shopAction(${s.id},'delete')">Delete</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      totalShops = data.pagination?.total || 0;
+      document.getElementById('pageInfo').textContent = `Page ${page} of ${Math.ceil(totalShops / 20) || 1}`;
+      document.getElementById('prevBtn').disabled = page <= 1;
+      document.getElementById('nextBtn').disabled = page * 20 >= totalShops;
+    } catch (err) {
+      document.getElementById('shopsBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red)">Failed to load</td></tr>';
+    }
+  }
+
+  function searchShops() {
+    const q = document.getElementById('searchInput').value.trim();
+    loadShops(1, q);
+  }
+
+  function changePage(delta) { loadShops(currentPage + delta, document.getElementById('searchInput').value.trim()); }
+
+  async function shopAction(shopId, action) {
+    if (action === 'delete' && !confirm('Delete this shop permanently?')) return;
+    if (action === 'suspend') {
+      const reason = prompt('Suspension reason (optional):');
+      await fetch('/api/admin/shops', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ shopId, action, reason: reason || undefined }),
+      });
+    } else {
+      await fetch('/api/admin/shops', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ shopId, action }),
+      });
+    }
+    showToast(`Shop ${action}d ✓`);
+    loadShops(currentPage, document.getElementById('searchInput').value.trim());
+  }
+
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  loadShops();
+</script>
+</body>
+</html>

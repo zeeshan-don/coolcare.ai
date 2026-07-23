@@ -119,6 +119,12 @@
       <p id="techNotes" style="margin:0;font-size:14px;color:var(--ink)"></p>
     </div>
 
+    <!-- Timeline -->
+    <div class="card" style="margin-top:16px">
+      <h2>Booking Timeline</h2>
+      <div id="timelineContainer"></div>
+    </div>
+
     <!-- Job actions -->
     <div class="section-label" style="margin-top:26px">Job Actions</div>
     <div class="actions" id="actionsContainer">
@@ -177,17 +183,18 @@
 
   async function loadBooking() {
     try {
-      // Get all bookings from dashboard, then find this one
-      const res = await fetch('/api/shop/dashboard', {
+      const res = await fetch(`/api/shop/booking/${bookingId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) { window.location.href = '/shop-login.html'; return; }
-      const data = await res.json();
-      booking = (data.bookings || []).find(b => String(b.id) === bookingId);
-      if (!booking) {
+      if (res.status === 404) {
         document.getElementById('loadingMsg').textContent = 'Booking not found.';
         return;
       }
+      const data = await res.json();
+      booking = data.booking;
+      window.timelineData = data.timeline || [];
+      window.techniciansData = data.technicians || [];
       renderBooking();
     } catch (err) {
       console.error('[booking] Load error:', err);
@@ -225,6 +232,29 @@
     document.getElementById('notesInput').value     = booking.technician_notes || '';
 
     renderActions();
+    renderTimeline();
+  }
+
+  function renderTimeline() {
+    const timeline = window.timelineData || [];
+    const container = document.getElementById('timelineContainer');
+    if (!container) return;
+
+    if (!timeline.length) {
+      container.innerHTML = '<p style="color:var(--muted);font-size:13px;margin:0;">No timeline entries yet.</p>';
+      return;
+    }
+
+    container.innerHTML = timeline.map(entry => `
+      <div style="padding:12px 0;border-bottom:1px solid var(--line);">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <strong style="font-size:13px;color:var(--ink);">${escapeHtml(entry.action_type.replace(/_/g, ' '))}</strong>
+          <span style="font-size:11px;color:var(--muted);">${new Date(entry.created_at).toLocaleString()}</span>
+        </div>
+        ${entry.notes ? `<p style="margin:4px 0 0;font-size:13px;color:var(--ink);">${escapeHtml(entry.notes)}</p>` : ''}
+        ${entry.changed_by ? `<small style="color:var(--muted);font-size:11px;">By: ${escapeHtml(entry.changed_by)}</small>` : ''}
+      </div>
+    `).join('');
   }
 
   const SVGS = {

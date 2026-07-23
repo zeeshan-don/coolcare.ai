@@ -137,7 +137,7 @@
     .book-btn{display:none}
 
     /* ── Pricing ── */
-    .price{text-align:center;background:linear-gradient(180deg,var(--bg2),#0F1015);border:1px solid var(--border2);border-radius:16px;max-width:580px;padding:56px 36px;margin:0 auto;position:relative;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,0.2)}
+    .price{text-align:center;background:linear-gradient(180deg,var(--bg2),#0F1015);border:1px solid var(--border2);border-radius:16px;max-width:960px;padding:56px 36px;margin:0 auto;position:relative;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,0.2)}
     .price::before{content:'';position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:400px;height:400px;background:radial-gradient(ellipse,rgba(197,160,89,0.06),transparent 70%);pointer-events:none}
     .price::after{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue2),transparent)}
     .price h2{font-size:32px;letter-spacing:-0.5px;font-weight:700;margin-bottom:12px}
@@ -175,6 +175,7 @@
       .how-inner{gap:40px}
       .queue{border-right:0;border-bottom:1px solid var(--border)}
       .section,.how{padding:65px 20px}
+      #pricingCards{grid-template-columns:1fr !important}
     }
     @media(max-width:480px){
       .nav{padding:0 18px}
@@ -327,24 +328,22 @@
 
   <!-- ── Pricing ── -->
   <section class="section" id="pricing">
+    <div style="text-align:center;margin-bottom:24px;">
+      <select id="currencySelect" onchange="loadPricing(this.value)" style="background:var(--bg2);color:var(--ink2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:600 13px 'Plus Jakarta Sans',sans-serif;cursor:pointer;appearance:auto;">
+        <option value="USD">🇺🇸 USD ($)</option>
+        <option value="INR">🇮🇳 INR (₹)</option>
+        <option value="KWD">🇰🇼 KWD (KD)</option>
+        <option value="AED">🇦🇪 AED (د.إ)</option>
+      </select>
+    </div>
     <div class="price">
       <div class="tag">Pricing</div>
       <h2>Simple, honest pricing.</h2>
-      <p class="price-sub">One plan for your entire home appliance service team.</p>
-      <div>
-        <span class="price-amount">₹4,999</span>
-        <span class="price-period"> / month</span>
+      <p class="price-sub">Choose the plan that fits your team.</p>
+      <div id="pricingCards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px;">
+        <!-- Filled dynamically -->
       </div>
-      <p class="price-desc">Includes onboarding, booking flows and monthly support.</p>
-      <div class="price-features">
-        <div class="pf">Unlimited WhatsApp bookings</div>
-        <div class="pf">AI-powered customer conversations</div>
-        <div class="pf">Repair shop portal &amp; job management</div>
-        <div class="pf">Customer notifications on every status change</div>
-        <div class="pf">Real-time dashboard &amp; analytics</div>
-        <div class="pf">Dedicated onboarding support</div>
-      </div>
-      <a href="/shop-signup.html"><button class="btn-hero" style="width:100%">Get started today →</button></a>
+      <p style="color:var(--muted);font-size:12px;margin-top:18px">All plans include a 14-day free trial. No credit card required.</p>
     </div>
   </section>
 </main>
@@ -397,6 +396,53 @@
   }
   loadQueue();
   setInterval(loadQueue, 15000);
+
+  // ── Currency & Dynamic Pricing ──
+  const PLANS = [
+    { name: 'Starter', key: 'starter', features: ['100 bookings/mo', '3 technicians', 'WhatsApp bot', 'Dashboard', 'Notifications'] },
+    { name: 'Professional', key: 'professional', features: ['500 bookings/mo', '10 technicians', 'Everything in Starter', 'Analytics', 'Priority support'], popular: true },
+    { name: 'Enterprise', key: 'enterprise', features: ['Unlimited bookings', 'Unlimited technicians', 'Everything in Pro', 'Custom branding', 'API access'] },
+  ];
+
+  let currentCurrency = localStorage.getItem('cc_currency') || 'USD';
+  document.getElementById('currencySelect').value = currentCurrency;
+
+  async function loadPricing(currency) {
+    currentCurrency = currency || currentCurrency;
+    localStorage.setItem('cc_currency', currentCurrency);
+    try {
+      const res = await fetch(`/api/currency?currency=${currentCurrency}`);
+      const data = await res.json();
+      const pricing = data.pricing || {};
+      const sym = data.symbol || '$';
+
+      document.getElementById('pricingCards').innerHTML = PLANS.map(plan => {
+        const monthly = pricing[plan.key + '_monthly'];
+        const yearly = pricing[plan.key + '_yearly'];
+        const price = monthly ? monthly.formatted : '$29/mo';
+        const priceYearly = yearly ? yearly.formatted : '$290/yr';
+        return `<div style="background:var(--bg2);border:1px solid ${plan.popular ? 'var(--blue2)' : 'var(--border)'};border-radius:14px;padding:32px 24px;text-align:center;position:relative;${plan.popular ? 'box-shadow:0 0 40px rgba(197,160,89,0.08);transform:scale(1.03);' : ''}">
+          ${plan.popular ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--blue),var(--blue2));color:#090A0F;font:700 10px sans-serif;padding:3px 12px;border-radius:20px;text-transform:uppercase;letter-spacing:0.5px">Most Popular</div>' : ''}
+          <h3 style="font-size:20px;margin-bottom:8px">${plan.name}</h3>
+          <div style="font-size:36px;font-weight:700;font-family:'Playfair Display',serif;background:linear-gradient(135deg,var(--blue),#E8C96A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:8px 0">${price}</div>
+          <div style="color:var(--muted);font-size:12px;margin-bottom:4px">${priceYearly} billed yearly</div>
+          <div style="text-align:left;margin:20px 0">${plan.features.map(f => `<div class="pf">${f}</div>`).join('')}</div>
+          <a href="/shop-signup.html"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
+        </div>`;
+      }).join('');
+    } catch (err) {
+      // Fallback static pricing
+      document.getElementById('pricingCards').innerHTML = PLANS.map(plan =>
+        `<div style="background:var(--bg2);border:1px solid ${plan.popular ? 'var(--blue2)' : 'var(--border)'};border-radius:14px;padding:32px 24px;text-align:center">
+          <h3 style="font-size:20px;margin-bottom:8px">${plan.name}</h3>
+          <div style="font-size:36px;font-weight:700;font-family:'Playfair Display',serif;background:linear-gradient(135deg,var(--blue),#E8C96A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:8px 0">$29/mo</div>
+          <div style="text-align:left;margin:20px 0">${plan.features.map(f => `<div class="pf">${f}</div>`).join('')}</div>
+          <a href="/shop-signup.html"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
+        </div>`
+      ).join('');
+    }
+  }
+  loadPricing(currentCurrency);
 </script>
 </body>
 </html>
