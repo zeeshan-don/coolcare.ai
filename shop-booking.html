@@ -183,7 +183,7 @@
 
   async function loadBooking() {
     try {
-      const res = await fetch(`/api/shop/booking/${bookingId}`, {
+      const res = await fetch(`/api/shop?action=booking&id=${bookingId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) { window.location.href = '/shop-login.html'; return; }
@@ -302,13 +302,13 @@
       : undefined;
 
     try {
-      const res = await fetch('/api/shop/bookings/update', {
+      const res = await fetch('/api/shop', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ bookingId: booking.id, status, technicianName }),
+        body: JSON.stringify({ action: 'update', bookingId: booking.id, status, technicianName }),
       });
       if (res.status === 401) { window.location.href = '/shop-login.html'; return; }
       const data = await res.json();
@@ -343,13 +343,13 @@
     Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
 
     try {
-      const res = await fetch('/api/shop/bookings/update', {
+      const res = await fetch('/api/shop', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ action: 'update', ...body }),
       });
       const data = await res.json();
       if (!res.ok) { showToast('Error: ' + (data.error || 'Save failed')); return; }

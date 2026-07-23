@@ -133,9 +133,10 @@
   if (shopData.shopName) document.getElementById('shopName').textContent = shopData.shopName;
 
   function logout() {
-    fetch('/api/auth/logout', {
+    fetch('/api/auth', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'logout' }),
     }).catch(() => {});
     localStorage.removeItem('cc_token');
     localStorage.removeItem('cc_shop');
@@ -156,7 +157,7 @@
   function exportCSV() {
     const params = new URLSearchParams();
     if (currentFilter !== 'all') params.set('status', currentFilter);
-    window.open(`/api/shop/export?${params}`, '_blank');
+    window.open(`/api/shop?action=export&${params}`, '_blank');
   }
 
   async function loadDashboard() {
@@ -165,7 +166,7 @@
       if (currentFilter !== 'all') params.set('status', currentFilter);
       if (searchQuery) params.set('search', searchQuery);
 
-      const res = await fetch(`/api/shop/dashboard?${params}`, {
+      const res = await fetch(`/api/shop?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.status === 401) { logout(); return; }

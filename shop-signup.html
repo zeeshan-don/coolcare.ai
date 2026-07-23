@@ -215,10 +215,10 @@
     submitBtn.textContent = 'Creating account…';
 
     try {
-      const res = await fetch('/api/auth/signup', {
+      const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shopName, ownerName, email, mobile, password, confirmPassword, address, city, serviceAreas, servicesOffered }),
+        body: JSON.stringify({ action: 'signup', shopName, ownerName, email, mobile, password, confirmPassword, address, city, serviceAreas, servicesOffered }),
       });
       const data = await res.json();
 

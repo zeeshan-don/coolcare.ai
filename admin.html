@@ -121,7 +121,7 @@
   }
 
   function logout() {
-    fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
     localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop');
     window.location.href = '/shop-login.html';
   }
@@ -131,7 +131,7 @@
     try {
       const params = new URLSearchParams({ page, limit: 20 });
       if (search) params.set('search', search);
-      const res = await fetch(`/api/admin/shops?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(`/api/shop?action=admin&${params}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) { logout(); return; }
       if (res.status === 403) { alert('Admin access required.'); return; }
       const data = await res.json();
@@ -192,12 +192,12 @@
     if (action === 'delete' && !confirm('Delete this shop permanently?')) return;
     if (action === 'suspend') {
       const reason = prompt('Suspension reason (optional):');
-      await fetch('/api/admin/shops', {
+      await fetch('/api/shop', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ shopId, action, reason: reason || undefined }),
       });
     } else {
-      await fetch('/api/admin/shops', {
+      await fetch('/api/shop', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ shopId, action }),
       });
