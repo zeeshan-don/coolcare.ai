@@ -32,14 +32,18 @@ function validate(request, response, schema) {
 // ─── Reusable Zod schemas ────────────────────────────────────────────────────
 
 // Sanitize strings: trim, collapse whitespace, strip HTML tags
-const cleanString = z
-  .string()
-  .transform((s) =>
-    s
-      .trim()
-      .replace(/\s+/g, " ")
-      .replace(/<[^>]*>/g, "")
-  );
+// In Zod v4, .transform() returns ZodEffects which loses .min()/.max().
+// So we apply length constraints BEFORE the transform.
+function cleanString() {
+  return z
+    .string()
+    .trim()
+    .transform((s) =>
+      s
+        .replace(/\s+/g, " ")
+        .replace(/<[^>]*>/g, "")
+    );
+}
 
 const email = z.string().email("Invalid email address").transform((s) => s.toLowerCase().trim());
 
@@ -71,22 +75,22 @@ const pagination = z.object({
 
 // ─── Login schema ────────────────────────────────────────────────────────────
 const loginSchema = z.object({
-  identifier: cleanString.min(1, "Email or mobile number is required"),
+  identifier: z.string().min(1, "Email or mobile number is required").trim(),
   password: z.string().min(1, "Password is required"),
 });
 
 // ─── Signup schema ───────────────────────────────────────────────────────────
 const signupSchema = z.object({
-  shopName: cleanString.min(1, "Shop name is required").max(100),
-  ownerName: cleanString.min(1, "Owner name is required").max(100),
+  shopName: z.string().min(1, "Shop name is required").max(100).trim(),
+  ownerName: z.string().min(1, "Owner name is required").max(100).trim(),
   email,
   mobile,
   password,
   confirmPassword: z.string().min(1, "Please confirm your password"),
-  address: cleanString.max(500).optional(),
-  city: cleanString.min(1, "City is required").max(100),
-  serviceAreas: z.array(cleanString).max(20).default([]),
-  servicesOffered: z.array(cleanString).min(1, "Select at least one service").max(20),
+  address: z.string().max(500).trim().optional(),
+  city: z.string().min(1, "City is required").max(100).trim(),
+  serviceAreas: z.array(z.string().trim()).max(20).default([]),
+  servicesOffered: z.array(z.string().trim()).min(1, "Select at least one service").max(20),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],
@@ -96,14 +100,14 @@ const signupSchema = z.object({
 const bookingUpdateSchema = z.object({
   bookingId: z.coerce.number().int().positive("bookingId is required"),
   status: bookingStatus.optional(),
-  technicianName: cleanString.max(100).optional().nullable(),
+  technicianName: z.string().max(100).trim().optional().nullable(),
   technicianId: z.coerce.number().int().positive().optional().nullable(),
   technicianNotes: z.string().max(2000).optional().nullable(),
   estimatedCost: z.coerce.number().min(0).max(999999).optional().nullable(),
   finalCost: z.coerce.number().min(0).max(999999).optional().nullable(),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   rescheduleDate: z.string().optional().nullable(),
-  invoiceNumber: cleanString.max(50).optional().nullable(),
+  invoiceNumber: z.string().max(50).trim().optional().nullable(),
 });
 
 module.exports = {
