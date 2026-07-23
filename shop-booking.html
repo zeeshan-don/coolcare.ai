@@ -3,47 +3,71 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>CoolCare | Booking Details</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--navy:#09233b;--blue:#146ef5;--sky:#eaf3ff;--mint:#dbf7ea;--green:#08784d;--gold:#ffbd53;--paper:#f7f9fc;--line:#e3eaf1;--ink:#102a43;--muted:#64778b;--red:#d93025}
-    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
-    a{color:var(--blue);text-decoration:none}
-    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--line);background:#fff}
-    .brand{font-weight:850;letter-spacing:-1.2px;font-size:22px;color:var(--ink)}.brand b{color:var(--blue)}
+    :root{
+      --bg:#F7F5F0;
+      --bg2:#FFFFFF;
+      --bg3:#F1EFE9;
+      --border:rgba(197,160,89,0.15);
+      --border2:rgba(197,160,89,0.35);
+      --blue:#C5A059;
+      --blue2:#D4AF37;
+      --glow:rgba(197,160,89,0.12);
+      --green:#6E8B68;
+      --green-bg:#EBF0EA;
+      --paper:#F7F5F0;
+      --line:#E2E0D9;
+      --ink:#0D0D0E;
+      --muted:#7E7A72;
+      --muted2:#B5B1A8;
+      --red:#B85A5A;
+      --red-bg:#FBEAEA;
+    }
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,sans-serif}
+    h1,h2,h3,.brand{font-family:'Playfair Display',Georgia,serif;font-weight:700}
+    a{color:var(--blue);text-decoration:none;transition:color 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
+    a:hover{color:var(--blue2)}
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--border);background:var(--bg2)}
+    .brand{font-weight:700;letter-spacing:1px;font-size:22px;color:var(--ink);text-transform:uppercase}.brand b{color:var(--blue);font-weight:900}
     .nav-right{display:flex;align-items:center;gap:16px}
-    .back{font-size:13px;font-weight:700;color:var(--muted)}
+    .back{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+    .back:hover{color:var(--blue)}
     .wrap{max-width:900px;margin:auto;padding:28px 24px 60px}
     .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;gap:14px}
-    .page-header h1{font-size:24px;letter-spacing:-.8px;margin:0 0 4px}
-    .badge{display:inline-block;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.3px}
-    .badge.open{background:#e9f3ff;color:#1761bd}
-    .badge.accepted,.badge.assigned{background:#fff7e0;color:#7a5c00}
-    .badge.completed{background:var(--mint);color:var(--green)}
-    .badge.cancelled,.badge.rejected{background:#f0f0f0;color:#888}
-    .badge.on_the_way{background:#d6ebff;color:#1e63c5}
-    .badge.arrived{background:#ffeaea;color:#c00}
+    .page-header h1{font-size:28px;letter-spacing:-0.2px;margin:0 0 4px}
+    .badge{display:inline-block;padding:5px 10px;border-radius:6px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px}
+    .badge.open{background:rgba(197,160,89,0.08);color:var(--blue);border:1px solid rgba(197,160,89,0.15)}
+    .badge.accepted,.badge.assigned{background:rgba(197,160,89,0.04);color:var(--blue2);border:1px solid rgba(197,160,89,0.12)}
+    .badge.completed{background:var(--green-bg);color:var(--green);border:1px solid rgba(110,139,104,0.15)}
+    .badge.cancelled,.badge.rejected{background:var(--bg3);color:var(--muted);border:1px solid var(--border)}
+    .badge.on_the_way{background:rgba(197,160,89,0.04);color:var(--blue2);border:1px solid rgba(197,160,89,0.12)}
+    .badge.arrived{background:var(--red-bg);color:var(--red);border:1px solid rgba(184,90,90,0.15)}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
-    .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 24px}
-    .card h2{font-size:15px;font-weight:800;margin:0 0 16px;letter-spacing:-.3px}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:22px 24px;box-shadow:0 12px 40px rgba(197,160,89,0.04)}
+    .card h2{font-size:15px;font-weight:800;margin:0 0 16px;letter-spacing:-0.2px}
     .info-row{display:flex;flex-direction:column;margin-bottom:12px}
     .info-row:last-child{margin:0}
-    .info-label{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+    .info-label{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
     .info-value{font-size:14px;font-weight:600}
-    .section-label{font-weight:800;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+    .section-label{font-weight:800;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
     .actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:24px}
-    .action-btn{padding:11px 14px;border-radius:10px;border:1.5px solid var(--line);background:#fff;font:700 13px inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s}
-    .action-btn:hover{border-color:var(--blue);background:var(--sky);color:var(--blue)}
-    .action-btn.danger:hover{border-color:var(--red);background:#ffeaea;color:var(--red)}
-    .action-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
-    .action-btn.primary:hover{opacity:.85}
+    .action-btn{padding:11px 14px;border-radius:8px;border:1px solid var(--line);background:var(--bg2);font:700 13px inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
+    .action-btn:hover{border-color:var(--blue);background:rgba(197,160,89,0.05);color:var(--blue);transform:translateY(-1px)}
+    .action-btn.danger:hover{border-color:var(--red);background:var(--red-bg);color:var(--red)}
+    .action-btn.primary{background:var(--blue);color:#090A0F;border-color:var(--blue);box-shadow:0 4px 12px var(--glow)}
+    .action-btn.primary:hover{background:var(--blue2);transform:translateY(-1px);box-shadow:0 6px 16px rgba(197,160,89,0.25)}
     .action-btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
     .field{margin-bottom:14px}
-    label{display:block;font-weight:700;font-size:13px;margin-bottom:5px}
-    input,textarea{width:100%;border:1px solid #cbd8e4;border-radius:9px;padding:11px 13px;font:inherit;transition:border-color .15s}
-    input:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px #146ef520}
+    label{display:block;font-weight:700;font-size:12px;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted)}
+    input,textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 13px;font:inherit;background:var(--bg2);transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
+    input:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--glow)}
     textarea{resize:vertical;min-height:80px}
-    .save-btn{background:var(--blue);color:#fff;border:0;border-radius:9px;padding:11px 18px;font:700 14px inherit;cursor:pointer}
-    .save-btn:hover{opacity:.88}.save-btn:disabled{opacity:.5;cursor:not-allowed}
-    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 22px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:opacity .3s;z-index:100}
+    .save-btn{background:var(--blue);color:#090A0F;border:0;border-radius:8px;padding:11px 18px;font:700 14px inherit;cursor:pointer;box-shadow:0 4px 12px var(--glow);transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
+    .save-btn:hover{background:var(--blue2);transform:translateY(-1px);box-shadow:0 6px 16px rgba(197,160,89,0.25)}.save-btn:disabled{opacity:.5;cursor:not-allowed}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:12px 22px;border-radius:8px;font-size:13px;font-weight:700;opacity:0;transition:opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);z-index:100}
     .toast.show{opacity:1}
     @media(max-width:680px){.grid{grid-template-columns:1fr}.page-header{flex-direction:column;align-items:flex-start}}
   </style>
@@ -201,16 +225,24 @@
     renderActions();
   }
 
+  const SVGS = {
+    check: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
+    x: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+    user: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`,
+    truck: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`,
+    mapPin: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`
+  };
+
   const ACTION_FLOWS = {
-    open:       [{ label: '✅ Accept Booking',       status: 'accepted',   cls: 'primary' },
-                 { label: '❌ Reject Booking',        status: 'rejected',   cls: 'danger'  }],
-    accepted:   [{ label: '🔧 Assign Technician',    status: 'assigned',   cls: '' },
-                 { label: '🚫 Cancel Booking',        status: 'cancelled',  cls: 'danger'  }],
-    assigned:   [{ label: '🚗 Technician On The Way', status: 'on_the_way', cls: '' },
-                 { label: '🚫 Cancel Booking',        status: 'cancelled',  cls: 'danger'  }],
-    on_the_way: [{ label: '📍 Mark Arrived',          status: 'arrived',    cls: '' }],
-    arrived:    [{ label: '🎉 Mark Completed',         status: 'completed',  cls: 'primary' },
-                 { label: '🚫 Cancel Booking',         status: 'cancelled',  cls: 'danger'  }],
+    open:       [{ label: 'Accept Booking',       status: 'accepted',   cls: 'primary', icon: SVGS.check },
+                 { label: 'Reject Booking',        status: 'rejected',   cls: 'danger',  icon: SVGS.x }],
+    accepted:   [{ label: 'Assign Technician',    status: 'assigned',   cls: '',         icon: SVGS.user },
+                 { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
+    assigned:   [{ label: 'Technician On The Way', status: 'on_the_way', cls: '',         icon: SVGS.truck },
+                 { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
+    on_the_way: [{ label: 'Mark Arrived',          status: 'arrived',    cls: '',         icon: SVGS.mapPin }],
+    arrived:    [{ label: 'Mark Completed',         status: 'completed',  cls: 'primary', icon: SVGS.check },
+                 { label: 'Cancel Booking',         status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
     completed:  [],
     cancelled:  [],
     rejected:   [],
@@ -220,11 +252,11 @@
     const container = document.getElementById('actionsContainer');
     const actions = ACTION_FLOWS[booking.status] || [];
     if (!actions.length) {
-      container.innerHTML = '<div style="color:var(--muted);font-size:14px">No further actions available for this status.</div>';
+      container.innerHTML = '<div style="color:var(--muted);font-size:14px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">No further actions available for this status.</div>';
       return;
     }
     container.innerHTML = actions.map(a =>
-      `<button class="action-btn ${a.cls}" onclick="updateStatus('${a.status}')">${escapeHtml(a.label)}</button>`
+      `<button class="action-btn ${a.cls}" onclick="updateStatus('${a.status}')">${a.icon || ''}<span>${escapeHtml(a.label)}</span></button>`
     ).join('');
   }
 

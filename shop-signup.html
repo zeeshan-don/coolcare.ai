@@ -3,35 +3,58 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>CoolCare | Register Your Repair Shop</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--navy:#09233b;--blue:#146ef5;--sky:#eaf3ff;--mint:#dbf7ea;--green:#08784d;--paper:#f7f9fc;--line:#e3eaf1;--ink:#102a43;--muted:#64778b;--red:#d93025}
-    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
-    a{color:var(--blue);text-decoration:none}
-    .nav{height:66px;display:flex;align-items:center;justify-content:space-between;max-width:1100px;margin:auto;padding:0 24px;border-bottom:1px solid var(--line)}
-    .brand{font-weight:850;letter-spacing:-1.2px;font-size:22px}.brand b{color:var(--blue)}
+    :root{
+      --bg:#F7F5F0;
+      --bg2:#FFFFFF;
+      --bg3:#F1EFE9;
+      --border:rgba(197,160,89,0.15);
+      --border2:rgba(197,160,89,0.35);
+      --blue:#C5A059;
+      --blue2:#D4AF37;
+      --glow:rgba(197,160,89,0.12);
+      --green:#6E8B68;
+      --green-bg:#EBF0EA;
+      --paper:#F7F5F0;
+      --line:#E2E0D9;
+      --ink:#0D0D0E;
+      --muted:#7E7A72;
+      --muted2:#B5B1A8;
+      --red:#B85A5A;
+      --red-bg:#FBEAEA;
+    }
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,sans-serif}
+    h1,h2,h3,.brand{font-family:'Playfair Display',Georgia,serif;font-weight:700}
+    a{color:var(--blue);text-decoration:none;transition:color 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
+    a:hover{color:var(--blue2)}
+    .nav{height:66px;display:flex;align-items:center;justify-content:space-between;max-width:1100px;margin:auto;padding:0 24px;border-bottom:1px solid var(--border)}
+    .brand{font-weight:700;letter-spacing:1px;font-size:22px;text-transform:uppercase}.brand b{color:var(--blue);font-weight:900}
     .wrap{max-width:640px;margin:40px auto;padding:0 20px 60px}
-    .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:36px 32px}
-    h1{font-size:26px;letter-spacing:-1px;margin:0 0 6px}
+    .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:36px 32px;box-shadow:0 12px 40px rgba(197,160,89,0.06)}
+    h1{font-size:26px;letter-spacing:-0.2px;margin:0 0 6px}
     .sub{color:var(--muted);margin:0 0 28px;font-size:14px}
-    .section-label{font-weight:800;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:24px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+    .section-label{font-weight:800;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:24px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .field{margin-bottom:14px}
-    label{display:block;font-weight:700;font-size:13px;margin-bottom:5px}
-    input,select{width:100%;border:1px solid #cbd8e4;border-radius:9px;padding:11px 13px;font:inherit;background:#fff;transition:border-color .15s}
-    input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px #146ef520}
+    label{display:block;font-weight:700;font-size:12px;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted)}
+    input,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 13px;font:inherit;background:#fff;transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
+    input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--glow)}
     input.error,select.error{border-color:var(--red)}
     .err-msg{color:var(--red);font-size:12px;margin-top:4px;display:none}
     .err-msg.show{display:block}
     .services-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
-    .service-chip{display:flex;align-items:center;gap:7px;padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
+    .service-chip{display:flex;align-items:center;gap:7px;padding:9px 11px;border:1.5px solid var(--line);border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
     .service-chip input{width:auto;margin:0;accent-color:var(--blue)}
-    .service-chip:has(input:checked){border-color:var(--blue);background:var(--sky);color:var(--blue)}
-    .btn{width:100%;background:var(--blue);color:#fff;border:0;border-radius:10px;padding:13px;font:700 15px inherit;cursor:pointer;margin-top:8px;transition:opacity .15s}
-    .btn:hover{opacity:.88}.btn:disabled{opacity:.5;cursor:not-allowed}
-    .alert{padding:12px 16px;border-radius:9px;font-size:13px;margin-bottom:16px;display:none}
+    .service-chip:has(input:checked){border-color:var(--blue);background:rgba(197,160,89,0.08);color:var(--blue)}
+    .btn{width:100%;background:var(--blue);color:#090A0F;border:0;border-radius:8px;padding:13px;font:700 15px inherit;cursor:pointer;margin-top:8px;transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);box-shadow:0 4px 12px var(--glow)}
+    .btn:hover{background:var(--blue2);transform:translateY(-1px);box-shadow:0 6px 16px rgba(197,160,89,0.25)}.btn:disabled{opacity:.5;cursor:not-allowed}
+    .alert{padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none}
     .alert.show{display:block}
-    .alert.error{background:#ffeaea;border:1px solid #fcc;color:#8b0000}
-    .alert.success{background:var(--mint);border:1px solid #aee9ca;color:var(--green)}
+    .alert.error{background:var(--red-bg);border:1px solid rgba(184,90,90,0.2);color:var(--red)}
+    .alert.success{background:var(--green-bg);border:1px solid rgba(110,139,104,0.2);color:var(--green)}
     .login-link{text-align:center;margin-top:20px;font-size:13px;color:var(--muted)}
     @media(max-width:560px){.row{grid-template-columns:1fr}.services-grid{grid-template-columns:repeat(2,1fr)}.card{padding:24px 18px}}
   </style>

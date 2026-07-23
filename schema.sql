@@ -67,15 +67,6 @@ CREATE TABLE IF NOT EXISTS technicians (
   active BOOLEAN DEFAULT true
 );
 
--- Demo requests: landing page demo form submissions
-CREATE TABLE IF NOT EXISTS demo_requests (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  business_name TEXT,
-  whatsapp_number TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
 -- Sample technicians (edit with real names/numbers before going live)
 INSERT INTO technicians (name, phone, active, services) VALUES
   ('Rajesh Kumar', '+919876543210', true, ARRAY['AC no cooling', 'AC installation', 'AC service', 'Refrigerator not cooling', 'Refrigerator repair']),

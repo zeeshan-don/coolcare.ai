@@ -68,27 +68,19 @@ Then add it to Vercel:
 
 ## 🧪 Test the Fix
 
-### Test 1: Dashboard SQL Error Fixed
-1. Open your deployed site: `https://your-coolcare-site.vercel.app`
-2. Click **"Request Demo"** and submit the form
-3. Open browser DevTools → Network tab
-4. The `/api/dashboard` call should return `200 OK`
-5. **Before fix:** returned `500` with `"column b.address does not exist"`
-6. **After fix:** returns `200` with `{"enquiries": [...]}`
-
-### Test 2: Repair Shop Signup
+### Test 1: Repair Shop Signup
 1. Go to `/shop-signup.html`
 2. Fill out the form
 3. Click "Create Account"
 4. **Expected:** redirects to `/shop-dashboard.html` with your shop's bookings
 5. **If it fails:** check browser console for errors, and Vercel logs for backend errors
 
-### Test 3: Repair Shop Login
+### Test 2: Repair Shop Login
 1. Go to `/shop-login.html`
 2. Log in with the email/mobile + password you just created
 3. **Expected:** redirects to `/shop-dashboard.html`
 
-### Test 4: Job Management
+### Test 3: Job Management
 1. In the shop dashboard, click any booking
 2. Click "Accept Booking"
 3. **Expected:** status changes to "Accepted" and customer receives WhatsApp notification
@@ -152,7 +144,6 @@ Once everything is deployed:
 - [ ] Run `migration-repair-shop-auth.sql` in Neon
 - [ ] Add `JWT_SECRET` to Vercel
 - [ ] Redeploy on Vercel
-- [ ] Test dashboard SQL error is fixed
 - [ ] Test shop signup works
 - [ ] Test shop login works
 - [ ] Test job status update sends WhatsApp notification
