@@ -37,139 +37,7 @@
       e.target.innerHTML='<h2>Thank you!</h2><p>We\'ve got your details and will reach out shortly.</p><button class="btn" type="button" onclick="closeDemo()">Close</button>';
     }
 
-    // ── Book Service button handler ──────────────────────────────────────────
-    // Reads the first pending booking from the queue, calls /api/book-service,
-    // and logs every step to the browser console so failures are easy to trace.
-    async function booked() {
-      const btn = document.querySelector('.booking');
-
-      // ── STEP 1: button click confirmed ──────────────────────────────────
-      console.log('%c[BOOK] STEP 1 — Button clicked', 'color:#146ef5;font-weight:bold');
-
-      // Disable button to prevent double-submit
-      btn.textContent = '⏳ Booking…';
-      btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.7';
-
-      // ── STEP 2: build payload from first queue item ──────────────────────
-      console.log('[BOOK] STEP 2 — Building payload from queue…');
-
-      // Try to pull the first booking row from the rendered queue list
-      const firstJob = document.querySelector('#queue-list .job');
-      let customerName   = '';
-      let serviceType    = '';
-      let customerNumber = '';
-      let area           = '';
-
-      if (firstJob) {
-        customerName  = firstJob.querySelector('b')?.textContent?.trim()  || '';
-        const detail  = firstJob.querySelector('small')?.textContent?.trim() || '';
-        // detail is "Area · ServiceType" or just one of them
-        const parts   = detail.split('·').map(s => s.trim());
-        area          = parts[0] || '';
-        serviceType   = parts[1] || parts[0] || '';
-        console.log('[BOOK] STEP 2 — Pulled from queue row:', { customerName, area, serviceType });
-      } else {
-        console.warn('[BOOK] STEP 2 — No queue row found. Using demo values.');
-      }
-
-      // Fall back to demo values if nothing was found in the queue
-      if (!customerName) customerName = 'Demo Customer';
-      if (!serviceType)  serviceType  = 'AC Repair';
-      if (!area)         area         = 'Indiranagar';
-
-      // customerNumber must be a valid WhatsApp number (E.164 without the +)
-      // In a real dashboard this would come from the booking record.
-      // We read it from a data attribute if available, else a placeholder.
-      customerNumber = firstJob?.dataset?.customerNumber || '';
-      if (!customerNumber) {
-        console.warn('[BOOK] STEP 2 — customerNumber missing from queue row. WhatsApp send will fail on the backend unless you supply a real number.');
-        customerNumber = '919999999999'; // placeholder — replace with real number from your DB
-      }
-
-      const payload = {
-        customerNumber,
-        customerName,
-        serviceType,
-        area,
-        slot:    '2–4 PM',
-        address: area,    // best available; a full address would come from the booking record
-        urgency: 'Today',
-      };
-
-      console.log('[BOOK] STEP 2 — Final payload:', JSON.stringify(payload, null, 2));
-
-      // ── STEP 3: send the API request ────────────────────────────────────
-      console.log('[BOOK] STEP 3 — Sending POST /api/book-service…');
-      let res;
-      try {
-        res = await fetch('/api/book-service', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(payload),
-        });
-        console.log('[BOOK] STEP 3 — Response received. HTTP status:', res.status);
-      } catch (networkErr) {
-        // Network failure — server unreachable or CORS block
-        console.error('[BOOK] STEP 3 — fetch() threw a network error:', networkErr.message);
-        btn.textContent    = '✗ Network error — see console';
-        btn.style.background = '#ffeaea';
-        btn.style.color      = '#c00';
-        btn.style.pointerEvents = 'auto';
-        btn.style.opacity    = '1';
-        return;
-      }
-
-      // ── STEP 4: parse the JSON response ─────────────────────────────────
-      console.log('[BOOK] STEP 4 — Parsing response body…');
-      let data;
-      try {
-        data = await res.json();
-        console.log('[BOOK] STEP 4 — Response body:', JSON.stringify(data, null, 2));
-      } catch (parseErr) {
-        console.error('[BOOK] STEP 4 — Failed to parse JSON response:', parseErr.message);
-        btn.textContent    = '✗ Bad response — see console';
-        btn.style.background = '#ffeaea';
-        btn.style.color      = '#c00';
-        btn.style.pointerEvents = 'auto';
-        btn.style.opacity    = '1';
-        return;
-      }
-
-      // ── STEP 5: evaluate outcome ─────────────────────────────────────────
-      if (!res.ok && res.status !== 207) {
-        console.error('[BOOK] STEP 5 — Backend returned an error:', res.status, data);
-        btn.textContent    = `✗ Error ${res.status} — ${data?.error || 'see console'}`;
-        btn.style.background = '#ffeaea';
-        btn.style.color      = '#c00';
-        btn.style.pointerEvents = 'auto';
-        btn.style.opacity    = '1';
-        return;
-      }
-
-      if (data?.booked) {
-        if (data.whatsappSent) {
-          console.log('%c[BOOK] STEP 5 — SUCCESS: booking saved & WhatsApp sent. Booking ID:', 'color:green;font-weight:bold', data.bookingId);
-          btn.textContent    = '✓ Slot booked — customer notified via WhatsApp';
-          btn.style.background = '#dbf7ea';
-          btn.style.color      = '#08784d';
-        } else {
-          console.warn('[BOOK] STEP 5 — Booking saved but WhatsApp send FAILED:', data.whatsappError);
-          btn.textContent    = '⚠ Booked — WhatsApp send failed (see console)';
-          btn.style.background = '#fff7e0';
-          btn.style.color      = '#7a5c00';
-        }
-      } else {
-        console.error('[BOOK] STEP 5 — Unexpected response (booked=false):', data);
-        btn.textContent    = '✗ Unexpected response — see console';
-        btn.style.background = '#ffeaea';
-        btn.style.color      = '#c00';
-      }
-
-      btn.style.pointerEvents = 'auto';
-      btn.style.opacity = '1';
-      console.log('[BOOK] Flow complete.');
-    }
+    function booked(){const x=document.querySelector('.booking');x.textContent='✓ Slot booked — customer notified';x.style.background='#dbf7ea';x.style.color='#08784d'}
 
     function escapeHtml(s){
       return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -191,9 +59,7 @@
           let statusText = 'Needs booking', statusClass = '';
           if(r.status === 'assigned'){ statusText = r.technician_name ? `${escapeHtml(r.technician_name)} assigned` : 'Technician assigned'; statusClass='booked'; }
           if(r.status === 'completed'){ statusText = 'Completed'; statusClass='booked'; }
-          // data-customer-number is used by the Book Service button to know who to notify
-          const custNum = escapeHtml(r.customer_number || '');
-          return `<div class="job" data-customer-number="${custNum}"><div><b>${label}</b><small>${detail}</small></div><span class="${statusClass}">${statusText}</span></div>`;
+          return `<div class="job"><div><b>${label}</b><small>${detail}</small></div><span class="${statusClass}">${statusText}</span></div>`;
         }).join('');
       }catch(e){
         list.innerHTML = '<div class="job"><small>Could not load queue right now.</small></div>';
