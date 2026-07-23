@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoolCare | Booking Details</title>
+  <style>
+    :root{--navy:#09233b;--blue:#146ef5;--sky:#eaf3ff;--mint:#dbf7ea;--green:#08784d;--gold:#ffbd53;--paper:#f7f9fc;--line:#e3eaf1;--ink:#102a43;--muted:#64778b;--red:#d93025}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
+    a{color:var(--blue);text-decoration:none}
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--line);background:#fff}
+    .brand{font-weight:850;letter-spacing:-1.2px;font-size:22px;color:var(--ink)}.brand b{color:var(--blue)}
+    .nav-right{display:flex;align-items:center;gap:16px}
+    .back{font-size:13px;font-weight:700;color:var(--muted)}
+    .wrap{max-width:900px;margin:auto;padding:28px 24px 60px}
+    .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;gap:14px}
+    .page-header h1{font-size:24px;letter-spacing:-.8px;margin:0 0 4px}
+    .badge{display:inline-block;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.3px}
+    .badge.open{background:#e9f3ff;color:#1761bd}
+    .badge.accepted,.badge.assigned{background:#fff7e0;color:#7a5c00}
+    .badge.completed{background:var(--mint);color:var(--green)}
+    .badge.cancelled,.badge.rejected{background:#f0f0f0;color:#888}
+    .badge.on_the_way{background:#d6ebff;color:#1e63c5}
+    .badge.arrived{background:#ffeaea;color:#c00}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+    .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+    .card h2{font-size:15px;font-weight:800;margin:0 0 16px;letter-spacing:-.3px}
+    .info-row{display:flex;flex-direction:column;margin-bottom:12px}
+    .info-row:last-child{margin:0}
+    .info-label{font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+    .info-value{font-size:14px;font-weight:600}
+    .section-label{font-weight:800;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:22px 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+    .actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:24px}
+    .action-btn{padding:11px 14px;border-radius:10px;border:1.5px solid var(--line);background:#fff;font:700 13px inherit;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .15s}
+    .action-btn:hover{border-color:var(--blue);background:var(--sky);color:var(--blue)}
+    .action-btn.danger:hover{border-color:var(--red);background:#ffeaea;color:var(--red)}
+    .action-btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .action-btn.primary:hover{opacity:.85}
+    .action-btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+    .field{margin-bottom:14px}
+    label{display:block;font-weight:700;font-size:13px;margin-bottom:5px}
+    input,textarea{width:100%;border:1px solid #cbd8e4;border-radius:9px;padding:11px 13px;font:inherit;transition:border-color .15s}
+    input:focus,textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px #146ef520}
+    textarea{resize:vertical;min-height:80px}
+    .save-btn{background:var(--blue);color:#fff;border:0;border-radius:9px;padding:11px 18px;font:700 14px inherit;cursor:pointer}
+    .save-btn:hover{opacity:.88}.save-btn:disabled{opacity:.5;cursor:not-allowed}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 22px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:opacity .3s;z-index:100}
+    .toast.show{opacity:1}
+    @media(max-width:680px){.grid{grid-template-columns:1fr}.page-header{flex-direction:column;align-items:flex-start}}
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/shop-dashboard.html">cool<b>care</b></a>
+  <div class="nav-right">
+    <a class="back" href="/shop-dashboard.html">← Dashboard</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div id="loadingMsg" style="text-align:center;color:var(--muted);padding:60px">Loading booking…</div>
+  <div id="bookingContent" style="display:none">
+
+    <div class="page-header">
+      <div>
+        <h1 id="pageTitle">Booking #</h1>
+        <div id="statusBadge" class="badge">—</div>
+        <span id="createdAt" style="font-size:12px;color:var(--muted);margin-left:10px"></span>
+      </div>
+    </div>
+
+    <!-- Customer & booking info -->
+    <div class="grid" id="infoGrid">
+      <div class="card">
+        <h2>Customer Details</h2>
+        <div class="info-row"><span class="info-label">Name</span><span class="info-value" id="custName">—</span></div>
+        <div class="info-row"><span class="info-label">Phone</span><span class="info-value" id="custPhone">—</span></div>
+        <div class="info-row"><span class="info-label">Address</span><span class="info-value" id="custAddress">—</span></div>
+        <div class="info-row"><span class="info-label">Area</span><span class="info-value" id="custArea">—</span></div>
+      </div>
+      <div class="card">
+        <h2>Booking Details</h2>
+        <div class="info-row"><span class="info-label">Appliance / Service</span><span class="info-value" id="serviceType">—</span></div>
+        <div class="info-row"><span class="info-label">Preferred Date</span><span class="info-value" id="urgency">—</span></div>
+        <div class="info-row"><span class="info-label">Assigned Technician</span><span class="info-value" id="techName">—</span></div>
+        <div class="info-row"><span class="info-label">Estimated Cost</span><span class="info-value" id="estCost">—</span></div>
+        <div class="info-row"><span class="info-label">Final Cost</span><span class="info-value" id="finalCost">—</span></div>
+      </div>
+    </div>
+
+    <!-- Technician notes -->
+    <div class="card" style="margin-top:16px;display:none" id="notesCard">
+      <h2>Technician Notes</h2>
+      <p id="techNotes" style="margin:0;font-size:14px;color:var(--ink)"></p>
+    </div>
+
+    <!-- Job actions -->
+    <div class="section-label" style="margin-top:26px">Job Actions</div>
+    <div class="actions" id="actionsContainer">
+      <!-- Populated dynamically -->
+    </div>
+
+    <!-- Technician assignment form -->
+    <div class="card" style="margin-top:0" id="techForm">
+      <h2>Update Technician & Costs</h2>
+      <div class="grid" style="gap:12px">
+        <div class="field">
+          <label for="technicianName">Technician Name</label>
+          <input id="technicianName" type="text" placeholder="Full name">
+        </div>
+        <div class="field">
+          <label for="estCostInput">Estimated Cost (₹)</label>
+          <input id="estCostInput" type="number" placeholder="e.g. 500" min="0">
+        </div>
+        <div class="field">
+          <label for="finalCostInput">Final Cost (₹)</label>
+          <input id="finalCostInput" type="number" placeholder="e.g. 650" min="0">
+        </div>
+      </div>
+      <div class="field">
+        <label for="notesInput">Technician Notes</label>
+        <textarea id="notesInput" placeholder="Observations, parts needed, work done…"></textarea>
+      </div>
+      <button class="save-btn" id="saveTechBtn" onclick="saveTechDetails()">Save Details</button>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const token = localStorage.getItem('cc_token');
+  if (!token) window.location.href = '/shop-login.html';
+
+  const params    = new URLSearchParams(location.search);
+  const bookingId = params.get('id');
+  if (!bookingId) window.location.href = '/shop-dashboard.html';
+
+  let booking = null;
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  async function loadBooking() {
+    try {
+      // Get all bookings from dashboard, then find this one
+      const res = await fetch('/api/shop/dashboard', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) { window.location.href = '/shop-login.html'; return; }
+      const data = await res.json();
+      booking = (data.bookings || []).find(b => String(b.id) === bookingId);
+      if (!booking) {
+        document.getElementById('loadingMsg').textContent = 'Booking not found.';
+        return;
+      }
+      renderBooking();
+    } catch (err) {
+      console.error('[booking] Load error:', err);
+      document.getElementById('loadingMsg').textContent = 'Failed to load booking.';
+    }
+  }
+
+  function renderBooking() {
+    document.getElementById('loadingMsg').style.display = 'none';
+    document.getElementById('bookingContent').style.display = 'block';
+
+    document.getElementById('pageTitle').textContent    = `Booking #${booking.id}`;
+    document.getElementById('statusBadge').textContent  = booking.status.replace(/_/g, ' ');
+    document.getElementById('statusBadge').className    = `badge ${booking.status}`;
+    document.getElementById('createdAt').textContent    = new Date(booking.created_at).toLocaleString();
+    document.getElementById('custName').textContent     = booking.customer_name || '—';
+    document.getElementById('custPhone').textContent    = booking.customer_number || '—';
+    document.getElementById('custAddress').textContent  = booking.address || '—';
+    document.getElementById('custArea').textContent     = booking.area || '—';
+    document.getElementById('serviceType').textContent  = booking.service_type || '—';
+    document.getElementById('urgency').textContent      = booking.urgency || '—';
+    document.getElementById('techName').textContent     = booking.technician_name || booking.assigned_technician_name || '—';
+    document.getElementById('estCost').textContent      = booking.estimated_cost ? `₹${booking.estimated_cost}` : '—';
+    document.getElementById('finalCost').textContent    = booking.final_cost ? `₹${booking.final_cost}` : '—';
+
+    if (booking.technician_notes) {
+      document.getElementById('notesCard').style.display = 'block';
+      document.getElementById('techNotes').textContent   = booking.technician_notes;
+    }
+
+    // Pre-fill the update form
+    document.getElementById('technicianName').value = booking.technician_name || '';
+    document.getElementById('estCostInput').value   = booking.estimated_cost || '';
+    document.getElementById('finalCostInput').value = booking.final_cost || '';
+    document.getElementById('notesInput').value     = booking.technician_notes || '';
+
+    renderActions();
+  }
+
+  const ACTION_FLOWS = {
+    open:       [{ label: '✅ Accept Booking',       status: 'accepted',   cls: 'primary' },
+                 { label: '❌ Reject Booking',        status: 'rejected',   cls: 'danger'  }],
+    accepted:   [{ label: '🔧 Assign Technician',    status: 'assigned',   cls: '' },
+                 { label: '🚫 Cancel Booking',        status: 'cancelled',  cls: 'danger'  }],
+    assigned:   [{ label: '🚗 Technician On The Way', status: 'on_the_way', cls: '' },
+                 { label: '🚫 Cancel Booking',        status: 'cancelled',  cls: 'danger'  }],
+    on_the_way: [{ label: '📍 Mark Arrived',          status: 'arrived',    cls: '' }],
+    arrived:    [{ label: '🎉 Mark Completed',         status: 'completed',  cls: 'primary' },
+                 { label: '🚫 Cancel Booking',         status: 'cancelled',  cls: 'danger'  }],
+    completed:  [],
+    cancelled:  [],
+    rejected:   [],
+  };
+
+  function renderActions() {
+    const container = document.getElementById('actionsContainer');
+    const actions = ACTION_FLOWS[booking.status] || [];
+    if (!actions.length) {
+      container.innerHTML = '<div style="color:var(--muted);font-size:14px">No further actions available for this status.</div>';
+      return;
+    }
+    container.innerHTML = actions.map(a =>
+      `<button class="action-btn ${a.cls}" onclick="updateStatus('${a.status}')">${escapeHtml(a.label)}</button>`
+    ).join('');
+  }
+
+  async function updateStatus(status) {
+    const buttons = document.querySelectorAll('.action-btn');
+    buttons.forEach(b => b.disabled = true);
+
+    // When assigning, include technician name from the form if filled
+    const technicianName = status === 'assigned'
+      ? document.getElementById('technicianName').value.trim() || undefined
+      : undefined;
+
+    try {
+      const res = await fetch('/api/shop/bookings/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ bookingId: booking.id, status, technicianName }),
+      });
+      if (res.status === 401) { window.location.href = '/shop-login.html'; return; }
+      const data = await res.json();
+      if (!res.ok) {
+        showToast('Error: ' + (data.error || 'Update failed'));
+        return;
+      }
+      booking = data.booking;
+      showToast(`Status updated to "${status.replace(/_/g,' ')}" ✓`);
+      renderBooking();
+    } catch (err) {
+      console.error('[booking] Update error:', err);
+      showToast('Network error. Please try again.');
+    } finally {
+      buttons.forEach(b => b.disabled = false);
+    }
+  }
+
+  async function saveTechDetails() {
+    const btn = document.getElementById('saveTechBtn');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const body = {
+      bookingId:      booking.id,
+      technicianName: document.getElementById('technicianName').value.trim() || undefined,
+      estimatedCost:  document.getElementById('estCostInput').value  || undefined,
+      finalCost:      document.getElementById('finalCostInput').value || undefined,
+      technicianNotes: document.getElementById('notesInput').value.trim() || undefined,
+    };
+    // Remove undefined keys
+    Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
+
+    try {
+      const res = await fetch('/api/shop/bookings/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast('Error: ' + (data.error || 'Save failed')); return; }
+      booking = data.booking;
+      showToast('Details saved ✓');
+      renderBooking();
+    } catch (err) {
+      showToast('Network error. Please try again.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save Details';
+    }
+  }
+
+  loadBooking();
+</script>
+</body>
+</html>

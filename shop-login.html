@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoolCare | Repair Shop Login</title>
+  <style>
+    :root{--navy:#09233b;--blue:#146ef5;--sky:#eaf3ff;--mint:#dbf7ea;--green:#08784d;--paper:#f7f9fc;--line:#e3eaf1;--ink:#102a43;--muted:#64778b;--red:#d93025}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
+    a{color:var(--blue);text-decoration:none}
+    .page{min-height:100vh;display:grid;place-items:center;padding:20px}
+    .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:40px 36px;width:min(420px,100%);box-shadow:0 8px 40px #102a430d}
+    .brand{font-weight:850;letter-spacing:-1.2px;font-size:22px;display:block;margin-bottom:28px}.brand b{color:var(--blue)}
+    h1{font-size:24px;letter-spacing:-.8px;margin:0 0 6px}
+    .sub{color:var(--muted);font-size:13px;margin:0 0 26px}
+    .field{margin-bottom:16px}
+    label{display:block;font-weight:700;font-size:13px;margin-bottom:5px}
+    input{width:100%;border:1px solid #cbd8e4;border-radius:9px;padding:12px 14px;font:inherit;transition:border-color .15s}
+    input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px #146ef520}
+    input.error{border-color:var(--red)}
+    .err-msg{color:var(--red);font-size:12px;margin-top:4px;display:none}
+    .err-msg.show{display:block}
+    .forgot{font-size:12px;color:var(--muted);text-align:right;margin-top:-8px;margin-bottom:16px}
+    .btn{width:100%;background:var(--blue);color:#fff;border:0;border-radius:10px;padding:13px;font:700 15px inherit;cursor:pointer;transition:opacity .15s}
+    .btn:hover{opacity:.88}.btn:disabled{opacity:.5;cursor:not-allowed}
+    .divider{text-align:center;color:var(--muted);font-size:12px;margin:18px 0;position:relative}
+    .divider::before,.divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:var(--line)}
+    .divider::before{left:0}.divider::after{right:0}
+    .alert{padding:12px 16px;border-radius:9px;font-size:13px;margin-bottom:16px;display:none}
+    .alert.show{display:block}
+    .alert.error{background:#ffeaea;border:1px solid #fcc;color:#8b0000}
+    .signup-link{text-align:center;margin-top:22px;font-size:13px;color:var(--muted)}
+    .home-link{text-align:center;margin-top:12px;font-size:12px;color:var(--muted)}
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="card">
+    <a class="brand" href="/">cool<b>care</b></a>
+    <h1>Welcome back</h1>
+    <p class="sub">Sign in to your repair shop portal</p>
+
+    <div id="alert" class="alert error"></div>
+
+    <form id="loginForm" novalidate>
+      <div class="field">
+        <label for="identifier">Email or Mobile Number</label>
+        <input id="identifier" type="text" placeholder="email@example.com or 9876543210" autocomplete="username">
+        <div class="err-msg" id="identifier-err"></div>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="Your password" autocomplete="current-password">
+        <div class="err-msg" id="password-err"></div>
+      </div>
+      <button type="submit" class="btn" id="loginBtn">Log In →</button>
+    </form>
+
+    <div class="divider">or</div>
+    <p class="signup-link">New to CoolCare? <a href="/shop-signup.html">Register your shop</a></p>
+    <p class="home-link"><a href="/">← Back to CoolCare home</a></p>
+  </div>
+</div>
+
+<script>
+  // Redirect if already logged in
+  if (localStorage.getItem('cc_token')) window.location.href = '/shop-dashboard.html';
+
+  const form    = document.getElementById('loginForm');
+  const loginBtn = document.getElementById('loginBtn');
+  const alertEl = document.getElementById('alert');
+
+  function showAlert(msg) {
+    alertEl.textContent = msg;
+    alertEl.classList.add('show');
+  }
+  function fieldError(id, msg) {
+    const el  = document.getElementById(id + '-err');
+    const inp = document.getElementById(id);
+    if (el)  { el.textContent = msg; el.classList.toggle('show', !!msg); }
+    if (inp) inp.classList.toggle('error', !!msg);
+  }
+  function clearErrors() {
+    alertEl.classList.remove('show');
+    document.querySelectorAll('.err-msg').forEach(e => e.classList.remove('show'));
+    document.querySelectorAll('.error').forEach(e => e.classList.remove('error'));
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErrors();
+
+    const identifier = document.getElementById('identifier').value.trim();
+    const password   = document.getElementById('password').value;
+
+    if (!identifier) { fieldError('identifier', 'Please enter your email or mobile number'); return; }
+    if (!password)   { fieldError('password',   'Please enter your password'); return; }
+
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Signing in…';
+
+    try {
+      const res  = await fetch('/api/auth/login', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ identifier, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showAlert(data.error || 'Login failed. Please check your credentials.');
+        return;
+      }
+
+      localStorage.setItem('cc_token', data.token);
+      localStorage.setItem('cc_shop', JSON.stringify(data.shop));
+      window.location.href = '/shop-dashboard.html';
+    } catch (err) {
+      console.error('[login] Network error:', err);
+      showAlert('Network error. Please check your connection.');
+    } finally {
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Log In →';
+    }
+  });
+</script>
+</body>
+</html>

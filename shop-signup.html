@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoolCare | Register Your Repair Shop</title>
+  <style>
+    :root{--navy:#09233b;--blue:#146ef5;--sky:#eaf3ff;--mint:#dbf7ea;--green:#08784d;--paper:#f7f9fc;--line:#e3eaf1;--ink:#102a43;--muted:#64778b;--red:#d93025}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
+    a{color:var(--blue);text-decoration:none}
+    .nav{height:66px;display:flex;align-items:center;justify-content:space-between;max-width:1100px;margin:auto;padding:0 24px;border-bottom:1px solid var(--line)}
+    .brand{font-weight:850;letter-spacing:-1.2px;font-size:22px}.brand b{color:var(--blue)}
+    .wrap{max-width:640px;margin:40px auto;padding:0 20px 60px}
+    .card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:36px 32px}
+    h1{font-size:26px;letter-spacing:-1px;margin:0 0 6px}
+    .sub{color:var(--muted);margin:0 0 28px;font-size:14px}
+    .section-label{font-weight:800;font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:24px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .field{margin-bottom:14px}
+    label{display:block;font-weight:700;font-size:13px;margin-bottom:5px}
+    input,select{width:100%;border:1px solid #cbd8e4;border-radius:9px;padding:11px 13px;font:inherit;background:#fff;transition:border-color .15s}
+    input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px #146ef520}
+    input.error,select.error{border-color:var(--red)}
+    .err-msg{color:var(--red);font-size:12px;margin-top:4px;display:none}
+    .err-msg.show{display:block}
+    .services-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px}
+    .service-chip{display:flex;align-items:center;gap:7px;padding:9px 11px;border:1.5px solid var(--line);border-radius:9px;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s}
+    .service-chip input{width:auto;margin:0;accent-color:var(--blue)}
+    .service-chip:has(input:checked){border-color:var(--blue);background:var(--sky);color:var(--blue)}
+    .btn{width:100%;background:var(--blue);color:#fff;border:0;border-radius:10px;padding:13px;font:700 15px inherit;cursor:pointer;margin-top:8px;transition:opacity .15s}
+    .btn:hover{opacity:.88}.btn:disabled{opacity:.5;cursor:not-allowed}
+    .alert{padding:12px 16px;border-radius:9px;font-size:13px;margin-bottom:16px;display:none}
+    .alert.show{display:block}
+    .alert.error{background:#ffeaea;border:1px solid #fcc;color:#8b0000}
+    .alert.success{background:var(--mint);border:1px solid #aee9ca;color:var(--green)}
+    .login-link{text-align:center;margin-top:20px;font-size:13px;color:var(--muted)}
+    @media(max-width:560px){.row{grid-template-columns:1fr}.services-grid{grid-template-columns:repeat(2,1fr)}.card{padding:24px 18px}}
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/">cool<b>care</b></a>
+  <a href="/shop-login.html" style="font-weight:700;font-size:13px;color:var(--blue)">Already registered? Log in →</a>
+</nav>
+<div class="wrap">
+  <div class="card">
+    <h1>Register Your Repair Shop</h1>
+    <p class="sub">Join CoolCare to receive and manage service bookings from customers in your area.</p>
+
+    <div id="alert" class="alert"></div>
+
+    <form id="signupForm" novalidate>
+      <div class="section-label">Shop Details</div>
+      <div class="row">
+        <div class="field">
+          <label for="shopName">Shop Name *</label>
+          <input id="shopName" type="text" placeholder="e.g. Cool Fix Services" autocomplete="organization">
+          <div class="err-msg" id="shopName-err"></div>
+        </div>
+        <div class="field">
+          <label for="ownerName">Owner Name *</label>
+          <input id="ownerName" type="text" placeholder="Your full name" autocomplete="name">
+          <div class="err-msg" id="ownerName-err"></div>
+        </div>
+      </div>
+      <div class="field">
+        <label for="address">Business Address</label>
+        <input id="address" type="text" placeholder="Shop/building number, street" autocomplete="street-address">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="city">City *</label>
+          <input id="city" type="text" placeholder="e.g. Bengaluru" autocomplete="address-level2">
+          <div class="err-msg" id="city-err"></div>
+        </div>
+        <div class="field">
+          <label for="serviceAreas">Service Areas</label>
+          <input id="serviceAreas" type="text" placeholder="Indiranagar, Koramangala…">
+          <div style="color:var(--muted);font-size:11px;margin-top:4px">Comma-separated localities</div>
+        </div>
+      </div>
+
+      <div class="section-label">Services Offered</div>
+      <div class="services-grid" id="servicesGrid">
+        <label class="service-chip"><input type="checkbox" value="AC"> AC</label>
+        <label class="service-chip"><input type="checkbox" value="Refrigerator"> Refrigerator</label>
+        <label class="service-chip"><input type="checkbox" value="Washing Machine"> Washing Machine</label>
+        <label class="service-chip"><input type="checkbox" value="Geyser"> Geyser</label>
+        <label class="service-chip"><input type="checkbox" value="Microwave"> Microwave</label>
+        <label class="service-chip"><input type="checkbox" value="TV"> TV</label>
+        <label class="service-chip"><input type="checkbox" value="RO"> RO / Water Purifier</label>
+        <label class="service-chip"><input type="checkbox" value="Fan"> Fan</label>
+        <label class="service-chip"><input type="checkbox" value="Dishwasher"> Dishwasher</label>
+      </div>
+      <div class="err-msg" id="services-err"></div>
+
+      <div class="section-label">Login Credentials</div>
+      <div class="row">
+        <div class="field">
+          <label for="email">Email Address *</label>
+          <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
+          <div class="err-msg" id="email-err"></div>
+        </div>
+        <div class="field">
+          <label for="mobile">Mobile Number *</label>
+          <input id="mobile" type="tel" placeholder="9876543210" autocomplete="tel">
+          <div class="err-msg" id="mobile-err"></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="password">Password *</label>
+          <input id="password" type="password" placeholder="Min 8 characters" autocomplete="new-password">
+          <div class="err-msg" id="password-err"></div>
+        </div>
+        <div class="field">
+          <label for="confirmPassword">Confirm Password *</label>
+          <input id="confirmPassword" type="password" placeholder="Repeat password" autocomplete="new-password">
+          <div class="err-msg" id="confirmPassword-err"></div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn" id="submitBtn">Create Account →</button>
+    </form>
+    <p class="login-link">Already have an account? <a href="/shop-login.html">Log in here</a></p>
+  </div>
+</div>
+
+<script>
+  // Redirect if already logged in
+  if (localStorage.getItem('cc_token')) window.location.href = '/shop-dashboard.html';
+
+  const form    = document.getElementById('signupForm');
+  const submitBtn = document.getElementById('submitBtn');
+  const alert   = document.getElementById('alert');
+
+  function showAlert(msg, type) {
+    alert.textContent = msg;
+    alert.className = `alert show ${type}`;
+  }
+  function hideAlert() {
+    alert.className = 'alert';
+  }
+  function fieldError(id, msg) {
+    const el = document.getElementById(id + '-err');
+    const inp = document.getElementById(id);
+    if (el) { el.textContent = msg; el.classList.toggle('show', !!msg); }
+    if (inp) inp.classList.toggle('error', !!msg);
+  }
+  function clearErrors() {
+    document.querySelectorAll('.err-msg').forEach(e => e.classList.remove('show'));
+    document.querySelectorAll('.error').forEach(e => e.classList.remove('error'));
+    hideAlert();
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErrors();
+
+    const shopName       = document.getElementById('shopName').value.trim();
+    const ownerName      = document.getElementById('ownerName').value.trim();
+    const email          = document.getElementById('email').value.trim();
+    const mobile         = document.getElementById('mobile').value.trim();
+    const password       = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const address        = document.getElementById('address').value.trim();
+    const city           = document.getElementById('city').value.trim();
+    const serviceAreasRaw = document.getElementById('serviceAreas').value;
+    const serviceAreas   = serviceAreasRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const servicesOffered = [...document.querySelectorAll('#servicesGrid input:checked')].map(c => c.value);
+
+    // Client-side validation
+    let valid = true;
+    if (!shopName) { fieldError('shopName', 'Shop name is required'); valid = false; }
+    if (!ownerName) { fieldError('ownerName', 'Owner name is required'); valid = false; }
+    if (!email) { fieldError('email', 'Email is required'); valid = false; }
+    if (!mobile) { fieldError('mobile', 'Mobile number is required'); valid = false; }
+    if (!password) { fieldError('password', 'Password is required'); valid = false; }
+    else if (password.length < 8) { fieldError('password', 'Must be at least 8 characters'); valid = false; }
+    if (password !== confirmPassword) { fieldError('confirmPassword', 'Passwords do not match'); valid = false; }
+    if (!city) { fieldError('city', 'City is required'); valid = false; }
+    if (servicesOffered.length === 0) {
+      const el = document.getElementById('services-err');
+      el.textContent = 'Select at least one service';
+      el.classList.add('show');
+      valid = false;
+    }
+    if (!valid) return;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating account…';
+
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shopName, ownerName, email, mobile, password, confirmPassword, address, city, serviceAreas, servicesOffered }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.errors) {
+          Object.entries(data.errors).forEach(([k, v]) => fieldError(k, v));
+          showAlert(data.error || 'Please fix the errors above.', 'error');
+        } else {
+          showAlert(data.error || 'Registration failed. Please try again.', 'error');
+        }
+        return;
+      }
+
+      // Success
+      localStorage.setItem('cc_token', data.token);
+      localStorage.setItem('cc_shop', JSON.stringify(data.shop));
+      showAlert('Account created! Redirecting to your dashboard…', 'success');
+      setTimeout(() => window.location.href = '/shop-dashboard.html', 1200);
+    } catch (err) {
+      console.error('[signup] Network error:', err);
+      showAlert('Network error. Please check your connection.', 'error');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Create Account →';
+    }
+  });
+</script>
+</body>
+</html>
