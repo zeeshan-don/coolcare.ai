@@ -2,99 +2,235 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>CoolCare | Super Admin</title>
+  <title>CoolCare | Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#090A0F;--bg2:#121318;--bg3:#1A1B22;--border:rgba(197,160,89,0.12);--border2:rgba(197,160,89,0.25);--blue:#C5A059;--blue2:#D4AF37;--glow:rgba(197,160,89,0.15);--green:#A3B899;--ink:#F7F5F0;--ink2:#E1DED7;--muted:#8E8A82;--muted2:#5C5954;--red:#E87461}
+    :root{--bg:#fff;--bg2:#fafafa;--bg3:#f5f5f5;--border:#e5e5e5;--border2:#d4d4d4;--ink:#171717;--ink2:#404040;--muted:#737373;--muted2:#a3a3a3;--red:#dc2626;--red-bg:#fef2f2;--green:#16a34a;--green-bg:#f0fdf4;--blue:#2563eb;--blue-bg:#eff6ff}
     *{box-sizing:border-box;margin:0;padding:0}
-    body{background:var(--bg);color:var(--ink);font:15px/1.6 'Plus Jakarta Sans',ui-sans-serif,system-ui,sans-serif;min-height:100vh}
-    body::before{content:'';position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--blue),var(--blue2),transparent);z-index:100}
-    h1,h2,h3,.brand{font-family:'Playfair Display',Georgia,serif;font-weight:700}
+    body{background:var(--bg);color:var(--ink);font:14px/1.6 'Inter',system-ui,sans-serif;min-height:100vh}
+    h1,h2,h3{font-weight:600}
     a{color:inherit;text-decoration:none}
-    .nav{height:68px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 28px;border-bottom:1px solid var(--border)}
-    .brand{font-weight:700;letter-spacing:1px;font-size:22px;text-transform:uppercase}.brand b{color:var(--blue);font-weight:900}
+    .nav{height:56px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 24px;border-bottom:1px solid var(--border)}
+    .brand{font-weight:700;font-size:18px;letter-spacing:-0.3px}.brand span{background:var(--ink);color:#fff;font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;margin-left:8px;vertical-align:middle;letter-spacing:0.5px;text-transform:uppercase}
     .nav-right{display:flex;gap:12px;align-items:center}
-    .badge-admin{font-size:10px;font-weight:800;color:var(--blue2);background:rgba(197,160,89,0.1);border:1px solid var(--border2);border-radius:6px;padding:4px 8px;text-transform:uppercase;letter-spacing:0.5px}
-    .logout-btn{font-size:12px;font-weight:700;color:var(--muted);padding:8px 14px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:transparent;transition:all .3s}
-    .logout-btn:hover{border-color:var(--blue);color:var(--blue)}
-    .wrap{max-width:1280px;margin:auto;padding:28px}
-    .header{margin-bottom:28px}.header h1{font-size:32px;margin:0 0 6px}.header p{color:var(--muted);font-size:14px}
-    .analytics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:28px}
-    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative;overflow:hidden}
-    .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue2),transparent);opacity:0.5}
-    .stat-label{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
-    .stat-value{font-size:28px;font-weight:700;font-family:'Playfair Display',serif;color:var(--blue2)}
-    .search-bar{display:flex;gap:10px;margin-bottom:18px}
-    .search-bar input{flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:11px 16px;color:var(--ink);font:inherit}
-    .search-bar input:focus{outline:none;border-color:var(--blue)}
-    .search-bar button{background:linear-gradient(135deg,var(--blue),var(--blue2));color:#090A0F;border:0;border-radius:10px;padding:11px 20px;font:700 13px inherit;cursor:pointer}
-    table{width:100%;border-collapse:collapse;background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden}
-    th{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted);padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg3)}
-    td{padding:12px 16px;font-size:13px;border-bottom:1px solid var(--border)}
-    tr:last-child td{border:0}
-    tr:hover td{background:rgba(197,160,89,0.03)}
-    .shop-badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase}
-    .shop-badge.active{background:rgba(163,184,153,0.15);color:var(--green)}
-    .shop-badge.suspended{background:rgba(232,116,97,0.15);color:var(--red)}
-    .shop-badge.trial{background:rgba(197,160,89,0.1);color:var(--blue)}
-    .action-btn{font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--ink2);transition:all .2s;margin-right:4px}
-    .action-btn:hover{border-color:var(--blue);color:var(--blue)}
-    .action-btn.danger:hover{border-color:var(--red);color:var(--red)}
-    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg2);color:var(--ink);padding:12px 24px;border-radius:10px;font-size:13px;font-weight:700;opacity:0;transition:opacity .3s;z-index:100;border:1px solid var(--border2)}
+    .nav-user{font-size:13px;color:var(--muted)}
+    .logout-btn{font-size:13px;font-weight:500;color:var(--muted);padding:6px 14px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:transparent;transition:all 0.15s}
+    .logout-btn:hover{background:var(--bg3);color:var(--ink)}
+    .wrap{max-width:1280px;margin:auto;padding:24px}
+    .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:24px;overflow-x:auto}
+    .tab{padding:10px 20px;font-weight:500;font-size:14px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.15s;white-space:nowrap}
+    .tab:hover{color:var(--ink)}.tab.active{color:var(--ink);border-bottom-color:var(--ink)}
+    .tab-content{display:none}.tab-content.active{display:block}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+    .stat-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:16px}
+    .stat-label{font-size:12px;font-weight:500;color:var(--muted);margin-bottom:2px}
+    .stat-value{font-size:24px;font-weight:700;color:var(--ink)}
+    .search-bar{display:flex;gap:8px;margin-bottom:16px}
+    .search-bar input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 14px;font:inherit;font-size:14px}
+    .search-bar input:focus{outline:none;border-color:var(--ink)}
+    .btn{font-size:13px;font-weight:600;padding:8px 16px;border-radius:8px;cursor:pointer;border:1px solid var(--border);background:var(--bg);color:var(--ink);transition:all 0.15s}
+    .btn:hover{background:var(--bg3)}.btn-primary{background:var(--ink);color:#fff;border-color:var(--ink)}.btn-primary:hover{background:#333}
+    .btn-danger{color:var(--red);border-color:var(--red)}.btn-danger:hover{background:var(--red-bg)}
+    .btn-sm{font-size:12px;padding:5px 10px}
+    table{width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+    th{font-size:12px;font-weight:600;color:var(--muted);padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg2)}
+    td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border)}
+    tr:last-child td{border:0}tr:hover td{background:var(--bg2)}
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+    .badge-active{background:var(--green-bg);color:var(--green)}
+    .badge-suspended{background:var(--red-bg);color:var(--red)}
+    .badge-trial{background:var(--bg3);color:var(--muted)}
+    .badge-inactive{background:var(--bg3);color:var(--muted)}
+    .action-btn{font-size:11px;font-weight:600;padding:4px 8px;border-radius:4px;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--ink2);transition:all 0.15s;margin-right:4px}
+    .action-btn:hover{background:var(--bg3);border-color:var(--ink2)}
+    .action-btn.danger:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+    .pagination{display:flex;gap:8px;justify-content:center;margin-top:16px}
+    .pagination button{background:var(--bg);border:1px solid var(--border);color:var(--ink2);padding:6px 12px;border-radius:6px;cursor:pointer;font:500 12px inherit}
+    .pagination button:hover{background:var(--bg3)}.pagination button:disabled{opacity:.4;cursor:not-allowed}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:500;opacity:0;transition:opacity 0.2s;z-index:100}
     .toast.show{opacity:1}
-    .pagination{display:flex;gap:8px;justify-content:center;margin-top:20px}
-    .pagination button{background:var(--bg2);border:1px solid var(--border);color:var(--ink2);padding:8px 14px;border-radius:8px;cursor:pointer;font:600 12px inherit}
-    .pagination button:hover{border-color:var(--blue)}
-    .pagination button:disabled{opacity:.4;cursor:not-allowed}
-    @media(max-width:768px){.analytics{grid-template-columns:repeat(2,1fr)}table{font-size:12px}th,td{padding:8px 10px}}
+    .empty{text-align:center;color:var(--muted);padding:40px 20px}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.3);display:none;align-items:center;justify-content:center;z-index:200}
+    .modal-overlay.show{display:flex}
+    .modal{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:28px;width:min(500px,90%);max-height:80vh;overflow-y:auto}
+    .modal h2{font-size:18px;margin-bottom:16px}
+    .modal .field{margin-bottom:12px}
+    .modal label{display:block;font-weight:500;font-size:13px;margin-bottom:4px;color:var(--ink2)}
+    .modal input,.modal select,.modal textarea{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font:inherit;font-size:14px}
+    .modal input:focus,.modal select:focus,.modal textarea:focus{outline:none;border-color:var(--ink)}
+    .modal textarea{resize:vertical;min-height:60px}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+    .plan-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
+    .plan-card{border:1px solid var(--border);border-radius:10px;padding:20px;background:var(--bg)}
+    .plan-card h3{font-size:16px;margin-bottom:4px}
+    .plan-card .price{font-size:22px;font-weight:700;margin:8px 0}
+    .plan-card .features{font-size:12px;color:var(--muted);margin-top:8px}
+    .plan-card .actions{margin-top:12px;display:flex;gap:6px}
+    .settings-grid{display:grid;gap:16px;max-width:600px}
+    .settings-grid .field label{display:block;font-weight:600;font-size:13px;margin-bottom:4px}
+    .settings-grid input,.settings-grid textarea{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 12px;font:inherit;font-size:14px}
+    .settings-grid input:focus,.settings-grid textarea:focus{outline:none;border-color:var(--ink)}
+    .section-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .section-header h2{font-size:20px}
+    @media(max-width:768px){.stats{grid-template-columns:repeat(2,1fr)}.nav-user{display:none}}
   </style>
 </head>
 <body>
 <nav class="nav">
-  <a class="brand" href="/admin.html">cool<b>care</b> <span class="badge-admin">Admin</span></a>
+  <a class="brand" href="/admin.html">coolcare <span>Admin</span></a>
   <div class="nav-right">
-    <button class="logout-btn" onclick="logout()">Log Out</button>
+    <span class="nav-user" id="navUser"></span>
+    <button class="logout-btn" onclick="logout()">Log out</button>
   </div>
 </nav>
 
 <div class="wrap">
-  <div class="header">
-    <h1>Platform Admin</h1>
-    <p>Manage shops, subscriptions, and platform analytics</p>
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('dashboard')">Dashboard</div>
+    <div class="tab" onclick="switchTab('shops')">Shops</div>
+    <div class="tab" onclick="switchTab('users')">Users</div>
+    <div class="tab" onclick="switchTab('plans')">Plans</div>
+    <div class="tab" onclick="switchTab('payments')">Payments</div>
+    <div class="tab" onclick="switchTab('analytics')">Analytics</div>
+    <div class="tab" onclick="switchTab('settings')">Settings</div>
   </div>
 
-  <div class="analytics" id="analytics">
-    <div class="stat-card"><div class="stat-label">Total Shops</div><div class="stat-value" id="totalShops">—</div></div>
-    <div class="stat-card"><div class="stat-label">Active Shops</div><div class="stat-value" id="activeShops">—</div></div>
-    <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value" id="totalBookings">—</div></div>
-    <div class="stat-card"><div class="stat-label">Total Revenue</div><div class="stat-value" id="totalRevenue">—</div></div>
-    <div class="stat-card"><div class="stat-label">Active Subs</div><div class="stat-value" id="activeSubs">—</div></div>
-    <div class="stat-card"><div class="stat-label">Today's Bookings</div><div class="stat-value" id="todayBookings">—</div></div>
+  <!-- ═══ DASHBOARD ═══ -->
+  <div class="tab-content active" id="tab-dashboard">
+    <div class="stats" id="dashStats">
+      <div class="stat-card"><div class="stat-label">Total Shops</div><div class="stat-value" id="s_totalShops">-</div></div>
+      <div class="stat-card"><div class="stat-label">Active Shops</div><div class="stat-value" id="s_activeShops">-</div></div>
+      <div class="stat-card"><div class="stat-label">Suspended</div><div class="stat-value" id="s_suspended">-</div></div>
+      <div class="stat-card"><div class="stat-label">Pending</div><div class="stat-value" id="s_pending">-</div></div>
+      <div class="stat-card"><div class="stat-label">Total Bookings</div><div class="stat-value" id="s_totalBookings">-</div></div>
+      <div class="stat-card"><div class="stat-label">Monthly Revenue</div><div class="stat-value" id="s_monthlyRevenue">-</div></div>
+      <div class="stat-card"><div class="stat-label">Active Plans</div><div class="stat-value" id="s_activePlans">-</div></div>
+      <div class="stat-card"><div class="stat-label">Failed Payments</div><div class="stat-value" id="s_failedPayments">-</div></div>
+      <div class="stat-card"><div class="stat-label">Today's Bookings</div><div class="stat-value" id="s_todayBookings">-</div></div>
+    </div>
+    <div class="section-header"><h2>Recent Shops</h2></div>
+    <div class="search-bar">
+      <input id="shopSearch" type="text" placeholder="Search shops..." onkeyup="if(event.key==='Enter')loadShops(1,this.value)">
+      <button class="btn btn-primary" onclick="loadShops(1,document.getElementById('shopSearch').value)">Search</button>
+    </div>
+    <table><thead><tr><th>Shop</th><th>Owner</th><th>City</th><th>Plan</th><th>Bookings</th><th>Revenue</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody id="shopsBody"><tr><td colspan="8" class="empty">Loading...</td></tr></tbody></table>
+    <div class="pagination"><button id="shopPrev" onclick="loadShops(currentShopPage-1)" disabled>Prev</button><span id="shopPage" style="color:var(--muted);padding:6px">Page 1</span><button id="shopNext" onclick="loadShops(currentShopPage+1)">Next</button></div>
   </div>
 
-  <div class="search-bar">
-    <input id="searchInput" type="text" placeholder="Search shops by name or email…" onkeyup="if(event.key==='Enter')searchShops()">
-    <button onclick="searchShops()">Search</button>
+  <!-- ═══ USERS ═══ -->
+  <div class="tab-content" id="tab-users">
+    <div class="section-header"><h2>Users</h2><button class="btn btn-primary" onclick="showCreateUserModal()">+ Create User</button></div>
+    <div class="search-bar">
+      <input id="userSearch" type="text" placeholder="Search users..." onkeyup="if(event.key==='Enter')loadUsers(1,this.value)">
+      <button class="btn" onclick="loadUsers(1,document.getElementById('userSearch').value)">Search</button>
+    </div>
+    <table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Shop</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+    <tbody id="usersBody"><tr><td colspan="7" class="empty">Loading...</td></tr></tbody></table>
+    <div class="pagination"><button id="userPrev" onclick="loadUsers(currentUserPage-1)" disabled>Prev</button><span id="userPage" style="color:var(--muted);padding:6px">Page 1</span><button id="userNext" onclick="loadUsers(currentUserPage+1)">Next</button></div>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Shop</th><th>Owner</th><th>City</th><th>Plan</th>
-        <th>Bookings</th><th>Revenue</th><th>Status</th><th>Actions</th>
-      </tr>
-    </thead>
-    <tbody id="shopsBody">
-      <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:40px">Loading…</td></tr>
-    </tbody>
-  </table>
+  <!-- ═══ PLANS ═══ -->
+  <div class="tab-content" id="tab-plans">
+    <div class="section-header"><h2>Subscription Plans</h2><button class="btn btn-primary" onclick="showCreatePlanModal()">+ Create Plan</button></div>
+    <div class="plan-grid" id="plansGrid"><div class="empty">Loading...</div></div>
+  </div>
 
-  <div class="pagination">
-    <button id="prevBtn" onclick="changePage(-1)" disabled>← Prev</button>
-    <span id="pageInfo" style="color:var(--muted);padding:8px">Page 1</span>
-    <button id="nextBtn" onclick="changePage(1)">Next →</button>
+  <!-- ═══ PAYMENTS ═══ -->
+  <div class="tab-content" id="tab-payments">
+    <div class="section-header"><h2>Payments</h2></div>
+    <table><thead><tr><th>Invoice</th><th>Shop</th><th>Amount</th><th>Gateway</th><th>Status</th><th>Date</th></tr></thead>
+    <tbody id="paymentsBody"><tr><td colspan="6" class="empty">Loading...</td></tr></tbody></table>
+    <div class="pagination"><button id="payPrev" onclick="loadPayments(currentPayPage-1)" disabled>Prev</button><span id="payPage" style="color:var(--muted);padding:6px">Page 1</span><button id="payNext" onclick="loadPayments(currentPayPage+1)">Next</button></div>
+  </div>
+
+  <!-- ═══ ANALYTICS ═══ -->
+  <div class="tab-content" id="tab-analytics">
+    <div class="section-header"><h2>Platform Analytics</h2></div>
+    <div class="stats" id="analyticsStats">
+      <div class="stat-card"><div class="stat-label">New Shops (Month)</div><div class="stat-value" id="a_newShops">-</div></div>
+      <div class="stat-card"><div class="stat-label">Bookings (Month)</div><div class="stat-value" id="a_bookingsMonth">-</div></div>
+      <div class="stat-card"><div class="stat-label">New Users (Month)</div><div class="stat-value" id="a_newUsers">-</div></div>
+    </div>
+    <h3 style="margin:20px 0 12px">Most Active Shops</h3>
+    <table><thead><tr><th>Shop</th><th>City</th><th>Bookings</th><th>Revenue</th></tr></thead>
+    <tbody id="activeShopsBody"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody></table>
+    <h3 style="margin:20px 0 12px">Top Cities</h3>
+    <table><thead><tr><th>City</th><th>Shops</th></tr></thead>
+    <tbody id="topCitiesBody"><tr><td colspan="2" class="empty">Loading...</td></tr></tbody></table>
+    <h3 style="margin:20px 0 12px">Monthly Revenue (12 months)</h3>
+    <table><thead><tr><th>Month</th><th>Bookings</th><th>Revenue</th></tr></thead>
+    <tbody id="monthlyBody"><tr><td colspan="3" class="empty">Loading...</td></tr></tbody></table>
+  </div>
+
+  <!-- ═══ SETTINGS ═══ -->
+  <div class="tab-content" id="tab-settings">
+    <div class="section-header"><h2>Platform Settings</h2></div>
+    <div class="settings-grid" id="settingsForm">
+      <div class="field"><label>Platform Name</label><input id="set_platform_name" type="text" value="CoolCare"></div>
+      <div class="field"><label>Logo URL</label><input id="set_logo_url" type="text" placeholder="https://..."></div>
+      <div class="field"><label>Maintenance Mode</label><select id="set_maintenance_mode"><option value="false">Off</option><option value="true">On</option></select></div>
+      <div class="field"><label>Announcement Text</label><textarea id="set_announcement" placeholder="Platform-wide announcement..."></textarea></div>
+      <div class="field"><label>Announcement Active</label><select id="set_announcement_active"><option value="false">No</option><option value="true">Yes</option></select></div>
+      <div class="field"><label>WhatsApp Phone Number ID</label><input id="set_whatsapp_phone" type="text"></div>
+      <div class="field"><label>WhatsApp API Version</label><input id="set_whatsapp_version" type="text" value="v19.0"></div>
+      <div class="field"><label>AI Model</label><input id="set_ai_model" type="text" value="llama3-8b-8192"></div>
+      <div class="field"><label>Default Currency</label><input id="set_currency" type="text" value="USD"></div>
+      <div class="field"><label>From Email</label><input id="set_from_email" type="email" value="noreply@coolcare.ai"></div>
+      <button class="btn btn-primary" onclick="saveSettings()" style="max-width:200px">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODALS ═══ -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <h2 id="userModalTitle">Create User</h2>
+    <input type="hidden" id="editUserId">
+    <div class="field"><label>Name</label><input id="mu_name" type="text"></div>
+    <div class="field"><label>Email</label><input id="mu_email" type="email"></div>
+    <div class="field"><label>Password</label><input id="mu_password" type="password" placeholder="Min 8 characters"></div>
+    <div class="field"><label>Role</label>
+      <select id="mu_role">
+        <option value="admin">Admin</option><option value="support">Support</option>
+        <option value="owner">Owner</option><option value="manager">Manager</option>
+        <option value="editor">Editor</option><option value="receptionist">Receptionist</option>
+        <option value="technician">Technician</option><option value="super_admin">Super Admin</option>
+      </select>
+    </div>
+    <div class="field"><label>Shop ID (optional, for shop staff)</label><input id="mu_shopId" type="number" placeholder="Leave empty for platform staff"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="planModal">
+  <div class="modal">
+    <h2 id="planModalTitle">Create Plan</h2>
+    <input type="hidden" id="editPlanId">
+    <div class="field"><label>Plan Name (lowercase, unique)</label><input id="mp_name" type="text" placeholder="starter"></div>
+    <div class="field"><label>Display Name</label><input id="mp_display" type="text" placeholder="Starter"></div>
+    <div class="field"><label>Description</label><textarea id="mp_desc" placeholder="Plan description"></textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label>Monthly Price ($)</label><input id="mp_monthly" type="number" step="0.01" value="0"></div>
+      <div class="field"><label>Yearly Price ($)</label><input id="mp_yearly" type="number" step="0.01" value="0"></div>
+      <div class="field"><label>Max Bookings</label><input id="mp_bookings" type="number" placeholder="null=unlimited"></div>
+      <div class="field"><label>Max Technicians</label><input id="mp_techs" type="number"></div>
+      <div class="field"><label>Max Staff</label><input id="mp_staff" type="number"></div>
+      <div class="field"><label>WhatsApp Conversations</label><input id="mp_whatsapp" type="number"></div>
+      <div class="field"><label>AI Credits</label><input id="mp_ai" type="number"></div>
+      <div class="field"><label>Trial Days</label><input id="mp_trial" type="number" value="14"></div>
+    </div>
+    <div class="field"><label>Currency</label><input id="mp_currency" type="text" value="USD"></div>
+    <div class="field"><label>Active</label><select id="mp_active"><option value="true">Yes</option><option value="false">No</option></select></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('planModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePlan()">Save</button>
+    </div>
   </div>
 </div>
 
@@ -102,17 +238,17 @@
 
 <script>
   const token = localStorage.getItem('cc_token');
-  if (!token) window.location.href = '/shop-login.html';
+  if (!token) window.location.href = '/login.html';
 
-  // Check admin role
-  const shopData = JSON.parse(localStorage.getItem('cc_shop') || '{}');
-  if (shopData.role !== 'admin' && shopData.role !== 'super_admin') {
+  const userData = JSON.parse(localStorage.getItem('cc_user') || '{}');
+  if (!['super_admin','admin','support'].includes(userData.role)) {
     alert('Admin access required.');
     window.location.href = '/shop-dashboard.html';
   }
+  document.getElementById('navUser').textContent = userData.name || userData.email || '';
 
-  let currentPage = 1;
-  let totalShops = 0;
+  let currentShopPage = 1, currentUserPage = 1, currentPayPage = 1;
+  let currentTab = 'dashboard';
 
   function showToast(msg) {
     const t = document.getElementById('toast');
@@ -122,93 +258,373 @@
 
   function logout() {
     fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
-    localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop');
-    window.location.href = '/shop-login.html';
+    localStorage.removeItem('cc_token'); localStorage.removeItem('cc_user'); localStorage.removeItem('cc_shop');
+    window.location.href = '/login.html';
   }
 
-  async function loadShops(page = 1, search = '') {
-    currentPage = page;
-    try {
-      const params = new URLSearchParams({ page, limit: 20 });
-      if (search) params.set('search', search);
-      const res = await fetch(`/api/shop?action=admin&${params}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.status === 401) { logout(); return; }
-      if (res.status === 403) { alert('Admin access required.'); return; }
-      const data = await res.json();
-
-      // Analytics
-      const a = data.analytics || {};
-      document.getElementById('totalShops').textContent = a.total_shops || 0;
-      document.getElementById('activeShops').textContent = a.active_shops || 0;
-      document.getElementById('totalBookings').textContent = a.total_bookings || 0;
-      document.getElementById('totalRevenue').textContent = '₹' + (a.total_revenue || 0).toLocaleString();
-      document.getElementById('activeSubs').textContent = a.active_subscriptions || 0;
-      document.getElementById('todayBookings').textContent = a.bookings_today || 0;
-
-      // Shops table
-      const tbody = document.getElementById('shopsBody');
-      if (!data.shops?.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:40px">No shops found</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = data.shops.map(s => {
-        const status = s.suspended_at ? 'suspended' : (s.subscription_status === 'active' ? 'active' : 'trial');
-        return `<tr>
-          <td><strong>${esc(s.shop_name)}</strong><br><small style="color:var(--muted)">${esc(s.email)}</small></td>
-          <td>${esc(s.owner_name)}</td>
-          <td>${esc(s.city || '—')}</td>
-          <td>${esc(s.plan_name || 'Trial')}</td>
-          <td>${s.total_bookings || 0}</td>
-          <td>₹${(parseFloat(s.total_revenue) || 0).toLocaleString()}</td>
-          <td><span class="shop-badge ${status}">${status}</span></td>
-          <td>
-            ${status === 'suspended'
-              ? `<button class="action-btn" onclick="shopAction(${s.id},'activate')">Activate</button>`
-              : `<button class="action-btn danger" onclick="shopAction(${s.id},'suspend')">Suspend</button>`
-            }
-            <button class="action-btn danger" onclick="shopAction(${s.id},'delete')">Delete</button>
-          </td>
-        </tr>`;
-      }).join('');
-
-      totalShops = data.pagination?.total || 0;
-      document.getElementById('pageInfo').textContent = `Page ${page} of ${Math.ceil(totalShops / 20) || 1}`;
-      document.getElementById('prevBtn').disabled = page <= 1;
-      document.getElementById('nextBtn').disabled = page * 20 >= totalShops;
-    } catch (err) {
-      document.getElementById('shopsBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--red)">Failed to load</td></tr>';
-    }
-  }
-
-  function searchShops() {
-    const q = document.getElementById('searchInput').value.trim();
-    loadShops(1, q);
-  }
-
-  function changePage(delta) { loadShops(currentPage + delta, document.getElementById('searchInput').value.trim()); }
-
-  async function shopAction(shopId, action) {
-    if (action === 'delete' && !confirm('Delete this shop permanently?')) return;
-    if (action === 'suspend') {
-      const reason = prompt('Suspension reason (optional):');
-      await fetch('/api/shop', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ shopId, action, reason: reason || undefined }),
-      });
-    } else {
-      await fetch('/api/shop', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ shopId, action }),
-      });
-    }
-    showToast(`Shop ${action}d ✓`);
-    loadShops(currentPage, document.getElementById('searchInput').value.trim());
+  function switchTab(name) {
+    currentTab = name;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.tab-content#tab-${name}`).classList.add('active');
+    event.target.classList.add('active');
+    // Load data for tab
+    if (name === 'dashboard') loadDashboard();
+    if (name === 'users') loadUsers();
+    if (name === 'plans') loadPlans();
+    if (name === 'payments') loadPayments();
+    if (name === 'analytics') loadAnalytics();
+    if (name === 'settings') loadSettings();
   }
 
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmt(n) { return (parseFloat(n) || 0).toLocaleString(); }
 
-  loadShops();
+  async function apiFetch(url, opts = {}) {
+    const res = await fetch(url, { ...opts, headers: { ...opts.headers, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+    if (res.status === 401) { logout(); return null; }
+    if (res.status === 403) { showToast('Access denied'); return null; }
+    return res;
+  }
+
+  // ═══ DASHBOARD ═══
+  async function loadDashboard() {
+    const res = await apiFetch('/api/shop?action=admin&page=1&limit=5');
+    if (!res) return;
+    const data = await res.json();
+    const a = data.analytics || {};
+    document.getElementById('s_totalShops').textContent = fmt(a.total_shops);
+    document.getElementById('s_activeShops').textContent = fmt(a.active_shops);
+    document.getElementById('s_suspended').textContent = fmt(a.suspended_shops);
+    document.getElementById('s_pending').textContent = fmt(a.pending_shops);
+    document.getElementById('s_totalBookings').textContent = fmt(a.total_bookings);
+    document.getElementById('s_monthlyRevenue').textContent = '$' + fmt(a.monthly_revenue);
+    document.getElementById('s_activePlans').textContent = fmt(a.active_plans);
+    document.getElementById('s_failedPayments').textContent = fmt(a.failed_payments);
+    document.getElementById('s_todayBookings').textContent = fmt(a.bookings_today);
+    renderShops(data);
+  }
+
+  async function loadShops(page, search) {
+    currentShopPage = page || 1;
+    const params = new URLSearchParams({ action: 'admin', page: currentShopPage, limit: 20 });
+    if (search) params.set('search', search);
+    const res = await apiFetch(`/api/shop?${params}`);
+    if (!res) return;
+    renderShops(await res.json());
+  }
+
+  function renderShops(data) {
+    const tbody = document.getElementById('shopsBody');
+    if (!data.shops?.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">No shops found</td></tr>'; return; }
+    tbody.innerHTML = data.shops.map(s => {
+      const status = s.suspended_at ? 'suspended' : (s.subscription_status === 'active' ? 'active' : 'trial');
+      const badge = status === 'suspended' ? 'badge-suspended' : (status === 'active' ? 'badge-active' : 'badge-trial');
+      return `<tr>
+        <td><strong>${esc(s.shop_name)}</strong><br><small style="color:var(--muted)">${esc(s.email)}</small></td>
+        <td>${esc(s.owner_name)}</td><td>${esc(s.city || '-')}</td><td>${esc(s.plan_name || 'Trial')}</td>
+        <td>${s.total_bookings || 0}</td><td>$${fmt(s.total_revenue)}</td>
+        <td><span class="badge ${badge}">${status}</span></td>
+        <td>
+          ${status === 'suspended' ? `<button class="action-btn" onclick="shopAction(${s.id},'activate')">Activate</button>` : `<button class="action-btn danger" onclick="shopAction(${s.id},'suspend')">Suspend</button>`}
+          <button class="action-btn danger" onclick="shopAction(${s.id},'delete')">Delete</button>
+        </td></tr>`;
+    }).join('');
+    const total = data.pagination?.total || 0;
+    document.getElementById('shopPage').textContent = `Page ${currentShopPage} of ${Math.ceil(total / 20) || 1}`;
+    document.getElementById('shopPrev').disabled = currentShopPage <= 1;
+    document.getElementById('shopNext').disabled = currentShopPage * 20 >= total;
+  }
+
+  async function shopAction(shopId, action) {
+    if (action === 'delete' && !confirm('Delete this shop permanently?')) return;
+    const body = { shopId, action };
+    if (action === 'suspend') { body.reason = prompt('Reason (optional):') || undefined; }
+    await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify(body) });
+    showToast(`Shop ${action}d`);
+    loadShops(currentShopPage);
+  }
+
+  // ═══ USERS ═══
+  async function loadUsers(page, search) {
+    currentUserPage = page || 1;
+    const params = new URLSearchParams({ action: 'admin-users', page: currentUserPage, limit: 20 });
+    if (search) params.set('search', search);
+    const res = await apiFetch(`/api/shop?${params}`);
+    if (!res) return;
+    const data = await res.json();
+    const tbody = document.getElementById('usersBody');
+    if (!data.users?.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty">No users found</td></tr>'; return; }
+    tbody.innerHTML = data.users.map(u => {
+      const badge = u.is_active ? 'badge-active' : 'badge-inactive';
+      const status = u.is_active ? 'Active' : 'Disabled';
+      return `<tr>
+        <td>${esc(u.name)}</td><td>${esc(u.email)}</td><td><span class="badge badge-trial">${esc(u.role)}</span></td>
+        <td>${esc(u.shop_name || '-')}</td><td><span class="badge ${badge}">${status}</span></td>
+        <td>${u.last_login ? new Date(u.last_login).toLocaleDateString() : 'Never'}</td>
+        <td>
+          <button class="action-btn" onclick="editUser(${u.id},'${esc(u.name)}','${esc(u.email)}','${esc(u.role)}')">Edit</button>
+          <button class="action-btn" onclick="toggleUser(${u.id},${!u.is_active})">${u.is_active ? 'Disable' : 'Enable'}</button>
+          <button class="action-btn danger" onclick="deleteUser(${u.id})">Delete</button>
+          <button class="action-btn" onclick="resetUserPassword(${u.id},'user')">Reset PW</button>
+        </td></tr>`;
+    }).join('');
+    const total = data.pagination?.total || 0;
+    document.getElementById('userPage').textContent = `Page ${currentUserPage} of ${Math.ceil(total / 20) || 1}`;
+    document.getElementById('userPrev').disabled = currentUserPage <= 1;
+    document.getElementById('userNext').disabled = currentUserPage * 20 >= total;
+  }
+
+  function showCreateUserModal() {
+    document.getElementById('userModalTitle').textContent = 'Create User';
+    document.getElementById('editUserId').value = '';
+    document.getElementById('mu_name').value = '';
+    document.getElementById('mu_email').value = '';
+    document.getElementById('mu_password').value = '';
+    document.getElementById('mu_role').value = 'admin';
+    document.getElementById('mu_shopId').value = '';
+    document.getElementById('userModal').classList.add('show');
+  }
+
+  function editUser(id, name, email, role) {
+    document.getElementById('userModalTitle').textContent = 'Edit User';
+    document.getElementById('editUserId').value = id;
+    document.getElementById('mu_name').value = name;
+    document.getElementById('mu_email').value = email;
+    document.getElementById('mu_password').value = '';
+    document.getElementById('mu_role').value = role;
+    document.getElementById('userModal').classList.add('show');
+  }
+
+  async function saveUser() {
+    const editId = document.getElementById('editUserId').value;
+    if (editId) {
+      const body = { action: 'edit-user', userId: parseInt(editId), name: document.getElementById('mu_name').value.trim(), role: document.getElementById('mu_role').value };
+      const shopId = document.getElementById('mu_shopId').value;
+      if (shopId) body.repair_shop_id = parseInt(shopId);
+      await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify(body) });
+      showToast('User updated');
+    } else {
+      const body = { action: 'create-user', name: document.getElementById('mu_name').value.trim(), email: document.getElementById('mu_email').value.trim(), password: document.getElementById('mu_password').value, role: document.getElementById('mu_role').value };
+      const shopId = document.getElementById('mu_shopId').value;
+      if (shopId) body.repair_shop_id = parseInt(shopId);
+      await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify(body) });
+      showToast('User created');
+    }
+    closeModal('userModal');
+    loadUsers(currentUserPage);
+  }
+
+  async function toggleUser(userId, isActive) {
+    await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify({ action: 'edit-user', userId, is_active: isActive }) });
+    showToast(`User ${isActive ? 'enabled' : 'disabled'}`);
+    loadUsers(currentUserPage);
+  }
+
+  async function deleteUser(userId) {
+    if (!confirm('Delete this user?')) return;
+    await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify({ action: 'delete-user', userId }) });
+    showToast('User deleted');
+    loadUsers(currentUserPage);
+  }
+
+  async function resetUserPassword(targetId, targetType) {
+    if (!confirm('Reset password? A temporary password will be generated.')) return;
+    const res = await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify({ action: 'reset-password', targetId, targetType }) });
+    if (res) { const d = await res.json(); showToast('Temp password: ' + (d.tempPassword || 'see console')); alert('Temporary password: ' + d.tempPassword); }
+  }
+
+  // ═══ PLANS ═══
+  async function loadPlans() {
+    const res = await apiFetch('/api/shop?action=admin-plans');
+    if (!res) return;
+    const data = await res.json();
+    const grid = document.getElementById('plansGrid');
+    if (!data.plans?.length) { grid.innerHTML = '<div class="empty">No plans</div>'; return; }
+    grid.innerHTML = data.plans.map(p => `
+      <div class="plan-card" style="${p.is_active ? '' : 'opacity:0.5'}">
+        <h3>${esc(p.display_name)} <span class="badge ${p.is_active ? 'badge-active' : 'badge-inactive'}">${p.is_active ? 'Active' : 'Inactive'}</span></h3>
+        <p style="font-size:12px;color:var(--muted)">${esc(p.description || p.name)}</p>
+        <div class="price">$${parseFloat(p.price_monthly_usd || 0)}/mo</div>
+        <div class="features">
+          Yearly: $${parseFloat(p.price_yearly_usd || 0)} | Max bookings: ${p.max_bookings || 'Unlimited'}<br>
+          Technicians: ${p.max_technicians || 'Unlimited'} | Staff: ${p.max_staff || 'Unlimited'}<br>
+          WhatsApp: ${p.whatsapp_conversations || 'Unlimited'} | AI Credits: ${p.ai_credits || 'Unlimited'}<br>
+          Trial: ${p.trial_days || 14} days
+        </div>
+        <div class="actions">
+          <button class="action-btn" onclick="editPlan(${p.id})">Edit</button>
+          <button class="action-btn" onclick="duplicatePlan(${p.id})">Duplicate</button>
+          <button class="action-btn danger" onclick="deletePlan(${p.id})">${p.is_active ? 'Deactivate' : 'Activate'}</button>
+        </div>
+      </div>
+    `).join('');
+    window._plans = data.plans;
+  }
+
+  function showCreatePlanModal() {
+    document.getElementById('planModalTitle').textContent = 'Create Plan';
+    document.getElementById('editPlanId').value = '';
+    ['mp_name','mp_display','mp_desc'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('mp_monthly').value = 0; document.getElementById('mp_yearly').value = 0;
+    document.getElementById('mp_trial').value = 14; document.getElementById('mp_currency').value = 'USD';
+    document.getElementById('mp_active').value = 'true';
+    ['mp_bookings','mp_techs','mp_staff','mp_whatsapp','mp_ai'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('planModal').classList.add('show');
+  }
+
+  function editPlan(id) {
+    const p = (window._plans || []).find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('planModalTitle').textContent = 'Edit Plan';
+    document.getElementById('editPlanId').value = id;
+    document.getElementById('mp_name').value = p.name || '';
+    document.getElementById('mp_display').value = p.display_name || '';
+    document.getElementById('mp_desc').value = p.description || '';
+    document.getElementById('mp_monthly').value = p.price_monthly_usd || 0;
+    document.getElementById('mp_yearly').value = p.price_yearly_usd || 0;
+    document.getElementById('mp_bookings').value = p.max_bookings || '';
+    document.getElementById('mp_techs').value = p.max_technicians || '';
+    document.getElementById('mp_staff').value = p.max_staff || '';
+    document.getElementById('mp_whatsapp').value = p.whatsapp_conversations || '';
+    document.getElementById('mp_ai').value = p.ai_credits || '';
+    document.getElementById('mp_trial').value = p.trial_days || 14;
+    document.getElementById('mp_currency').value = p.currency || 'USD';
+    document.getElementById('mp_active').value = String(p.is_active);
+    document.getElementById('planModal').classList.add('show');
+  }
+
+  async function savePlan() {
+    const editId = document.getElementById('editPlanId').value;
+    const base = {
+      name: document.getElementById('mp_name').value.trim(),
+      display_name: document.getElementById('mp_display').value.trim(),
+      description: document.getElementById('mp_desc').value.trim(),
+      price_monthly_usd: parseFloat(document.getElementById('mp_monthly').value) || 0,
+      price_yearly_usd: parseFloat(document.getElementById('mp_yearly').value) || 0,
+      max_bookings: document.getElementById('mp_bookings').value ? parseInt(document.getElementById('mp_bookings').value) : null,
+      max_technicians: document.getElementById('mp_techs').value ? parseInt(document.getElementById('mp_techs').value) : null,
+      max_staff: document.getElementById('mp_staff').value ? parseInt(document.getElementById('mp_staff').value) : null,
+      whatsapp_conversations: document.getElementById('mp_whatsapp').value ? parseInt(document.getElementById('mp_whatsapp').value) : null,
+      ai_credits: document.getElementById('mp_ai').value ? parseInt(document.getElementById('mp_ai').value) : null,
+      trial_days: parseInt(document.getElementById('mp_trial').value) || 14,
+      currency: document.getElementById('mp_currency').value.trim() || 'USD',
+      features: {},
+    };
+    if (editId) {
+      await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify({ action: 'edit-plan', planId: parseInt(editId), ...base }) });
+      showToast('Plan updated');
+    } else {
+      base.is_active = document.getElementById('mp_active').value === 'true';
+      await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify({ action: 'create-plan', ...base }) });
+      showToast('Plan created');
+    }
+    closeModal('planModal');
+    loadPlans();
+  }
+
+  async function duplicatePlan(id) {
+    await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify({ action: 'duplicate-plan', planId: id }) });
+    showToast('Plan duplicated'); loadPlans();
+  }
+
+  async function deletePlan(id) {
+    const p = (window._plans || []).find(x => x.id === id);
+    if (p?.is_active && !confirm('Deactivate this plan?')) return;
+    await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify({ action: 'delete-plan', planId: id }) });
+    showToast('Plan deactivated'); loadPlans();
+  }
+
+  // ═══ PAYMENTS ═══
+  async function loadPayments(page) {
+    currentPayPage = page || 1;
+    const params = new URLSearchParams({ action: 'admin-payments', page: currentPayPage, limit: 20 });
+    const res = await apiFetch(`/api/shop?${params}`);
+    if (!res) return;
+    const data = await res.json();
+    const tbody = document.getElementById('paymentsBody');
+    if (!data.payments?.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty">No payments</td></tr>'; return; }
+    tbody.innerHTML = data.payments.map(p => {
+      const badge = p.status === 'completed' ? 'badge-active' : (p.status === 'failed' ? 'badge-suspended' : 'badge-trial');
+      return `<tr>
+        <td>${esc(p.invoice_number || p.payment_id || p.id)}</td>
+        <td>${esc(p.shop_name || '-')}</td>
+        <td>${p.currency} ${fmt(p.amount)}</td>
+        <td>${esc(p.gateway)}</td>
+        <td><span class="badge ${badge}">${p.status}</span></td>
+        <td>${new Date(p.created_at).toLocaleDateString()}</td>
+      </tr>`;
+    }).join('');
+    const total = data.pagination?.total || 0;
+    document.getElementById('payPage').textContent = `Page ${currentPayPage} of ${Math.ceil(total / 20) || 1}`;
+    document.getElementById('payPrev').disabled = currentPayPage <= 1;
+    document.getElementById('payNext').disabled = currentPayPage * 20 >= total;
+  }
+
+  // ═══ ANALYTICS ═══
+  async function loadAnalytics() {
+    const res = await apiFetch('/api/shop?action=admin-analytics');
+    if (!res) return;
+    const data = await res.json();
+    const g = data.growth || {};
+    document.getElementById('a_newShops').textContent = fmt(g.new_shops_this_month);
+    document.getElementById('a_bookingsMonth').textContent = fmt(g.bookings_this_month);
+    document.getElementById('a_newUsers').textContent = fmt(g.new_users_this_month);
+
+    document.getElementById('activeShopsBody').innerHTML = (data.activeShops || []).map(s =>
+      `<tr><td>${esc(s.shop_name)}</td><td>${esc(s.city || '-')}</td><td>${s.booking_count}</td><td>$${fmt(s.total_revenue)}</td></tr>`
+    ).join('') || '<tr><td colspan="4" class="empty">No data</td></tr>';
+
+    document.getElementById('topCitiesBody').innerHTML = (data.topCities || []).map(c =>
+      `<tr><td>${esc(c.city)}</td><td>${c.shop_count}</td></tr>`
+    ).join('') || '<tr><td colspan="2" class="empty">No data</td></tr>';
+
+    document.getElementById('monthlyBody').innerHTML = (data.monthly || []).map(m =>
+      `<tr><td>${new Date(m.month).toLocaleDateString('en', { year: 'numeric', month: 'short' })}</td><td>${m.bookings}</td><td>$${fmt(m.revenue)}</td></tr>`
+    ).join('') || '<tr><td colspan="3" class="empty">No data</td></tr>';
+  }
+
+  // ═══ SETTINGS ═══
+  async function loadSettings() {
+    const res = await apiFetch('/api/shop?action=admin-settings');
+    if (!res) return;
+    const data = await res.json();
+    const s = data.settings || {};
+    if (s.platform_name) document.getElementById('set_platform_name').value = s.platform_name.value || '';
+    if (s.logo_url) document.getElementById('set_logo_url').value = s.logo_url.value || '';
+    if (s.maintenance_mode) document.getElementById('set_maintenance_mode').value = String(s.maintenance_mode.value || false);
+    if (s.announcement) {
+      document.getElementById('set_announcement').value = s.announcement.value || '';
+      document.getElementById('set_announcement_active').value = String(s.announcement.active || false);
+    }
+    if (s.whatsapp_settings) {
+      document.getElementById('set_whatsapp_phone').value = s.whatsapp_settings.phone_number_id || '';
+      document.getElementById('set_whatsapp_version').value = s.whatsapp_settings.api_version || 'v19.0';
+    }
+    if (s.ai_settings) document.getElementById('set_ai_model').value = s.ai_settings.model || '';
+    if (s.default_currency) document.getElementById('set_currency').value = s.default_currency.value || 'USD';
+    if (s.email_settings) document.getElementById('set_from_email').value = s.email_settings.from_email || '';
+  }
+
+  async function saveSettings() {
+    const settings = {
+      platform_name: { value: document.getElementById('set_platform_name').value },
+      logo_url: { value: document.getElementById('set_logo_url').value },
+      maintenance_mode: { value: document.getElementById('set_maintenance_mode').value === 'true' },
+      announcement: { value: document.getElementById('set_announcement').value, active: document.getElementById('set_announcement_active').value === 'true' },
+      whatsapp_settings: { phone_number_id: document.getElementById('set_whatsapp_phone').value, api_version: document.getElementById('set_whatsapp_version').value },
+      ai_settings: { model: document.getElementById('set_ai_model').value },
+      default_currency: { value: document.getElementById('set_currency').value },
+      email_settings: { from_email: document.getElementById('set_from_email').value },
+    };
+    const res = await apiFetch('/api/shop', { method: 'POST', body: JSON.stringify({ action: 'save-settings', settings }) });
+    if (res) showToast('Settings saved');
+  }
+
+  function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+  // Init
+  loadDashboard();
 </script>
 </body>
 </html>

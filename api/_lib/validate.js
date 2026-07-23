@@ -110,6 +110,91 @@ const bookingUpdateSchema = z.object({
   invoiceNumber: z.string().max(50).trim().optional().nullable(),
 });
 
+// ─── Platform roles ───────────────────────────────────────────────────────────
+const platformRoles = ["super_admin", "admin", "support"];
+const shopRoles = ["owner", "manager", "editor", "receptionist", "technician"];
+const allRoles = [...platformRoles, ...shopRoles];
+
+// ─── Bootstrap schema (first super admin) ────────────────────────────────────
+const bootstrapSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100).trim(),
+  email: z.string().min(1, "Email is required").email("Invalid email").transform((s) => s.toLowerCase().trim()),
+  password: z.string().min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Must contain an uppercase letter")
+    .regex(/[a-z]/, "Must contain a lowercase letter")
+    .regex(/[0-9]/, "Must contain a number"),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
+}).refine((d) => d.password === d.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
+});
+
+// ─── Create user schema (admin creates user) ─────────────────────────────────
+const createUserSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100).trim(),
+  email: z.string().min(1, "Email is required").email("Invalid email").transform((s) => s.toLowerCase().trim()),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(allRoles, { errorMap: () => ({ message: "Invalid role" }) }),
+  repair_shop_id: z.coerce.number().int().positive().optional().nullable(),
+});
+
+// ─── Edit user schema ────────────────────────────────────────────────────────
+const editUserSchema = z.object({
+  userId: z.coerce.number().int().positive("userId is required"),
+  name: z.string().min(1).max(100).trim().optional(),
+  role: z.enum(allRoles).optional(),
+  is_active: z.boolean().optional(),
+  repair_shop_id: z.coerce.number().int().positive().optional().nullable(),
+});
+
+// ─── Create/edit plan schema ─────────────────────────────────────────────────
+const createPlanSchema = z.object({
+  name: z.string().min(1, "Plan name is required").max(50).trim().transform((s) => s.toLowerCase()),
+  display_name: z.string().min(1, "Display name is required").max(100).trim(),
+  description: z.string().max(500).trim().optional().default(""),
+  price_monthly_usd: z.coerce.number().min(0, "Must be >= 0"),
+  price_yearly_usd: z.coerce.number().min(0, "Must be >= 0"),
+  max_bookings: z.coerce.number().int().optional().nullable(),
+  max_technicians: z.coerce.number().int().optional().nullable(),
+  max_staff: z.coerce.number().int().optional().nullable(),
+  whatsapp_conversations: z.coerce.number().int().optional().nullable(),
+  ai_credits: z.coerce.number().int().optional().nullable(),
+  features: z.any().optional().default({}),
+  trial_days: z.coerce.number().int().min(0).default(14),
+  currency: z.string().max(3).trim().default("USD"),
+  is_active: z.boolean().default(true),
+});
+
+// ─── Edit plan schema (all fields optional) ──────────────────────────────────
+const editPlanSchema = z.object({
+  planId: z.coerce.number().int().positive("planId is required"),
+  name: z.string().min(1).max(50).trim().optional(),
+  display_name: z.string().min(1).max(100).trim().optional(),
+  description: z.string().max(500).trim().optional(),
+  price_monthly_usd: z.coerce.number().min(0).optional(),
+  price_yearly_usd: z.coerce.number().min(0).optional(),
+  max_bookings: z.coerce.number().int().optional().nullable(),
+  max_technicians: z.coerce.number().int().optional().nullable(),
+  max_staff: z.coerce.number().int().optional().nullable(),
+  whatsapp_conversations: z.coerce.number().int().optional().nullable(),
+  ai_credits: z.coerce.number().int().optional().nullable(),
+  features: z.any().optional(),
+  trial_days: z.coerce.number().int().min(0).optional(),
+  currency: z.string().max(3).trim().optional(),
+  is_active: z.boolean().optional(),
+});
+
+// ─── Settings schema ─────────────────────────────────────────────────────────
+const settingsSchema = z.object({
+  settings: z.record(z.string(), z.any()),
+});
+
+// ─── Reset password schema ───────────────────────────────────────────────────
+const resetPasswordSchema = z.object({
+  targetId: z.coerce.number().int().positive("targetId is required"),
+  targetType: z.enum(["user", "shop"]).default("shop"),
+});
+
 module.exports = {
   validate,
   cleanString,
@@ -121,5 +206,15 @@ module.exports = {
   loginSchema,
   signupSchema,
   bookingUpdateSchema,
+  bootstrapSchema,
+  createUserSchema,
+  editUserSchema,
+  createPlanSchema,
+  editPlanSchema,
+  settingsSchema,
+  resetPasswordSchema,
+  platformRoles,
+  shopRoles,
+  allRoles,
   z,
 };

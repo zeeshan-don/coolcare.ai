@@ -88,6 +88,9 @@
 </div>
 
 <script>
+  // Redirect to unified login page
+  window.location.href = '/login.html';
+  // --- Legacy code below (kept for reference) ---
   // Redirect if already logged in
   if (localStorage.getItem('cc_token')) window.location.href = '/shop-dashboard.html';
 
@@ -139,7 +142,10 @@
 
       localStorage.setItem('cc_token', data.token);
       localStorage.setItem('cc_shop', JSON.stringify(data.shop));
-      window.location.href = '/shop-dashboard.html';
+      // Role-based redirect
+      const role = data.user?.role || data.shop?.role || 'shop';
+      if (['super_admin','admin','support'].includes(role)) window.location.href = '/admin.html';
+      else window.location.href = '/shop-dashboard.html';
     } catch (err) {
       console.error('[login] Network error:', err);
       showAlert('Network error. Please check your connection.');

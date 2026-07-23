@@ -122,7 +122,7 @@
 
 <script>
   const token = localStorage.getItem('cc_token');
-  if (!token) { window.location.href = '/shop-login.html'; }
+  if (!token) { window.location.href = '/login.html'; }
 
   let allBookings = [];
   let currentFilter = 'all';
@@ -140,7 +140,8 @@
     }).catch(() => {});
     localStorage.removeItem('cc_token');
     localStorage.removeItem('cc_shop');
-    window.location.href = '/shop-login.html';
+    localStorage.removeItem('cc_user');
+    window.location.href = '/login.html';
   }
 
   function searchBookings() {

@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoolCare | Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#ffffff;--bg2:#f9f9f9;--border:#e5e5e5;--border2:#d4d4d4;--ink:#171717;--ink2:#404040;--muted:#737373;--muted2:#a3a3a3;--red:#dc2626;--red-bg:#fef2f2;--green:#16a34a;--green-bg:#f0fdf4}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,-apple-system,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+    .card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:40px;width:min(420px,100%);box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+    .logo{text-align:center;margin-bottom:32px}
+    .logo h1{font-size:24px;font-weight:700;color:var(--ink);letter-spacing:-0.5px}
+    .logo p{color:var(--muted);font-size:14px;margin-top:4px}
+    .field{margin-bottom:16px}
+    label{display:block;font-weight:500;font-size:14px;margin-bottom:6px;color:var(--ink2)}
+    input{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font:inherit;font-size:15px;background:var(--bg);transition:border-color 0.15s}
+    input:focus{outline:none;border-color:var(--ink);box-shadow:0 0 0 1px var(--ink)}
+    input.error{border-color:var(--red)}
+    .err-msg{color:var(--red);font-size:12px;margin-top:4px;display:none}
+    .err-msg.show{display:block}
+    .btn{width:100%;background:var(--ink);color:#fff;border:0;border-radius:8px;padding:11px;font:600 15px inherit;cursor:pointer;transition:background 0.15s;margin-top:4px}
+    .btn:hover{background:#333}.btn:disabled{opacity:.5;cursor:not-allowed}
+    .alert{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none}
+    .alert.show{display:block}
+    .alert.error{background:var(--red-bg);color:var(--red)}
+    .alert.success{background:var(--green-bg);color:var(--green)}
+    .divider{text-align:center;color:var(--muted);font-size:13px;margin:20px 0;position:relative}
+    .divider::before,.divider::after{content:'';position:absolute;top:50%;width:40%;height:1px;background:var(--border)}
+    .divider::before{left:0}.divider::after{right:0}
+    .link{text-align:center;font-size:13px;color:var(--muted);margin-top:16px}
+    .link a{color:var(--ink);font-weight:600;text-decoration:none}
+    .link a:hover{text-decoration:underline}
+    .bootstrap-banner{background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:14px;margin-bottom:20px;font-size:13px;color:#92400e;text-align:center;display:none}
+    .bootstrap-banner.show{display:block}
+    .bootstrap-form{display:none}
+    .bootstrap-form.show{display:block}
+    .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:20px}
+    .tab{padding:10px 20px;font-weight:500;font-size:14px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.15s}
+    .tab:hover{color:var(--ink)}.tab.active{color:var(--ink);border-bottom-color:var(--ink)}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <h1>coolcare</h1>
+    <p>Sign in to your account</p>
+  </div>
+
+  <div id="alert" class="alert"></div>
+  <div id="bootstrapBanner" class="bootstrap-banner">No admin account found. Create the first Super Admin to get started.</div>
+
+  <!-- Normal Login Form -->
+  <div id="loginForm">
+    <form id="loginFormEl" novalidate>
+      <div class="field">
+        <label for="identifier">Email</label>
+        <input id="identifier" type="text" placeholder="you@example.com" autocomplete="username">
+        <div class="err-msg" id="identifier-err"></div>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="Your password" autocomplete="current-password">
+        <div class="err-msg" id="password-err"></div>
+      </div>
+      <button type="submit" class="btn" id="loginBtn">Sign in</button>
+    </form>
+    <div class="link">New to CoolCare? <a href="/shop-signup.html">Register your shop</a></div>
+    <div class="link"><a href="/">Back to home</a></div>
+  </div>
+
+  <!-- Bootstrap Form (first super admin) -->
+  <div id="bootstrapForm" class="bootstrap-form">
+    <form id="bootstrapFormEl" novalidate>
+      <div class="field">
+        <label for="bName">Full Name</label>
+        <input id="bName" type="text" placeholder="Your full name">
+        <div class="err-msg" id="bName-err"></div>
+      </div>
+      <div class="field">
+        <label for="bEmail">Email</label>
+        <input id="bEmail" type="email" placeholder="admin@example.com">
+        <div class="err-msg" id="bEmail-err"></div>
+      </div>
+      <div class="field">
+        <label for="bPassword">Password</label>
+        <input id="bPassword" type="password" placeholder="Min 8 chars, uppercase, lowercase, number">
+        <div class="err-msg" id="bPassword-err"></div>
+      </div>
+      <div class="field">
+        <label for="bConfirm">Confirm Password</label>
+        <input id="bConfirm" type="password" placeholder="Repeat password">
+        <div class="err-msg" id="bConfirm-err"></div>
+      </div>
+      <button type="submit" class="btn" id="bootstrapBtn">Create Super Admin</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  // Redirect if already logged in
+  if (localStorage.getItem('cc_token')) {
+    const shop = JSON.parse(localStorage.getItem('cc_shop') || '{}');
+    const user = JSON.parse(localStorage.getItem('cc_user') || '{}');
+    const role = user.role || shop.role || 'owner';
+    if (['super_admin','admin','support'].includes(role)) window.location.href = '/admin.html';
+    else window.location.href = '/shop-dashboard.html';
+  }
+
+  const alertEl = document.getElementById('alert');
+
+  function showAlert(msg, type) {
+    alertEl.textContent = msg;
+    alertEl.className = `alert show ${type}`;
+  }
+  function hideAlert() { alertEl.className = 'alert'; }
+  function fieldError(id, msg) {
+    const el = document.getElementById(id + '-err');
+    const inp = document.getElementById(id);
+    if (el) { el.textContent = msg; el.classList.toggle('show', !!msg); }
+    if (inp) inp.classList.toggle('error', !!msg);
+  }
+  function clearErrors(prefix) {
+    hideAlert();
+    document.querySelectorAll('.err-msg').forEach(e => e.classList.remove('show'));
+    document.querySelectorAll('.error').forEach(e => e.classList.remove('error'));
+  }
+
+  // Role-based redirect after login
+  function redirectByRole(user) {
+    if (!user) return '/shop-dashboard.html';
+    const role = user.role || 'owner';
+    if (['super_admin', 'admin', 'support'].includes(role)) return '/admin.html';
+    if (role === 'technician') return '/shop-dashboard.html';
+    return '/shop-dashboard.html';
+  }
+
+  // Check if bootstrap is needed
+  async function checkBootstrap() {
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bootstrap-check' }),
+      });
+      const data = await res.json();
+      if (data.needsBootstrap) {
+        document.getElementById('bootstrapBanner').classList.add('show');
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('bootstrapForm').classList.add('show');
+        return true;
+      }
+    } catch (e) { /* proceed with login */ }
+    return false;
+  }
+
+  // ── Login Form ──
+  document.getElementById('loginFormEl').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErrors();
+
+    const identifier = document.getElementById('identifier').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!identifier) { fieldError('identifier', 'Please enter your email'); return; }
+    if (!password) { fieldError('password', 'Please enter your password'); return; }
+
+    const btn = document.getElementById('loginBtn');
+    btn.disabled = true; btn.textContent = 'Signing in...';
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', identifier, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showAlert(data.error || 'Login failed. Please check your credentials.', 'error');
+        return;
+      }
+
+      localStorage.setItem('cc_token', data.token);
+      localStorage.setItem('cc_user', JSON.stringify(data.user));
+      // Legacy compat
+      localStorage.setItem('cc_shop', JSON.stringify({
+        id: data.user.id, shopName: data.user.shopName || data.user.name,
+        ownerName: data.user.name, email: data.user.email,
+        mobile: data.user.mobile, role: data.user.role,
+      }));
+
+      window.location.href = redirectByRole(data.user);
+    } catch (err) {
+      showAlert('Network error. Please check your connection.', 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Sign in';
+    }
+  });
+
+  // ── Bootstrap Form ──
+  document.getElementById('bootstrapFormEl').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErrors();
+
+    const name = document.getElementById('bName').value.trim();
+    const email = document.getElementById('bEmail').value.trim();
+    const password = document.getElementById('bPassword').value;
+    const confirmPassword = document.getElementById('bConfirm').value;
+
+    let valid = true;
+    if (!name) { fieldError('bName', 'Name is required'); valid = false; }
+    if (!email) { fieldError('bEmail', 'Email is required'); valid = false; }
+    if (!password) { fieldError('bPassword', 'Password is required'); valid = false; }
+    else if (password.length < 8) { fieldError('bPassword', 'Must be at least 8 characters'); valid = false; }
+    if (password !== confirmPassword) { fieldError('bConfirm', 'Passwords do not match'); valid = false; }
+    if (!valid) return;
+
+    const btn = document.getElementById('bootstrapBtn');
+    btn.disabled = true; btn.textContent = 'Creating...';
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'bootstrap', name, email, password, confirmPassword }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.errors) {
+          Object.entries(data.errors).forEach(([k, v]) => fieldError(k, v));
+        }
+        showAlert(data.error || 'Failed to create admin account.', 'error');
+        return;
+      }
+
+      localStorage.setItem('cc_token', data.token);
+      localStorage.setItem('cc_user', JSON.stringify(data.user));
+      localStorage.setItem('cc_shop', JSON.stringify({
+        id: data.user.id, shopName: data.user.name, ownerName: data.user.name,
+        email: data.user.email, role: data.user.role,
+      }));
+
+      showAlert('Super Admin created! Redirecting...', 'success');
+      setTimeout(() => window.location.href = '/admin.html', 1000);
+    } catch (err) {
+      showAlert('Network error. Please check your connection.', 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Create Super Admin';
+    }
+  });
+
+  // Init
+  checkBootstrap();
+</script>
+</body>
+</html>

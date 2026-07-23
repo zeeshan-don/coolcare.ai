@@ -1,21 +1,30 @@
 // api/shop.js
-// Consolidated shop endpoint — dashboard, booking detail, update booking, export CSV, admin.
+// Consolidated shop + admin endpoint.
 // GET  /api/shop?page=1&limit=20&status=open&search=raj  → dashboard
-// GET  /api/shop?action=export&status=completed&from=…&to=… → CSV export
+// GET  /api/shop?action=export&status=completed  → CSV export
 // GET  /api/shop?action=booking&id=123  → single booking detail
-// GET  /api/shop?action=admin&page=1&search=…  → admin: list shops
+// GET  /api/shop?action=admin → admin dashboard
+// GET  /api/shop?action=admin-users → list users
+// GET  /api/shop?action=admin-plans → list plans
+// GET  /api/shop?action=admin-payments → list payments
+// GET  /api/shop?action=admin-settings → get settings
+// GET  /api/shop?action=admin-analytics → analytics
 // POST /api/shop  body: { action: "update", bookingId, … } → update booking
-// POST /api/shop  body: { action: "admin_action", shopId, action_type } → admin actions
-// Security: auth required, multi-tenant, rate-limited.
+// POST /api/shop  body: { action: "suspend|activate|delete", shopId } → shop admin
+// POST /api/shop  body: { action: "edit-shop|approve-shop|reset-password", ... } → admin
+// POST /api/shop  body: { action: "create-user|edit-user|delete-user|invite-user", ... } → user admin
+// POST /api/shop  body: { action: "create-plan|edit-plan|delete-plan|duplicate-plan", ... } → plan admin
+// POST /api/shop  body: { action: "save-settings", settings: {} } → settings
 
 const { neon } = require("@neondatabase/serverless");
-const { requireAuth } = require("./_lib/auth");
+const { requireAuth, requireRole, requirePlatformAdmin, requireSuperAdmin, logAdminAction } = require("./_lib/auth");
 const { notifyStatusChange } = require("./_lib/notify");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
-const { validate, bookingUpdateSchema } = require("./_lib/validate");
+const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { z } = require("zod");
+const bcrypt = require("bcryptjs");
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -25,6 +34,15 @@ const querySchema = z.object({
   sortBy: z.enum(["created_at", "updated_at", "status"]).default("created_at"),
   sortDir: z.enum(["asc", "desc"]).default("desc"),
 });
+
+// Admin GET actions
+const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-payments", "admin-settings", "admin-analytics"]);
+// Admin POST actions
+const ADMIN_POST_ACTIONS = new Set([
+  "suspend", "activate", "delete", "edit-shop", "approve-shop", "reset-password",
+  "create-user", "edit-user", "delete-user", "invite-user",
+  "create-plan", "edit-plan", "delete-plan", "duplicate-plan", "save-settings",
+]);
 
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -41,7 +59,7 @@ module.exports = withErrorHandler(async (request, response) => {
     if (action === "dashboard") return handleDashboard(request, response, sql, shopId);
     if (action === "booking") return handleBookingDetail(request, response, sql, shopId);
     if (action === "export") return handleExport(request, response, sql, shopId);
-    if (action === "admin") return handleAdminGet(request, response, sql, auth);
+    if (ADMIN_GET_ACTIONS.has(action)) return handleAdminGet(request, response, sql, auth, action);
     return response.status(400).json({ error: "Invalid GET action" });
   }
 
@@ -49,14 +67,16 @@ module.exports = withErrorHandler(async (request, response) => {
     const body = request.body || {};
     const action = body.action;
     if (action === "update") return handleBookingUpdate(request, response, sql, shopId, body);
-    if (action === "suspend" || action === "activate" || action === "delete") return handleAdminPost(request, response, sql, auth, body);
+    if (ADMIN_POST_ACTIONS.has(action)) return handleAdminPost(request, response, sql, auth, body);
     return response.status(400).json({ error: "Invalid POST action" });
   }
 
   return response.status(405).json({ error: "Method not allowed" });
 });
 
-// ─── DASHBOARD ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
 async function handleDashboard(request, response, sql, shopId) {
   if (!allowMethods(request, response, "GET")) return;
 
@@ -145,7 +165,9 @@ async function handleDashboard(request, response, sql, shopId) {
   });
 }
 
-// ─── BOOKING DETAIL ─────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// BOOKING DETAIL
+// ═══════════════════════════════════════════════════════════════════════════════
 async function handleBookingDetail(request, response, sql, shopId) {
   const bookingId = parseInt(request.query?.id, 10);
   if (!bookingId || isNaN(bookingId)) return response.status(400).json({ error: "Invalid booking ID" });
@@ -168,7 +190,9 @@ async function handleBookingDetail(request, response, sql, shopId) {
   return response.status(200).json({ booking: bookings[0], timeline, technicians });
 }
 
-// ─── EXPORT CSV ──────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXPORT CSV
+// ═══════════════════════════════════════════════════════════════════════════════
 async function handleExport(request, response, sql, shopId) {
   const status = request.query?.status;
   const from = request.query?.from;
@@ -195,7 +219,9 @@ async function handleExport(request, response, sql, shopId) {
   return response.status(200).send(rows.join("\n"));
 }
 
-// ─── BOOKING UPDATE ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// BOOKING UPDATE
+// ═══════════════════════════════════════════════════════════════════════════════
 async function handleBookingUpdate(request, response, sql, shopId, body) {
   const data = validate({ ...request, body }, response, bookingUpdateSchema);
   if (!data) return;
@@ -231,15 +257,11 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
   setValues.push(data.bookingId, shopId);
   await sql.unsafe(`UPDATE bookings SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length - 1} AND repair_shop_id = $${setValues.length}`, setValues);
 
-  // Timeline audit
   if (data.status && data.status !== oldStatus) {
     await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, actor_id) VALUES (${data.bookingId}, 'status_change', ${oldStatus}, ${data.status}, 'shop', ${shopId})`;
   }
   if (data.technicianName) {
     await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, actor_id) VALUES (${data.bookingId}, 'technician_assigned', ${booking.technician_name || null}, ${data.technicianName}, 'shop', ${shopId})`;
-  }
-  if (data.technicianNotes) {
-    await sql`INSERT INTO booking_timeline (booking_id, action, new_value, actor_type, actor_id, notes) VALUES (${data.bookingId}, 'note_added', ${data.technicianNotes}, 'shop', ${shopId}, ${data.technicianNotes})`;
   }
   if (data.priority) {
     await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, actor_id) VALUES (${data.bookingId}, 'priority_change', ${booking.priority || 'normal'}, ${data.priority}, 'shop', ${shopId})`;
@@ -257,11 +279,26 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
   return response.status(200).json({ updated: true, booking: updated[0], timeline });
 }
 
-// ─── ADMIN GET (list shops) ──────────────────────────────
-async function handleAdminGet(request, response, sql, auth) {
-  const admin = await requireAdmin(auth, sql, response);
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN GET ROUTER
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleAdminGet(request, response, sql, auth, action) {
+  const admin = await requirePlatformAdmin(auth, sql, response);
   if (!admin) return;
 
+  switch (action) {
+    case "admin": return adminDashboard(request, response, sql, auth);
+    case "admin-users": return adminListUsers(request, response, sql, auth);
+    case "admin-plans": return adminListPlans(request, response, sql, auth);
+    case "admin-payments": return adminListPayments(request, response, sql, auth);
+    case "admin-settings": return adminGetSettings(request, response, sql, auth);
+    case "admin-analytics": return adminAnalytics(request, response, sql, auth);
+    default: return response.status(400).json({ error: "Unknown admin GET action" });
+  }
+}
+
+// ─── ADMIN DASHBOARD (enhanced analytics) ────────────────────────────────────
+async function adminDashboard(request, response, sql, auth) {
   const page = parseInt(request.query?.page || "1", 10);
   const limit = parseInt(request.query?.limit || "20", 10);
   const search = request.query?.search || "";
@@ -285,10 +322,15 @@ async function handleAdminGet(request, response, sql, auth) {
     SELECT
       (SELECT COUNT(*) FROM repair_shops) as total_shops,
       (SELECT COUNT(*) FROM repair_shops WHERE suspended_at IS NULL AND is_active = true) as active_shops,
+      (SELECT COUNT(*) FROM repair_shops WHERE suspended_at IS NOT NULL) as suspended_shops,
+      (SELECT COUNT(*) FROM repair_shops WHERE subscription_status = 'trial') as pending_shops,
       (SELECT COUNT(*) FROM bookings) as total_bookings,
       (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE status = 'completed') as total_revenue,
+      (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE status = 'completed' AND created_at >= date_trunc('month', now())) as monthly_revenue,
       (SELECT COUNT(*) FROM subscriptions WHERE status = 'active') as active_subscriptions,
-      (SELECT COUNT(*) FROM bookings WHERE created_at >= date_trunc('day', now())) as bookings_today
+      (SELECT COUNT(*) FROM bookings WHERE created_at >= date_trunc('day', now())) as bookings_today,
+      (SELECT COUNT(*) FROM payments WHERE status = 'failed') as failed_payments,
+      (SELECT COUNT(*) FROM subscription_plans WHERE is_active = true) as active_plans
   `;
 
   const countResult = await sql.unsafe(`SELECT COUNT(*) as total FROM repair_shops rs ${whereClause}`, qp);
@@ -299,41 +341,413 @@ async function handleAdminGet(request, response, sql, auth) {
   });
 }
 
-// ─── ADMIN POST (shop actions) ───────────────────────────
-async function handleAdminPost(request, response, sql, auth, body) {
-  const admin = await requireAdmin(auth, sql, response);
-  if (!admin) return;
+// ─── ADMIN LIST USERS ────────────────────────────────────────────────────────
+async function adminListUsers(request, response, sql, auth) {
+  const page = parseInt(request.query?.page || "1", 10);
+  const limit = parseInt(request.query?.limit || "20", 10);
+  const search = request.query?.search || "";
+  const role = request.query?.role || "";
+  const offset = (page - 1) * limit;
 
-  const targetShopId = body.shopId;
-  if (!targetShopId) return response.status(400).json({ error: "shopId required" });
+  let whereClause = "WHERE 1=1";
+  const qp = [];
+  if (search) { qp.push(`%${search}%`); whereClause += ` AND (u.name ILIKE $${qp.length} OR u.email ILIKE $${qp.length})`; }
+  if (role) { qp.push(role); whereClause += ` AND u.role = $${qp.length}`; }
 
-  const actionType = body.action;
-  if (!actionType) return response.status(400).json({ error: "action required" });
+  const users = await sql.unsafe(`
+    SELECT u.id, u.email, u.name, u.role, u.repair_shop_id, u.is_active, u.last_login, u.created_at,
+           rs.shop_name as shop_name
+    FROM users u LEFT JOIN repair_shops rs ON rs.id = u.repair_shop_id
+    ${whereClause}
+    ORDER BY u.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
+  `, [...qp, limit, offset]);
 
-  if (actionType === "suspend") {
-    await sql`UPDATE repair_shops SET suspended_at = now(), suspension_reason = ${body.reason || null}, updated_at = now() WHERE id = ${targetShopId}`;
-    console.log(`[admin] Shop #${targetShopId} suspended by admin #${auth.sub}`);
-    return response.status(200).json({ message: "Shop suspended" });
-  }
-  if (actionType === "activate") {
-    await sql`UPDATE repair_shops SET suspended_at = NULL, suspension_reason = NULL, is_active = true, updated_at = now() WHERE id = ${targetShopId}`;
-    return response.status(200).json({ message: "Shop activated" });
-  }
-  if (actionType === "delete") {
-    await sql`DELETE FROM repair_shops WHERE id = ${targetShopId}`;
-    console.log(`[admin] Shop #${targetShopId} deleted by admin #${auth.sub}`);
-    return response.status(200).json({ message: "Shop deleted" });
-  }
+  const countResult = await sql.unsafe(`SELECT COUNT(*) as total FROM users u ${whereClause}`, qp);
 
-  return response.status(400).json({ error: "Invalid action" });
+  return response.status(200).json({
+    users,
+    pagination: { page, limit, total: parseInt(countResult[0]?.total || "0", 10) },
+  });
 }
 
-// Verify the authenticated user is an admin (DB lookup)
-async function requireAdmin(auth, sql, response) {
-  const shop = await sql`SELECT role FROM repair_shops WHERE id = ${parseInt(auth.sub, 10)} LIMIT 1`;
-  if (!shop.length || !["admin", "super_admin"].includes(shop[0].role)) {
-    response.status(403).json({ error: "Admin access required" });
-    return null;
+// ─── ADMIN LIST PLANS ────────────────────────────────────────────────────────
+async function adminListPlans(request, response, sql, auth) {
+  const plans = await sql`
+    SELECT * FROM subscription_plans ORDER BY is_active DESC, price_monthly_usd ASC
+  `;
+  return response.status(200).json({ plans });
+}
+
+// ─── ADMIN LIST PAYMENTS ─────────────────────────────────────────────────────
+async function adminListPayments(request, response, sql, auth) {
+  const page = parseInt(request.query?.page || "1", 10);
+  const limit = parseInt(request.query?.limit || "20", 10);
+  const status = request.query?.status || "";
+  const offset = (page - 1) * limit;
+
+  let whereClause = "WHERE 1=1";
+  const qp = [];
+  if (status) { qp.push(status); whereClause += ` AND p.status = $${qp.length}`; }
+
+  const payments = await sql.unsafe(`
+    SELECT p.id, p.payment_id, p.transaction_id, p.gateway, p.currency, p.amount, p.status,
+           p.invoice_number, p.description, p.refund_amount, p.refund_reason, p.refunded_at,
+           p.created_at, p.updated_at,
+           rs.shop_name, rs.owner_name as shop_owner
+    FROM payments p LEFT JOIN repair_shops rs ON rs.id = p.repair_shop_id
+    ${whereClause}
+    ORDER BY p.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
+  `, [...qp, limit, offset]);
+
+  const countResult = await sql.unsafe(`SELECT COUNT(*) as total FROM payments p ${whereClause}`, qp);
+
+  return response.status(200).json({
+    payments,
+    pagination: { page, limit, total: parseInt(countResult[0]?.total || "0", 10) },
+  });
+}
+
+// ─── ADMIN GET SETTINGS ──────────────────────────────────────────────────────
+async function adminGetSettings(request, response, sql, auth) {
+  let settings = {};
+  try {
+    const rows = await sql`SELECT key, value FROM platform_settings`;
+    rows.forEach((r) => { settings[r.key] = r.value; });
+  } catch (e) { /* table may not exist */ }
+  return response.status(200).json({ settings });
+}
+
+// ─── ADMIN ANALYTICS ─────────────────────────────────────────────────────────
+async function adminAnalytics(request, response, sql, auth) {
+  // Monthly bookings and revenue for last 12 months
+  const monthly = await sql`
+    SELECT date_trunc('month', created_at)::date as month,
+           COUNT(*) as bookings,
+           COALESCE(SUM(final_cost), 0) as revenue
+    FROM bookings
+    WHERE created_at >= now() - INTERVAL '12 months'
+    GROUP BY date_trunc('month', created_at)::date
+    ORDER BY month ASC
+  `;
+
+  // Most active shops (top 10 by bookings)
+  const activeShops = await sql`
+    SELECT rs.id, rs.shop_name, rs.city, COUNT(b.id) as booking_count,
+           COALESCE(SUM(b.final_cost), 0) as total_revenue
+    FROM repair_shops rs
+    JOIN bookings b ON b.repair_shop_id = rs.id
+    GROUP BY rs.id, rs.shop_name, rs.city
+    ORDER BY booking_count DESC LIMIT 10
+  `;
+
+  // Top cities
+  const topCities = await sql`
+    SELECT city, COUNT(*) as shop_count FROM repair_shops
+    WHERE city IS NOT NULL AND city != ''
+    GROUP BY city ORDER BY shop_count DESC LIMIT 10
+  `;
+
+  // Subscription breakdown
+  const subBreakdown = await sql`
+    SELECT s.status, COUNT(*) as count FROM subscriptions s GROUP BY s.status
+  `;
+
+  // Growth metrics
+  const growth = await sql`
+    SELECT
+      (SELECT COUNT(*) FROM repair_shops WHERE created_at >= date_trunc('month', now())) as new_shops_this_month,
+      (SELECT COUNT(*) FROM bookings WHERE created_at >= date_trunc('month', now())) as bookings_this_month,
+      (SELECT COUNT(*) FROM users WHERE created_at >= date_trunc('month', now())) as new_users_this_month
+  `;
+
+  return response.status(200).json({
+    monthly, activeShops, topCities,
+    subscriptions: subBreakdown,
+    growth: growth[0] || {},
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN POST ROUTER
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleAdminPost(request, response, sql, auth, body) {
+  const admin = await requirePlatformAdmin(auth, sql, response);
+  if (!admin) return;
+
+  const ip = request.headers["x-forwarded-for"]?.split(",")[0]?.trim() || request.headers["x-real-ip"] || null;
+  const actorType = auth.user_type || "shop";
+  const actorId = parseInt(auth.sub, 10);
+  const action = body.action;
+
+  switch (action) {
+    // ── Shop actions ────────────────────────────────────────────
+    case "suspend": return adminSuspendShop(sql, response, body, actorType, actorId, ip);
+    case "activate": return adminActivateShop(sql, response, body, actorType, actorId, ip);
+    case "delete": return adminDeleteShop(sql, response, body, actorType, actorId, ip);
+    case "edit-shop": return adminEditShop(sql, response, body, actorType, actorId, ip);
+    case "approve-shop": return adminApproveShop(sql, response, body, actorType, actorId, ip);
+    case "reset-password": return adminResetPassword(sql, response, body, actorType, actorId, ip);
+
+    // ── User actions ────────────────────────────────────────────
+    case "create-user": return adminCreateUser(sql, response, body, actorType, actorId, ip, auth);
+    case "edit-user": return adminEditUser(sql, response, body, actorType, actorId, ip);
+    case "delete-user": return adminDeleteUser(sql, response, body, actorType, actorId, ip);
+    case "invite-user": return adminInviteUser(sql, response, body, actorType, actorId, ip);
+
+    // ── Plan actions ────────────────────────────────────────────
+    case "create-plan": return adminCreatePlan(request, response, sql, body, actorType, actorId, ip);
+    case "edit-plan": return adminEditPlan(request, response, sql, body, actorType, actorId, ip);
+    case "delete-plan": return adminDeletePlan(sql, response, body, actorType, actorId, ip);
+    case "duplicate-plan": return adminDuplicatePlan(sql, response, body, actorType, actorId, ip);
+
+    // ── Settings ────────────────────────────────────────────────
+    case "save-settings": return adminSaveSettings(request, response, sql, body, actorType, actorId, ip);
+
+    default: return response.status(400).json({ error: "Unknown admin action" });
   }
-  return shop[0];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHOP ADMIN ACTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function adminSuspendShop(sql, response, body, actorType, actorId, ip) {
+  const shopId = body.shopId;
+  if (!shopId) return response.status(400).json({ error: "shopId required" });
+  await sql`UPDATE repair_shops SET suspended_at = now(), suspension_reason = ${body.reason || null}, updated_at = now() WHERE id = ${shopId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "suspend_shop", targetType: "shop", targetId: shopId, details: { reason: body.reason }, ip });
+  return response.status(200).json({ message: "Shop suspended" });
+}
+
+async function adminActivateShop(sql, response, body, actorType, actorId, ip) {
+  const shopId = body.shopId;
+  if (!shopId) return response.status(400).json({ error: "shopId required" });
+  await sql`UPDATE repair_shops SET suspended_at = NULL, suspension_reason = NULL, is_active = true, updated_at = now() WHERE id = ${shopId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "activate_shop", targetType: "shop", targetId: shopId, ip });
+  return response.status(200).json({ message: "Shop activated" });
+}
+
+async function adminDeleteShop(sql, response, body, actorType, actorId, ip) {
+  const shopId = body.shopId;
+  if (!shopId) return response.status(400).json({ error: "shopId required" });
+  await sql`DELETE FROM repair_shops WHERE id = ${shopId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "delete_shop", targetType: "shop", targetId: shopId, ip });
+  return response.status(200).json({ message: "Shop deleted" });
+}
+
+async function adminEditShop(sql, response, body, actorType, actorId, ip) {
+  const shopId = body.shopId;
+  if (!shopId) return response.status(400).json({ error: "shopId required" });
+  const updates = {};
+  if (body.shop_name !== undefined) updates.shop_name = body.shop_name;
+  if (body.owner_name !== undefined) updates.owner_name = body.owner_name;
+  if (body.email !== undefined) updates.email = body.email;
+  if (body.city !== undefined) updates.city = body.city;
+  if (body.subscription_status !== undefined) updates.subscription_status = body.subscription_status;
+  if (Object.keys(updates).length === 0) return response.status(400).json({ error: "No fields to update" });
+
+  const setParts = []; const setValues = [];
+  for (const [col, val] of Object.entries(updates)) { setValues.push(val); setParts.push(`${col} = $${setValues.length}`); }
+  setValues.push(shopId);
+  await sql.unsafe(`UPDATE repair_shops SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length}`, setValues);
+  await logAdminAction(sql, { actorType, actorId, action: "edit_shop", targetType: "shop", targetId: shopId, details: updates, ip });
+  return response.status(200).json({ message: "Shop updated" });
+}
+
+async function adminApproveShop(sql, response, body, actorType, actorId, ip) {
+  const shopId = body.shopId;
+  if (!shopId) return response.status(400).json({ error: "shopId required" });
+  await sql`UPDATE repair_shops SET is_active = true, subscription_status = 'active', updated_at = now() WHERE id = ${shopId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "approve_shop", targetType: "shop", targetId: shopId, ip });
+  return response.status(200).json({ message: "Shop approved" });
+}
+
+async function adminResetPassword(sql, response, body, actorType, actorId, ip) {
+  const data = validate({ body }, response, resetPasswordSchema);
+  if (!data) return;
+
+  const newPassword = body.newPassword || Math.random().toString(36).slice(2, 10) + "A1!";
+  const hash = await bcrypt.hash(newPassword, 12);
+
+  if (data.targetType === "user") {
+    await sql`UPDATE users SET password_hash = ${hash}, updated_at = now() WHERE id = ${data.targetId}`;
+  } else {
+    await sql`UPDATE repair_shops SET password_hash = ${hash}, updated_at = now() WHERE id = ${data.targetId}`;
+  }
+  await logAdminAction(sql, { actorType, actorId, action: "reset_password", targetType: data.targetType, targetId: data.targetId, ip });
+  return response.status(200).json({ message: "Password reset", tempPassword: newPassword });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// USER ADMIN ACTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function adminCreateUser(sql, response, body, actorType, actorId, ip, auth) {
+  const data = validate({ body }, response, createUserSchema);
+  if (!data) return;
+
+  // Check if creator is trying to create super_admin (only super_admin can)
+  if (data.role === "super_admin") {
+    const sa = await requireSuperAdmin(auth, sql, response);
+    if (!sa) return;
+  }
+
+  // Check email uniqueness
+  const existing = await sql`SELECT id FROM users WHERE email = ${data.email} LIMIT 1`;
+  if (existing.length > 0) return response.status(409).json({ error: "Email already in use" });
+
+  const hash = await bcrypt.hash(data.password, 12);
+  const rows = await sql`
+    INSERT INTO users (email, password_hash, name, role, repair_shop_id)
+    VALUES (${data.email}, ${hash}, ${data.name}, ${data.role}, ${data.repair_shop_id || null})
+    RETURNING id, email, name, role, repair_shop_id
+  `;
+  await logAdminAction(sql, { actorType, actorId, action: "create_user", targetType: "user", targetId: rows[0].id, details: { role: data.role }, ip });
+  return response.status(201).json({ message: "User created", user: rows[0] });
+}
+
+async function adminEditUser(sql, response, body, actorType, actorId, ip) {
+  const data = validate({ body }, response, editUserSchema);
+  if (!data) return;
+
+  const updates = {};
+  if (data.name !== undefined) updates.name = data.name;
+  if (data.role !== undefined) updates.role = data.role;
+  if (data.is_active !== undefined) updates.is_active = data.is_active;
+  if (data.repair_shop_id !== undefined) updates.repair_shop_id = data.repair_shop_id;
+  if (Object.keys(updates).length === 0) return response.status(400).json({ error: "No fields to update" });
+
+  const setParts = []; const setValues = [];
+  for (const [col, val] of Object.entries(updates)) { setValues.push(val); setParts.push(`${col} = $${setValues.length}`); }
+  setValues.push(data.userId);
+  await sql.unsafe(`UPDATE users SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length}`, setValues);
+  await logAdminAction(sql, { actorType, actorId, action: "edit_user", targetType: "user", targetId: data.userId, details: updates, ip });
+  return response.status(200).json({ message: "User updated" });
+}
+
+async function adminDeleteUser(sql, response, body, actorType, actorId, ip) {
+  const userId = body.userId;
+  if (!userId) return response.status(400).json({ error: "userId required" });
+  await sql`DELETE FROM users WHERE id = ${userId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "delete_user", targetType: "user", targetId: userId, ip });
+  return response.status(200).json({ message: "User deleted" });
+}
+
+async function adminInviteUser(sql, response, body, actorType, actorId, ip) {
+  // Create user with a temporary random password and mark for password change
+  const data = validate({ body }, response, createUserSchema);
+  if (!data) return;
+
+  const existing = await sql`SELECT id FROM users WHERE email = ${data.email} LIMIT 1`;
+  if (existing.length > 0) return response.status(409).json({ error: "Email already in use" });
+
+  const tempPass = Math.random().toString(36).slice(2, 10) + "A1!";
+  const hash = await bcrypt.hash(tempPass, 12);
+  const rows = await sql`
+    INSERT INTO users (email, password_hash, name, role, repair_shop_id)
+    VALUES (${data.email}, ${hash}, ${data.name}, ${data.role}, ${data.repair_shop_id || null})
+    RETURNING id, email, name, role
+  `;
+  await logAdminAction(sql, { actorType, actorId, action: "invite_user", targetType: "user", targetId: rows[0].id, ip });
+  return response.status(201).json({ message: "User invited", user: rows[0], tempPassword: tempPass });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PLAN ADMIN ACTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function adminCreatePlan(request, response, sql, body, actorType, actorId, ip) {
+  const data = validate({ body }, response, createPlanSchema);
+  if (!data) return;
+
+  const existing = await sql`SELECT id FROM subscription_plans WHERE name = ${data.name} LIMIT 1`;
+  if (existing.length > 0) return response.status(409).json({ error: "Plan name already exists" });
+
+  const rows = await sql`
+    INSERT INTO subscription_plans
+      (name, display_name, description, price_monthly_usd, price_yearly_usd,
+       max_bookings, max_technicians, max_staff, whatsapp_conversations, ai_credits,
+       features, trial_days, currency, is_active)
+    VALUES
+      (${data.name}, ${data.display_name}, ${data.description}, ${data.price_monthly_usd}, ${data.price_yearly_usd},
+       ${data.max_bookings || null}, ${data.max_technicians || null}, ${data.max_staff || null},
+       ${data.whatsapp_conversations || null}, ${data.ai_credits || null},
+       ${sql.json(data.features || {})}, ${data.trial_days}, ${data.currency}, ${data.is_active})
+    RETURNING *
+  `;
+  await logAdminAction(sql, { actorType, actorId, action: "create_plan", targetType: "plan", targetId: rows[0].id, ip });
+  return response.status(201).json({ message: "Plan created", plan: rows[0] });
+}
+
+async function adminEditPlan(request, response, sql, body, actorType, actorId, ip) {
+  const data = validate({ body }, response, editPlanSchema);
+  if (!data) return;
+
+  const updates = {};
+  const fields = ["name","display_name","description","price_monthly_usd","price_yearly_usd","max_bookings","max_technicians","max_staff","whatsapp_conversations","ai_credits","trial_days","currency","is_active"];
+  for (const f of fields) {
+    if (data[f] !== undefined) updates[f] = data[f];
+  }
+  if (data.features !== undefined) updates.features = data.features;
+  if (Object.keys(updates).length === 0) return response.status(400).json({ error: "No fields to update" });
+
+  const setParts = []; const setValues = [];
+  for (const [col, val] of Object.entries(updates)) {
+    setValues.push(col === "features" ? sql.json(val) : val);
+    setParts.push(`${col} = $${setValues.length}`);
+  }
+  setValues.push(data.planId);
+  await sql.unsafe(`UPDATE subscription_plans SET ${setParts.join(", ")} WHERE id = $${setValues.length}`, setValues);
+  await logAdminAction(sql, { actorType, actorId, action: "edit_plan", targetType: "plan", targetId: data.planId, ip });
+  return response.status(200).json({ message: "Plan updated" });
+}
+
+async function adminDeletePlan(sql, response, body, actorType, actorId, ip) {
+  const planId = body.planId;
+  if (!planId) return response.status(400).json({ error: "planId required" });
+  // Soft-delete: deactivate instead of delete
+  await sql`UPDATE subscription_plans SET is_active = false WHERE id = ${planId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "deactivate_plan", targetType: "plan", targetId: planId, ip });
+  return response.status(200).json({ message: "Plan deactivated" });
+}
+
+async function adminDuplicatePlan(sql, response, body, actorType, actorId, ip) {
+  const planId = body.planId;
+  if (!planId) return response.status(400).json({ error: "planId required" });
+
+  const original = await sql`SELECT * FROM subscription_plans WHERE id = ${planId} LIMIT 1`;
+  if (original.length === 0) return response.status(404).json({ error: "Plan not found" });
+  const p = original[0];
+
+  const newName = `${p.name}_copy`;
+  const newDisplay = `${p.display_name} (Copy)`;
+  const rows = await sql`
+    INSERT INTO subscription_plans
+      (name, display_name, description, price_monthly_usd, price_yearly_usd,
+       max_bookings, max_technicians, max_staff, whatsapp_conversations, ai_credits,
+       features, trial_days, currency, is_active)
+    VALUES
+      (${newName}, ${newDisplay}, ${p.description || ''}, ${p.price_monthly_usd}, ${p.price_yearly_usd},
+       ${p.max_bookings}, ${p.max_technicians}, ${p.max_staff}, ${p.whatsapp_conversations}, ${p.ai_credits},
+       ${sql.json(p.features || {})}, ${p.trial_days || 14}, ${p.currency || 'USD'}, false)
+    RETURNING *
+  `;
+  await logAdminAction(sql, { actorType, actorId, action: "duplicate_plan", targetType: "plan", targetId: rows[0].id, ip });
+  return response.status(201).json({ message: "Plan duplicated", plan: rows[0] });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function adminSaveSettings(request, response, sql, body, actorType, actorId, ip) {
+  const data = validate({ body }, response, settingsSchema);
+  if (!data) return;
+
+  for (const [key, value] of Object.entries(data.settings)) {
+    await sql`
+      INSERT INTO platform_settings (key, value, updated_by, updated_at)
+      VALUES (${key}, ${sql.json(typeof value === "object" ? value : { value })}, ${actorId}, now())
+      ON CONFLICT (key) DO UPDATE SET value = ${sql.json(typeof value === "object" ? value : { value })},
+        updated_by = ${actorId}, updated_at = now()
+    `;
+  }
+  await logAdminAction(sql, { actorType, actorId, action: "save_settings", details: { keys: Object.keys(data.settings) }, ip });
+  return response.status(200).json({ message: "Settings saved" });
 }

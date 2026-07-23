@@ -162,7 +162,7 @@
 
 <script>
   const token = localStorage.getItem('cc_token');
-  if (!token) window.location.href = '/shop-login.html';
+  if (!token) window.location.href = '/login.html';
 
   const params    = new URLSearchParams(location.search);
   const bookingId = params.get('id');
@@ -186,7 +186,7 @@
       const res = await fetch(`/api/shop?action=booking&id=${bookingId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.status === 401) { window.location.href = '/shop-login.html'; return; }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
       if (res.status === 404) {
         document.getElementById('loadingMsg').textContent = 'Booking not found.';
         return;
@@ -310,7 +310,7 @@
         },
         body: JSON.stringify({ action: 'update', bookingId: booking.id, status, technicianName }),
       });
-      if (res.status === 401) { window.location.href = '/shop-login.html'; return; }
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
       const data = await res.json();
       if (!res.ok) {
         showToast('Error: ' + (data.error || 'Update failed'));
