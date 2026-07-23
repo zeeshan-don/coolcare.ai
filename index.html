@@ -25,17 +25,35 @@
 
     async function submitForm(e){
       e.preventDefault();
-      const name = document.getElementById('demo-name').value;
-      const businessName = document.getElementById('demo-business').value;
-      const whatsappNumber = document.getElementById('demo-whatsapp').value;
+      const name = document.getElementById('demo-name').value.trim();
+      const businessName = document.getElementById('demo-business').value.trim();
+      const whatsappNumber = document.getElementById('demo-whatsapp').value.trim();
+      const submitBtn = e.target.querySelector('button.btn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending…';
+      console.log('[demo] Submitting form…', {name, businessName, whatsappNumber});
       try{
-        await fetch('/api/demo-requests', {
+        const res = await fetch('/api/demo-requests', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({name, businessName, whatsappNumber})
         });
-      }catch(err){ console.error(err); }
-      e.target.innerHTML='<h2>Thank you!</h2><p>We\'ve got your details and will reach out shortly.</p><button class="btn" type="button" onclick="closeDemo()">Close</button>';
+        const data = await res.json();
+        console.log('[demo] Response:', res.status, data);
+        if(!res.ok){
+          console.error('[demo] API error:', data);
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Request demo';
+          alert('Something went wrong: ' + (data.error || 'Please try again'));
+          return;
+        }
+        e.target.innerHTML='<h2>Thank you!</h2><p>We\'ve got your details and will reach out on WhatsApp shortly.</p><button class="btn" type="button" onclick="closeDemo()">Close</button>';
+      }catch(err){
+        console.error('[demo] Network error:', err);
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Request demo';
+        alert('Network error. Please check your connection and try again.');
+      }
     }
 
     // ── Book Service button handler ──────────────────────────────────────────

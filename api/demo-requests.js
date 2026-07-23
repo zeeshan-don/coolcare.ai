@@ -77,9 +77,12 @@ module.exports = async (request, response) => {
     }
 
     // ── 3. Send confirmation to the person who submitted ──────────────────
-    // Only if they provided a WhatsApp number
+    // Normalize the number: strip non-digits, add 91 prefix if needed
     if (whatsappNumber) {
-      const customerNumber = whatsappNumber.replace(/\D/g, ""); // strip non-digits
+      let customerNumber = whatsappNumber.replace(/\D/g, "");
+      if (customerNumber.length === 10) customerNumber = "91" + customerNumber;
+      else if (customerNumber.startsWith("0")) customerNumber = "91" + customerNumber.slice(1);
+
       const confirmMsg =
         `Hi ${name}! 👋\n\n` +
         `Thanks for your interest in *CoolCare*.\n` +
