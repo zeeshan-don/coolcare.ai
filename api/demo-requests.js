@@ -77,11 +77,22 @@ module.exports = async (request, response) => {
     }
 
     // ── 3. Send confirmation to the person who submitted ──────────────────
-    // Normalize the number: strip non-digits, add 91 prefix if needed
+    // Normalize the number to E.164 format (digits only, no +)
+    // Handles:
+    //   +1-555-123-4567  → 15551234567  (US)
+    //   +919876543210    → 919876543210 (India with +91)
+    //   9876543210       → 919876543210 (India 10-digit, assume 91)
+    //   07911123456      → 447911123456 (UK with leading 0, NOT handled — user must include country code)
     if (whatsappNumber) {
-      let customerNumber = whatsappNumber.replace(/\D/g, "");
-      if (customerNumber.length === 10) customerNumber = "91" + customerNumber;
-      else if (customerNumber.startsWith("0")) customerNumber = "91" + customerNumber.slice(1);
+      let customerNumber = whatsappNumber.replace(/\D/g, ""); // strip everything except digits
+
+      // If the number already starts with a country code (11+ digits or starts with known codes), use as-is
+      // If it's exactly 10 digits with no country code, assume India (+91) as the default
+      // For all other cases, trust what the user entered
+      if (customerNumber.length === 10 && !customerNumber.startsWith("1")) {
+        // Bare 10-digit number — default to India
+        customerNumber = "91" + customerNumber;
+      }
 
       const confirmMsg =
         `Hi ${name}! 👋\n\n` +
