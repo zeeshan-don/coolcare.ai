@@ -1,224 +1,397 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>CoolCare | Never miss a service job</title>
+  <title>CoolCare | AI-Powered Appliance Service Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
-    :root{--navy:#09233b;--blue:#146ef5;--sky:#eaf3ff;--mint:#dbf7ea;--green:#08784d;--gold:#ffbd53;--paper:#f7f9fc;--line:#e3eaf1;--ink:#102a43;--muted:#64778b}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}a{text-decoration:none;color:inherit}.nav{height:78px;display:flex;align-items:center;justify-content:space-between;max-width:1180px;margin:auto;padding:0 26px}.brand{font-weight:850;letter-spacing:-1.3px;font-size:24px}.brand b{color:var(--blue)}.navlinks{display:flex;gap:27px;color:#50657a;font-size:14px;font-weight:650}.navcta,.btn{background:var(--blue);color:#fff;border:0;border-radius:9px;padding:11px 17px;font:700 14px inherit;cursor:pointer;box-shadow:0 7px 17px #146ef536}.navcta{padding:9px 15px}.hero{max-width:1180px;margin:0 auto;padding:66px 26px 75px;display:grid;grid-template-columns:1.05fr .95fr;gap:54px;align-items:center}.eyebrow{display:inline-flex;align-items:center;gap:7px;background:#e9f3ff;color:#1761bd;border-radius:99px;padding:7px 11px;font-weight:750;font-size:12px}.pulse{height:7px;width:7px;background:#25bd79;border-radius:50%;box-shadow:0 0 0 4px #b9efd5}.hero h1{font-size:54px;line-height:1.08;letter-spacing:-2.7px;margin:16px 0 18px}.hero h1 em{font-style:normal;color:var(--blue)}.hero p{font-size:18px;max-width:520px;color:var(--muted);margin:0 0 27px}.hero-actions{display:flex;gap:13px;align-items:center}.secondary{font-weight:750;color:#185db1;padding:11px;cursor:pointer}.proof{display:flex;align-items:center;gap:11px;margin-top:31px;color:#62768a;font-size:13px}.faces{display:flex}.face{width:28px;height:28px;border:2px solid #fff;border-radius:50%;margin-left:-7px;display:grid;place-items:center;font-size:9px;font-weight:800;color:#fff}.face:first-child{margin:0}.face:nth-child(1){background:#6584ad}.face:nth-child(2){background:#de9179}.face:nth-child(3){background:#6a9f8a}.hero-art{position:relative;min-height:390px}.glow{position:absolute;inset:25px 0 0 40px;background:linear-gradient(145deg,#d6e9ff,#e8faf4);border-radius:30px;transform:rotate(-4deg)}.phone{position:absolute;right:28px;top:0;width:300px;background:#102a43;border:8px solid #102a43;border-radius:31px;padding:10px;box-shadow:0 30px 55px #0d294133}.phone-top{height:20px;background:#102a43;color:#fff;text-align:center;font-size:9px}.chat{background:#eff7f3;border-radius:19px;padding:15px 12px;height:350px}.chatbar{font-size:11px;font-weight:800;color:#24445e;margin-bottom:18px}.bubble{font-size:11px;padding:9px 10px;border-radius:11px;max-width:85%;margin:8px 0}.in{background:#fff;border-bottom-left-radius:2px}.out{background:#d6ebff;margin-left:auto;border-bottom-right-radius:2px}.choice{display:flex;gap:6px;margin-top:11px}.choice span{font-size:9px;color:#1560bb;background:#fff;border:1px solid #bcd9ff;border-radius:6px;padding:7px 5px;font-weight:800}.float-card{position:absolute;background:#fff;border:1px solid #e1eaf2;border-radius:13px;padding:12px 15px;box-shadow:0 15px 30px #102a4315;font-size:12px;font-weight:750}.float-card strong{font-size:19px;color:var(--green);display:block}.one{left:0;bottom:35px}.two{right:-5px;bottom:5px}.section{padding:76px 26px;max-width:1180px;margin:auto}.trusted{border-top:1px solid var(--line);padding:25px 0;color:#77889a;font-weight:700;font-size:12px;text-align:center;letter-spacing:.6px}.trusted span{margin:0 22px;color:#3c5268;font-size:14px}.intro{text-align:center;max-width:680px;margin:0 auto 39px}.intro h2{font-size:36px;letter-spacing:-1.6px;line-height:1.15;margin:0 0 10px}.intro p{color:var(--muted);font-size:16px;margin:0}.features{display:grid;grid-template-columns:repeat(3,1fr);gap:17px}.feature{background:#fff;border:1px solid var(--line);padding:26px;border-radius:16px}.icon{height:40px;width:40px;border-radius:11px;background:var(--sky);display:grid;place-items:center;font-size:20px;margin-bottom:17px}.feature h3{margin:0 0 8px;font-size:17px}.feature p{margin:0;color:var(--muted);font-size:14px}.how{background:var(--navy);color:#fff;max-width:none;padding:80px 26px}.how-inner{max-width:1128px;margin:auto;display:grid;grid-template-columns:.8fr 1.2fr;gap:60px;align-items:center}.how h2{font-size:38px;line-height:1.12;letter-spacing:-1.6px;margin:0 0 13px}.how p{color:#b9cad8;margin:0}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}.step{border-top:1px solid #35516a;padding-top:19px}.step b{color:#72aeff;font-size:13px}.step h3{font-size:16px;margin:8px 0}.step p{font-size:13px}.dashboard{background:#fff;border:1px solid var(--line);border-radius:20px;max-width:1128px;margin:0 auto;padding:24px}.dash-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:19px}.dash-head h3{margin:0;font-size:18px}.status{color:var(--green);background:var(--mint);border-radius:20px;padding:5px 9px;font-size:11px;font-weight:800}.dash-grid{display:grid;grid-template-columns:1.35fr .85fr;gap:17px}.queue,.assistant-box{border:1px solid var(--line);border-radius:12px;overflow:hidden}.box-title{font-weight:800;padding:13px 15px;border-bottom:1px solid var(--line);font-size:13px}.job{padding:13px 15px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #edf2f6}.job:last-child{border:0}.job b{display:block;font-size:13px}.job small{color:var(--muted);font-size:11px}.job span{font-size:10px;font-weight:800;background:#fff1d9;color:#9b5d04;border-radius:20px;padding:5px 8px}.job .booked{background:var(--mint);color:var(--green)}.assistant-box{padding-bottom:13px}.mini-chat{padding:11px}.mini{font-size:11px;padding:8px;border-radius:8px;background:#f1f4f7;margin:7px 0;max-width:90%}.mini.blue{background:#dceeff;margin-left:auto}.booking{margin:8px 11px;padding:9px;background:#e9f4ff;color:#155db5;border-radius:7px;font-weight:800;text-align:center;font-size:11px;cursor:pointer}.price{text-align:center;background:linear-gradient(145deg,#edf6ff,#fff);border:1px solid #d6e6fa;border-radius:20px;max-width:780px;padding:42px 25px;margin:0 auto}.price h2{font-size:30px;letter-spacing:-1.3px;margin:0 0 8px}.price p{color:var(--muted);margin:0 0 19px}.price strong{font-size:40px;letter-spacing:-2px}.price small{color:var(--muted)}footer{max-width:1180px;margin:auto;padding:26px;color:var(--muted);display:flex;justify-content:space-between;font-size:12px}.modal{display:none;position:fixed;inset:0;background:#081d31a3;z-index:10;place-items:center;padding:18px}.modal.show{display:grid}.modal-card{width:min(420px,100%);background:#fff;border-radius:18px;padding:27px;box-shadow:0 20px 70px #0004}.modal-card h2{margin:0 0 7px;font-size:23px}.modal-card p{color:var(--muted);margin:0 0 18px}.modal-card input{width:100%;margin:7px 0;border:1px solid #cbd8e4;border-radius:8px;padding:11px;font:inherit}.modal-actions{display:flex;gap:10px;margin-top:12px}.modal-actions .btn{flex:1}.close{border:1px solid var(--line);border-radius:8px;background:#fff;padding:10px;font-weight:700;cursor:pointer}@media(max-width:800px){.navlinks{display:none}.hero{grid-template-columns:1fr;padding-top:42px}.hero h1{font-size:42px}.hero-art{max-width:430px;width:100%;margin:auto}.features,.steps{grid-template-columns:1fr}.how-inner,.dash-grid{grid-template-columns:1fr}.how-inner{gap:35px}.section,.how{padding-top:55px;padding-bottom:55px}.trusted span{display:inline-block;margin:7px 12px}.one{left:0}.two{right:0}}@media(max-width:430px){.nav{padding:0 16px}.hero,.section{padding-left:18px;padding-right:18px}.hero h1{font-size:38px}.phone{right:10px;width:270px}.float-card{font-size:10px}.two{bottom:-7px}.hero-art{min-height:365px}.hero-actions{flex-wrap:wrap}}
+    :root{
+      --bg:#080c12;
+      --bg2:#0d1117;
+      --bg3:#111820;
+      --border:#1e2a38;
+      --border2:#243040;
+      --blue:#3b82f6;
+      --blue2:#60a5fa;
+      --glow:#3b82f620;
+      --green:#22c55e;
+      --green2:#16a34a;
+      --gold:#f59e0b;
+      --ink:#f1f5f9;
+      --ink2:#cbd5e1;
+      --muted:#64748b;
+      --muted2:#475569;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+    a{text-decoration:none;color:inherit}
+
+    /* ── Noise texture overlay ── */
+    body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");pointer-events:none;z-index:0;opacity:.4}
+
+    /* ── Nav ── */
+    .nav{position:sticky;top:0;z-index:100;height:68px;display:flex;align-items:center;justify-content:space-between;max-width:1200px;margin:auto;padding:0 28px}
+    .nav-backdrop{position:fixed;top:0;left:0;right:0;height:68px;background:rgba(8,12,18,.85);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-bottom:1px solid var(--border);z-index:99}
+    .brand{font-weight:900;letter-spacing:-1.4px;font-size:22px;position:relative;z-index:1}
+    .brand b{background:linear-gradient(135deg,var(--blue),var(--blue2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .navlinks{display:flex;gap:28px;font-size:13.5px;font-weight:500;color:var(--muted);position:relative;z-index:1}
+    .navlinks a:hover{color:var(--ink);transition:color .2s}
+    .nav-actions{display:flex;gap:10px;align-items:center;position:relative;z-index:1}
+    .btn-ghost{font:600 13px 'Inter',sans-serif;color:var(--ink2);background:transparent;border:1px solid var(--border2);border-radius:8px;padding:8px 14px;cursor:pointer;transition:all .2s}
+    .btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
+    .btn-primary{font:600 13px 'Inter',sans-serif;color:#fff;background:var(--blue);border:0;border-radius:8px;padding:9px 16px;cursor:pointer;box-shadow:0 0 20px var(--glow);transition:all .2s}
+    .btn-primary:hover{background:#2563eb;box-shadow:0 0 30px #3b82f640}
+
+    /* ── Hero ── */
+    .hero{position:relative;max-width:1200px;margin:auto;padding:100px 28px 80px;display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center;z-index:1}
+    .hero-bg{position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(ellipse at center,#3b82f608 0%,transparent 70%);pointer-events:none}
+    .eyebrow{display:inline-flex;align-items:center;gap:8px;background:#0f1e30;border:1px solid #1e3a5a;border-radius:99px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--blue2);margin-bottom:20px}
+    .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px #22c55e30;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{box-shadow:0 0 0 3px #22c55e30}50%{box-shadow:0 0 0 6px #22c55e15}}
+    .hero h1{font-size:56px;line-height:1.06;letter-spacing:-2.8px;font-weight:900;margin-bottom:20px}
+    .hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--blue),var(--blue2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .hero p{font-size:17px;color:var(--ink2);line-height:1.7;max-width:500px;margin-bottom:32px}
+    .hero-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+    .btn-hero{font:700 15px 'Inter',sans-serif;color:#fff;background:linear-gradient(135deg,#3b82f6,#2563eb);border:0;border-radius:10px;padding:14px 24px;cursor:pointer;box-shadow:0 4px 24px #3b82f630;transition:all .2s}
+    .btn-hero:hover{transform:translateY(-1px);box-shadow:0 8px 32px #3b82f640}
+    .btn-hero-ghost{font:600 15px 'Inter',sans-serif;color:var(--ink2);background:transparent;border:1px solid var(--border2);border-radius:10px;padding:13px 22px;cursor:pointer;transition:all .2s}
+    .btn-hero-ghost:hover{border-color:var(--blue);color:var(--blue)}
+    .proof{display:flex;align-items:center;gap:12px;margin-top:28px;color:var(--muted);font-size:13px}
+    .faces{display:flex}.face{width:28px;height:28px;border:2px solid var(--bg);border-radius:50%;margin-left:-6px;display:grid;place-items:center;font-size:9px;font-weight:800;color:#fff}
+    .face:first-child{margin:0}.face:nth-child(1){background:#4a6fa5}.face:nth-child(2){background:#c47a5a}.face:nth-child(3){background:#4a8a6a}
+
+    /* ── Phone mockup ── */
+    .hero-art{position:relative;min-height:420px}
+    .art-glow{position:absolute;inset:0;background:radial-gradient(ellipse at 60% 40%,#3b82f610,transparent 70%);border-radius:30px}
+    .phone{position:absolute;right:0;top:0;width:290px;background:#0d1117;border:1px solid var(--border);border-radius:32px;padding:12px;box-shadow:0 40px 80px #00000080,0 0 0 1px #ffffff08}
+    .phone-top{text-align:center;font-size:10px;color:var(--muted);padding-bottom:10px;font-weight:600;letter-spacing:.5px}
+    .chat{background:#0a0f16;border-radius:22px;padding:16px 13px;height:360px;overflow:hidden}
+    .chatbar{font-size:11px;font-weight:700;color:var(--blue2);margin-bottom:16px;display:flex;align-items:center;gap:6px}
+    .chatbar::before{content:'';width:6px;height:6px;background:var(--green);border-radius:50%;box-shadow:0 0 6px var(--green)}
+    .bubble{font-size:11px;padding:9px 12px;border-radius:12px;max-width:84%;margin:7px 0;line-height:1.45}
+    .in{background:#1a2535;color:var(--ink2);border-bottom-left-radius:3px}
+    .out{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;margin-left:auto;border-bottom-right-radius:3px}
+    .choice{display:flex;gap:6px;margin-top:10px}
+    .choice span{font-size:10px;color:var(--blue2);background:#0f1e30;border:1px solid #1e3a5a;border-radius:7px;padding:6px 10px;font-weight:600}
+    .float-card{position:absolute;background:#0d1117;border:1px solid var(--border);border-radius:12px;padding:12px 16px;box-shadow:0 16px 40px #00000060;font-size:12px;font-weight:600}
+    .float-card strong{font-size:20px;color:var(--green);display:block;font-weight:800}
+    .float-card small{color:var(--muted);font-size:11px}
+    .fc1{left:-20px;bottom:60px}.fc2{right:-10px;bottom:10px}
+
+    /* ── Trusted bar ── */
+    .trusted{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:20px 28px;text-align:center;color:var(--muted2);font-weight:600;font-size:11px;letter-spacing:1px;text-transform:uppercase}
+    .trusted span{margin:0 20px;color:var(--muted);font-size:13px;font-weight:500;letter-spacing:0;text-transform:none}
+
+    /* ── Sections ── */
+    .section{padding:80px 28px;max-width:1200px;margin:auto;position:relative;z-index:1}
+    .intro{text-align:center;max-width:640px;margin:0 auto 48px}
+    .tag{display:inline-block;background:#0f1e30;border:1px solid #1e3a5a;border-radius:99px;padding:5px 14px;font-size:11px;font-weight:700;color:var(--blue2);letter-spacing:.5px;text-transform:uppercase;margin-bottom:14px}
+    .intro h2{font-size:38px;letter-spacing:-1.6px;line-height:1.12;font-weight:900;margin-bottom:12px}
+    .intro p{color:var(--ink2);font-size:16px;line-height:1.7}
+
+    /* ── Features ── */
+    .features{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .feature{background:var(--bg2);border:1px solid var(--border);padding:28px;border-radius:16px;transition:border-color .2s,transform .2s}
+    .feature:hover{border-color:var(--border2);transform:translateY(-2px)}
+    .icon{height:44px;width:44px;border-radius:12px;background:#0f1e30;border:1px solid #1e3a5a;display:grid;place-items:center;font-size:20px;margin-bottom:18px}
+    .feature h3{font-size:16px;font-weight:700;margin-bottom:8px;letter-spacing:-.3px}
+    .feature p{color:var(--ink2);font-size:14px;line-height:1.65}
+
+    /* ── How it works ── */
+    .how{background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:80px 28px}
+    .how-inner{max-width:1200px;margin:auto;display:grid;grid-template-columns:.9fr 1.1fr;gap:70px;align-items:center}
+    .how h2{font-size:40px;line-height:1.1;letter-spacing:-1.8px;font-weight:900;margin-bottom:14px}
+    .how-sub{color:var(--ink2);font-size:15px;line-height:1.7}
+    .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+    .step{border-top:2px solid var(--border);padding-top:18px}
+    .step b{color:var(--blue2);font-size:12px;font-weight:700;letter-spacing:.5px}
+    .step h3{font-size:15px;font-weight:700;margin:8px 0 6px;letter-spacing:-.3px}
+    .step p{font-size:13px;color:var(--ink2);line-height:1.6}
+
+    /* ── Dashboard ── */
+    .dashboard{background:var(--bg2);border:1px solid var(--border);border-radius:20px;max-width:1140px;margin:0 auto;overflow:hidden;box-shadow:0 0 0 1px #ffffff05}
+    .dash-head{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;border-bottom:1px solid var(--border)}
+    .dash-head h3{font-size:16px;font-weight:700;letter-spacing:-.3px}
+    .status{color:var(--green);background:#052010;border:1px solid #0a3520;border-radius:20px;padding:5px 10px;font-size:11px;font-weight:700}
+    .dash-grid{display:grid;grid-template-columns:1.4fr .85fr}
+    .queue{border-right:1px solid var(--border)}
+    .box-title{font-weight:700;padding:13px 18px;border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase}
+    .job{padding:13px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+    .job:last-child{border:0}
+    .job b{display:block;font-size:13px;font-weight:600;margin-bottom:2px}
+    .job small{color:var(--muted);font-size:11px}
+    .job-badge{font-size:10px;font-weight:700;background:#1a2a1a;color:var(--green);border-radius:6px;padding:4px 8px}
+    .job-badge.pending{background:#1a1a0a;color:var(--gold)}
+    .assistant-box{padding-bottom:14px}
+    .mini-chat{padding:12px 14px}
+    .mini{font-size:11px;padding:8px 11px;border-radius:9px;background:#1a2535;color:var(--ink2);margin:7px 0;max-width:88%;line-height:1.4}
+    .mini.out{background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;margin-left:auto}
+    .book-btn{margin:4px 14px 0;padding:10px;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;border-radius:8px;font-weight:700;text-align:center;font-size:11px;cursor:pointer;box-shadow:0 4px 12px #3b82f630}
+
+    /* ── Pricing ── */
+    .price{text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:24px;max-width:560px;padding:48px 32px;margin:0 auto;position:relative;overflow:hidden}
+    .price::before{content:'';position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:300px;height:300px;background:radial-gradient(ellipse,#3b82f60a,transparent 70%);pointer-events:none}
+    .price h2{font-size:28px;letter-spacing:-1px;font-weight:900;margin-bottom:10px}
+    .price-sub{color:var(--ink2);margin-bottom:24px;font-size:14px}
+    .price-amount{font-size:52px;font-weight:900;letter-spacing:-3px;background:linear-gradient(135deg,var(--blue),var(--blue2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .price-period{color:var(--muted);font-size:15px}
+    .price-desc{color:var(--muted);font-size:13px;margin:12px 0 28px}
+    .price-features{text-align:left;margin-bottom:28px;display:flex;flex-direction:column;gap:10px}
+    .pf{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2)}
+    .pf::before{content:'✓';color:var(--green);font-weight:800;font-size:12px;flex-shrink:0}
+
+    /* ── Shop CTA ── */
+    .shop-cta{background:var(--bg2);border-top:1px solid var(--border);padding:70px 28px;text-align:center}
+    .shop-cta-inner{max-width:600px;margin:auto}
+    .shop-cta h2{font-size:32px;letter-spacing:-1.2px;font-weight:900;margin-bottom:12px}
+    .shop-cta p{color:var(--ink2);font-size:15px;margin-bottom:28px;line-height:1.7}
+    .cta-btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .cta-btn-primary{font:700 14px 'Inter',sans-serif;color:#fff;background:linear-gradient(135deg,#3b82f6,#2563eb);border:0;border-radius:10px;padding:13px 24px;cursor:pointer;box-shadow:0 4px 20px #3b82f630;transition:all .2s;text-decoration:none}
+    .cta-btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 28px #3b82f640}
+    .cta-btn-ghost{font:600 14px 'Inter',sans-serif;color:var(--ink2);background:transparent;border:1px solid var(--border2);border-radius:10px;padding:12px 22px;cursor:pointer;transition:all .2s;text-decoration:none}
+    .cta-btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
+
+    /* ── Footer ── */
+    footer{max-width:1200px;margin:auto;padding:28px;color:var(--muted2);display:flex;justify-content:space-between;align-items:center;font-size:12px;border-top:1px solid var(--border)}
+
+    /* ── Responsive ── */
+    @media(max-width:880px){
+      .navlinks{display:none}
+      .hero{grid-template-columns:1fr;padding-top:60px;gap:40px}
+      .hero h1{font-size:42px}
+      .hero-art{max-width:380px;width:100%;margin:auto}
+      .features,.steps{grid-template-columns:1fr}
+      .how-inner,.dash-grid{grid-template-columns:1fr}
+      .how-inner{gap:40px}
+      .queue{border-right:0;border-bottom:1px solid var(--border)}
+      .section,.how{padding:55px 20px}
+    }
+    @media(max-width:480px){
+      .nav{padding:0 18px}
+      .hero h1{font-size:36px;letter-spacing:-1.8px}
+      .phone{right:0;width:260px}
+      .fc1{left:-10px}.fc2{right:-5px}
+      .hero-art{min-height:380px}
+      .hero-actions{flex-direction:column;align-items:flex-start}
+      .btn-hero,.btn-hero-ghost{width:100%;text-align:center}
+    }
   </style>
 </head>
+
 <body>
-  <nav class="nav"><a class="brand" href="#top">cool<b>care</b></a><div class="navlinks"><a href="#how">How it works</a><a href="#dashboard">Dashboard</a><a href="#pricing">Pricing</a><a href="/shop-login.html" style="color:var(--blue);font-weight:750">Shop Login</a></div><button class="navcta" onclick="openDemo()">Book a demo</button></nav>
-  <main id="top"><section class="hero"><div><span class="eyebrow"><i class="pulse"></i> Built for home appliance service teams</span><h1>Every enquiry deserves a <em>fast reply.</em></h1><p>CoolCare turns WhatsApp conversations and missed calls into booked home appliance service jobs—without adding work for your team.</p><div class="hero-actions"><button class="btn" onclick="openDemo()">Book a free demo →</button><a class="secondary" href="#dashboard">See it in action</a></div><div class="proof"><div class="faces"><i class="face">RK</i><i class="face">AS</i><i class="face">VM</i></div><span>Designed for busy field-service businesses</span></div></div><div class="hero-art"><div class="glow"></div><div class="phone"><div class="phone-top">◉ &nbsp; 9:41</div><div class="chat"><div class="chatbar">CoolCare Assistant</div><div class="bubble in">Hi, my AC is not cooling properly.</div><div class="bubble out">I can help. Which area are you in?</div><div class="bubble in">Indiranagar. No water leakage.</div><div class="bubble out">A technician can visit today. Which slot works?</div><div class="choice"><span>2–4 PM</span><span>4–6 PM</span></div></div></div><div class="float-card one"><strong>6 jobs</strong> recovered this week</div><div class="float-card two">✓ Booking confirmed<br><small>Customer notified</small></div></div></section>
-  <div class="section trusted">MADE FOR TEAMS WHO GET LEADS FROM <span>WhatsApp</span><span>Google</span><span>Justdial</span><span>Phone calls</span></div>
-  <section class="section"><div class="intro"><h2>Your digital front desk—always on.</h2><p>Give every customer a clear, quick path from “my appliance isn’t working” to a confirmed technician visit.</p></div><div class="features"><article class="feature"><div class="icon">💬</div><h3>Replies in seconds</h3><p>Answers common questions and gathers the problem, location, urgency and customer details on WhatsApp.</p></article><article class="feature"><div class="icon">📅</div><h3>Books the right slot</h3><p>Offers available technician windows, confirms the visit and keeps everyone informed automatically.</p></article><article class="feature"><div class="icon">📈</div><h3>Shows what you gained</h3><p>See enquiries, booked jobs, missed calls recovered and AMC follow-ups in one simple view.</p></article></div></section>
-  <section class="how" id="how"><div class="how-inner"><div><h2>Less chasing.<br>More completed jobs.</h2><p>Your team stays focused on service visits while CoolCare handles the first conversation and the follow-up.</p></div><div class="steps"><div class="step"><b>01</b><h3>A customer gets in touch</h3><p>WhatsApp message or missed call comes in.</p></div><div class="step"><b>02</b><h3>CoolCare qualifies</h3><p>It collects the details your dispatcher needs.</p></div><div class="step"><b>03</b><h3>A job gets booked</h3><p>Your customer and technician receive the update.</p></div></div></div></section>
-  <section class="section" id="dashboard"><div class="intro"><h2>One calm view of a busy day.</h2><p>Nothing gets lost in the WhatsApp inbox.</p></div><div class="dashboard"><div class="dash-head"><h3>Today’s service desk</h3><span class="status">● WhatsApp connected</span></div><div class="dash-grid"><div class="queue"><div class="box-title">Enquiry & dispatch queue</div><div id="queue-list"><div class="job"><small>Loading…</small></div></div></div><div class="assistant-box"><div class="box-title">WhatsApp assistant</div><div class="mini-chat"><div class="mini">My split AC is not cooling.</div><div class="mini blue">Sorry to hear that. What area are you in?</div><div class="mini">Indiranagar. No leakage.</div><div class="mini blue">A technician can visit today.</div></div><div class="booking" onclick="booked()">Book 2–4 PM</div></div></div></div></section>
-  <section class="section" id="pricing"><div class="price"><h2>Simple monthly pricing.</h2><p>One service desk for your whole home appliance service team.</p><strong>₹4,999</strong> <small>/ month</small><p style="margin-top:8px">Includes onboarding, booking flows and monthly support.</p><button class="btn" onclick="openDemo()">Talk to us →</button></div></section></main>
-  <section style="background:var(--navy);padding:48px 26px;text-align:center"><div style="max-width:640px;margin:auto"><p style="color:#72aeff;font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;margin:0 0 10px">For Repair Shops</p><h2 style="color:#fff;font-size:30px;letter-spacing:-1.2px;margin:0 0 12px">Are you a repair shop owner?</h2><p style="color:#b9cad8;margin:0 0 22px;font-size:15px">Register your shop on CoolCare to receive bookings, manage jobs and notify customers automatically.</p><div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap"><a href="/shop-signup.html" style="background:var(--blue);color:#fff;padding:12px 22px;border-radius:10px;font:700 14px inherit;text-decoration:none">Register Your Shop →</a><a href="/shop-login.html" style="background:transparent;color:#fff;padding:12px 22px;border-radius:10px;font:700 14px inherit;text-decoration:none;border:1px solid #35516a">Already registered? Log in</a></div></div></section>
-  <footer><span class="brand" style="font-size:17px">cool<b>care</b></span><span>© 2026 CoolCare. Better service, one conversation at a time.</span></footer>
-  <div class="modal" id="modal"><form class="modal-card" onsubmit="submitForm(event)"><h2>See CoolCare in action</h2><p>Leave your details and we’ll arrange a short demo for your service team.</p><input required id="demo-name" placeholder="Your name"><input required id="demo-business" placeholder="Business name"><input required id="demo-whatsapp" placeholder="WhatsApp number (e.g. +1 555 123 4567)"><div class="modal-actions"><button class="close" type="button" onclick="closeDemo()">Not now</button><button class="btn">Request demo</button></div></form></div>
-  <script>
-    const modal=document.getElementById('modal');
-    function openDemo(){modal.classList.add('show')}
-    function closeDemo(){modal.classList.remove('show')}
+<div class="nav-backdrop"></div>
+<nav class="nav">
+  <a class="brand" href="#top">cool<b>care</b></a>
+  <div class="navlinks">
+    <a href="#how">How it works</a>
+    <a href="#dashboard">Dashboard</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/shop-login.html" style="color:var(--blue2)">Shop Login</a>
+  </div>
+  <div class="nav-actions">
+    <a href="/shop-login.html"><button class="btn-ghost">Log in</button></a>
+    <a href="/shop-signup.html"><button class="btn-primary">Get started →</button></a>
+  </div>
+</nav>
 
-    async function submitForm(e){
-      e.preventDefault();
-      const name = document.getElementById('demo-name').value.trim();
-      const businessName = document.getElementById('demo-business').value.trim();
-      const whatsappNumber = document.getElementById('demo-whatsapp').value.trim();
-      const submitBtn = e.target.querySelector('button.btn');
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Sending…';
-      console.log('[demo] Submitting form…', {name, businessName, whatsappNumber});
-      try{
-        const res = await fetch('/api/demo-requests', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({name, businessName, whatsappNumber})
-        });
-        const data = await res.json();
-        console.log('[demo] Response:', res.status, data);
-        if(!res.ok){
-          console.error('[demo] API error:', data);
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Request demo';
-          alert('Something went wrong: ' + (data.error || 'Please try again'));
-          return;
-        }
-        e.target.innerHTML='<h2>Thank you!</h2><p>We\'ve got your details and will reach out on WhatsApp shortly.</p><button class="btn" type="button" onclick="closeDemo()">Close</button>';
-      }catch(err){
-        console.error('[demo] Network error:', err);
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Request demo';
-        alert('Network error. Please check your connection and try again.');
-      }
-    }
+<main id="top">
+  <!-- ── Hero ── -->
+  <section class="hero">
+    <div class="hero-bg"></div>
+    <div style="position:relative;z-index:1">
+      <span class="eyebrow"><i class="pulse"></i> Built for home appliance service teams</span>
+      <h1>Every enquiry deserves a <em>fast reply.</em></h1>
+      <p>CoolCare turns WhatsApp conversations and missed calls into booked home appliance service jobs — without adding work for your team.</p>
+      <div class="hero-actions">
+        <a href="/shop-signup.html"><button class="btn-hero">Start for free →</button></a>
+        <a href="#dashboard"><button class="btn-hero-ghost">See it in action</button></a>
+      </div>
+      <div class="proof">
+        <div class="faces">
+          <i class="face">RK</i><i class="face">AS</i><i class="face">VM</i>
+        </div>
+        <span>Trusted by field-service businesses across India</span>
+      </div>
+    </div>
+    <div class="hero-art">
+      <div class="art-glow"></div>
+      <div class="phone">
+        <div class="phone-top">◉ &nbsp; 9:41 &nbsp; ●●●●</div>
+        <div class="chat">
+          <div class="chatbar">CoolCare Assistant</div>
+          <div class="bubble in">Hi, my AC is not cooling properly.</div>
+          <div class="bubble out">I can help! Which area are you in?</div>
+          <div class="bubble in">Indiranagar. No water leakage.</div>
+          <div class="bubble out">A technician can visit today. Which slot works?</div>
+          <div class="choice"><span>2–4 PM</span><span>4–6 PM</span></div>
+        </div>
+      </div>
+      <div class="float-card fc1"><strong>6 jobs</strong><small>recovered this week</small></div>
+      <div class="float-card fc2">✓ Booking confirmed<br><small style="color:var(--muted)">Customer notified</small></div>
+    </div>
+  </section>
 
-    // ── Book Service button handler ──────────────────────────────────────────
-    // Reads the first pending booking from the queue, calls /api/book-service,
-    // and logs every step to the browser console so failures are easy to trace.
-    async function booked() {
-      const btn = document.querySelector('.booking');
+  <!-- ── Trusted bar ── -->
+  <div class="trusted">
+    Businesses getting leads from &nbsp;
+    <span>WhatsApp</span><span>Google</span><span>Justdial</span><span>Phone calls</span>
+  </div>
 
-      // ── STEP 1: button click confirmed ──────────────────────────────────
-      console.log('%c[BOOK] STEP 1 — Button clicked', 'color:#146ef5;font-weight:bold');
+  <!-- ── Features ── -->
+  <section class="section">
+    <div class="intro">
+      <div class="tag">Platform</div>
+      <h2>Your digital front desk — always on.</h2>
+      <p>Give every customer a clear, fast path from "my appliance isn't working" to a confirmed technician visit.</p>
+    </div>
+    <div class="features">
+      <article class="feature">
+        <div class="icon">💬</div>
+        <h3>Replies in seconds</h3>
+        <p>Answers common questions and gathers the problem, location, urgency and customer details on WhatsApp — automatically.</p>
+      </article>
+      <article class="feature">
+        <div class="icon">📅</div>
+        <h3>Books the right slot</h3>
+        <p>Offers available technician windows, confirms the visit and keeps both the customer and your team informed.</p>
+      </article>
+      <article class="feature">
+        <div class="icon">📈</div>
+        <h3>Shows what you gained</h3>
+        <p>See enquiries, booked jobs, missed calls recovered and follow-ups — all in one clear dashboard.</p>
+      </article>
+    </div>
+  </section>
 
-      // Disable button to prevent double-submit
-      btn.textContent = '⏳ Booking…';
-      btn.style.pointerEvents = 'none';
-      btn.style.opacity = '0.7';
+  <!-- ── How it works ── -->
+  <section class="how" id="how">
+    <div class="how-inner">
+      <div>
+        <div class="tag">How it works</div>
+        <h2>Less chasing.<br>More completed jobs.</h2>
+        <p class="how-sub">Your team stays focused on service visits while CoolCare handles the first conversation and every follow-up along the way.</p>
+      </div>
+      <div class="steps">
+        <div class="step"><b>01</b><h3>Customer gets in touch</h3><p>WhatsApp message or missed call comes in — any time of day.</p></div>
+        <div class="step"><b>02</b><h3>CoolCare qualifies</h3><p>Collects the appliance, issue, address and preferred slot automatically.</p></div>
+        <div class="step"><b>03</b><h3>Job gets booked</h3><p>Your customer and technician both receive a confirmation instantly.</p></div>
+      </div>
+    </div>
+  </section>
 
-      // ── STEP 2: build payload from first queue item ──────────────────────
-      console.log('[BOOK] STEP 2 — Building payload from queue…');
 
-      // Try to pull the first booking row from the rendered queue list
-      const firstJob = document.querySelector('#queue-list .job');
-      let customerName   = '';
-      let serviceType    = '';
-      let customerNumber = '';
-      let area           = '';
+  <!-- ── Dashboard ── -->
+  <section class="section" id="dashboard">
+    <div class="intro">
+      <div class="tag">Live Dashboard</div>
+      <h2>One calm view of a busy day.</h2>
+      <p>Nothing gets lost in the WhatsApp inbox. Every enquiry tracked, every job visible.</p>
+    </div>
+    <div class="dashboard">
+      <div class="dash-head">
+        <h3>Today's service desk</h3>
+        <span class="status">● WhatsApp connected</span>
+      </div>
+      <div class="dash-grid">
+        <div class="queue">
+          <div class="box-title">Enquiry & dispatch queue</div>
+          <div id="queue-list"><div class="job"><small style="color:var(--muted)">Loading…</small></div></div>
+        </div>
+        <div class="assistant-box">
+          <div class="box-title">WhatsApp assistant</div>
+          <div class="mini-chat">
+            <div class="mini">My split AC is not cooling.</div>
+            <div class="mini out">Sorry to hear that. What area are you in?</div>
+            <div class="mini">Indiranagar. No leakage.</div>
+            <div class="mini out">A technician can visit today.</div>
+          </div>
+          <div class="book-btn" onclick="booked()">Book 2–4 PM slot</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-      if (firstJob) {
-        customerName  = firstJob.querySelector('b')?.textContent?.trim()  || '';
-        const detail  = firstJob.querySelector('small')?.textContent?.trim() || '';
-        // detail is "Area · ServiceType" or just one of them
-        const parts   = detail.split('·').map(s => s.trim());
-        area          = parts[0] || '';
-        serviceType   = parts[1] || parts[0] || '';
-        console.log('[BOOK] STEP 2 — Pulled from queue row:', { customerName, area, serviceType });
-      } else {
-        console.warn('[BOOK] STEP 2 — No queue row found. Using demo values.');
-      }
+  <!-- ── Pricing ── -->
+  <section class="section" id="pricing">
+    <div class="price">
+      <div class="tag">Pricing</div>
+      <h2>Simple, honest pricing.</h2>
+      <p class="price-sub">One plan for your entire home appliance service team.</p>
+      <div>
+        <span class="price-amount">₹4,999</span>
+        <span class="price-period"> / month</span>
+      </div>
+      <p class="price-desc">Includes onboarding, booking flows and monthly support.</p>
+      <div class="price-features">
+        <div class="pf">Unlimited WhatsApp bookings</div>
+        <div class="pf">AI-powered customer conversations</div>
+        <div class="pf">Repair shop portal &amp; job management</div>
+        <div class="pf">Customer notifications on every status change</div>
+        <div class="pf">Real-time dashboard &amp; analytics</div>
+        <div class="pf">Dedicated onboarding support</div>
+      </div>
+      <a href="/shop-signup.html"><button class="btn-hero" style="width:100%">Get started today →</button></a>
+    </div>
+  </section>
+</main>
 
-      // Fall back to demo values if nothing was found in the queue
-      if (!customerName) customerName = 'Demo Customer';
-      if (!serviceType)  serviceType  = 'AC Repair';
-      if (!area)         area         = 'Indiranagar';
+<!-- ── Shop CTA ── -->
+<div class="shop-cta">
+  <div class="shop-cta-inner">
+    <div class="tag">For Repair Shops</div>
+    <h2>Are you a repair shop owner?</h2>
+    <p>Register on CoolCare to receive bookings, manage jobs and automatically notify customers at every step — all from one dashboard.</p>
+    <div class="cta-btns">
+      <a href="/shop-signup.html" class="cta-btn-primary">Register your shop →</a>
+      <a href="/shop-login.html" class="cta-btn-ghost">Already registered? Log in</a>
+    </div>
+  </div>
+</div>
 
-      // customerNumber must be a valid WhatsApp number (E.164 without the +)
-      // In a real dashboard this would come from the booking record.
-      // We read it from a data attribute if available, else a placeholder.
-      customerNumber = firstJob?.dataset?.customerNumber || '';
-      if (!customerNumber) {
-        console.warn('[BOOK] STEP 2 — customerNumber missing from queue row. WhatsApp send will fail on the backend unless you supply a real number.');
-        customerNumber = '919999999999'; // placeholder — replace with real number from your DB
-      }
+<footer>
+  <span class="brand" style="font-size:18px">cool<b>care</b></span>
+  <span>© 2026 CoolCare. Better service, one conversation at a time.</span>
+</footer>
 
-      const payload = {
-        customerNumber,
-        customerName,
-        serviceType,
-        area,
-        slot:    '2–4 PM',
-        address: area,    // best available; a full address would come from the booking record
-        urgency: 'Today',
-      };
+<script>
+  function escapeHtml(s){
+    return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
 
-      console.log('[BOOK] STEP 2 — Final payload:', JSON.stringify(payload, null, 2));
+  async function booked(){
+    const btn = document.querySelector('.book-btn');
+    btn.textContent = '✓ Slot booked — customer notified';
+    btn.style.background = 'linear-gradient(135deg,#15803d,#16a34a)';
+    btn.style.boxShadow  = '0 4px 12px #22c55e30';
+  }
 
-      // ── STEP 3: send the API request ────────────────────────────────────
-      console.log('[BOOK] STEP 3 — Sending POST /api/book-service…');
-      let res;
-      try {
-        res = await fetch('/api/book-service', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(payload),
-        });
-        console.log('[BOOK] STEP 3 — Response received. HTTP status:', res.status);
-      } catch (networkErr) {
-        // Network failure — server unreachable or CORS block
-        console.error('[BOOK] STEP 3 — fetch() threw a network error:', networkErr.message);
-        btn.textContent    = '✗ Network error — see console';
-        btn.style.background = '#ffeaea';
-        btn.style.color      = '#c00';
-        btn.style.pointerEvents = 'auto';
-        btn.style.opacity    = '1';
+  async function loadQueue(){
+    const list = document.getElementById('queue-list');
+    try{
+      const res  = await fetch('/api/dashboard');
+      const data = await res.json();
+      const rows = data.enquiries || [];
+      if(!rows.length){
+        list.innerHTML = '<div class="job"><small style="color:var(--muted)">No enquiries yet — messages will appear here.</small></div>';
         return;
       }
-
-      // ── STEP 4: parse the JSON response ─────────────────────────────────
-      console.log('[BOOK] STEP 4 — Parsing response body…');
-      let data;
-      try {
-        data = await res.json();
-        console.log('[BOOK] STEP 4 — Response body:', JSON.stringify(data, null, 2));
-      } catch (parseErr) {
-        console.error('[BOOK] STEP 4 — Failed to parse JSON response:', parseErr.message);
-        btn.textContent    = '✗ Bad response — see console';
-        btn.style.background = '#ffeaea';
-        btn.style.color      = '#c00';
-        btn.style.pointerEvents = 'auto';
-        btn.style.opacity    = '1';
-        return;
-      }
-
-      // ── STEP 5: evaluate outcome ─────────────────────────────────────────
-      if (!res.ok && res.status !== 207) {
-        console.error('[BOOK] STEP 5 — Backend returned an error:', res.status, data);
-        btn.textContent    = `✗ Error ${res.status} — ${data?.error || 'see console'}`;
-        btn.style.background = '#ffeaea';
-        btn.style.color      = '#c00';
-        btn.style.pointerEvents = 'auto';
-        btn.style.opacity    = '1';
-        return;
-      }
-
-      if (data?.booked) {
-        if (data.whatsappSent) {
-          console.log('%c[BOOK] STEP 5 — SUCCESS: booking saved & WhatsApp sent. Booking ID:', 'color:green;font-weight:bold', data.bookingId);
-          btn.textContent    = '✓ Slot booked — customer notified via WhatsApp';
-          btn.style.background = '#dbf7ea';
-          btn.style.color      = '#08784d';
-        } else {
-          console.warn('[BOOK] STEP 5 — Booking saved but WhatsApp send FAILED:', data.whatsappError);
-          btn.textContent    = '⚠ Booked — WhatsApp send failed (see console)';
-          btn.style.background = '#fff7e0';
-          btn.style.color      = '#7a5c00';
-        }
-      } else {
-        console.error('[BOOK] STEP 5 — Unexpected response (booked=false):', data);
-        btn.textContent    = '✗ Unexpected response — see console';
-        btn.style.background = '#ffeaea';
-        btn.style.color      = '#c00';
-      }
-
-      btn.style.pointerEvents = 'auto';
-      btn.style.opacity = '1';
-      console.log('[BOOK] Flow complete.');
+      list.innerHTML = rows.slice(0,8).map(r=>{
+        const label  = escapeHtml(r.customer_name || r.customer_number);
+        const detail = escapeHtml([r.area, r.service_type].filter(Boolean).join(' · ') || 'Details pending');
+        const isBooked = r.status === 'assigned' || r.status === 'completed';
+        const badge  = isBooked
+          ? `<span class="job-badge">${r.technician_name ? escapeHtml(r.technician_name) : 'Assigned'}</span>`
+          : `<span class="job-badge pending">Pending</span>`;
+        return `<div class="job"><div><b>${label}</b><small>${detail}</small></div>${badge}</div>`;
+      }).join('');
+    }catch(e){
+      list.innerHTML = '<div class="job"><small style="color:var(--muted)">Could not load queue.</small></div>';
     }
-
-    function escapeHtml(s){
-      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    }
-
-    async function loadQueue(){
-      const list = document.getElementById('queue-list');
-      try{
-        const res = await fetch('/api/dashboard');
-        const data = await res.json();
-        const rows = data.enquiries || [];
-        if(!rows.length){
-          list.innerHTML = '<div class="job"><small>No enquiries yet — messages will appear here.</small></div>';
-          return;
-        }
-        list.innerHTML = rows.slice(0,8).map(r => {
-          const label = escapeHtml(r.customer_name || r.customer_number);
-          const detail = escapeHtml([r.area, r.service_type].filter(Boolean).join(' · ') || 'Details pending');
-          let statusText = 'Needs booking', statusClass = '';
-          if(r.status === 'assigned'){ statusText = r.technician_name ? `${escapeHtml(r.technician_name)} assigned` : 'Technician assigned'; statusClass='booked'; }
-          if(r.status === 'completed'){ statusText = 'Completed'; statusClass='booked'; }
-          // data-customer-number is used by the Book Service button to know who to notify
-          const custNum = escapeHtml(r.customer_number || '');
-          return `<div class="job" data-customer-number="${custNum}"><div><b>${label}</b><small>${detail}</small></div><span class="${statusClass}">${statusText}</span></div>`;
-        }).join('');
-      }catch(e){
-        list.innerHTML = '<div class="job"><small>Could not load queue right now.</small></div>';
-      }
-    }
-    loadQueue();
-    setInterval(loadQueue, 15000);
-  </script>
-</body></html>
+  }
+  loadQueue();
+  setInterval(loadQueue, 15000);
+</script>
+</body>
+</html>
