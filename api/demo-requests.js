@@ -8,14 +8,24 @@ async function sendWhatsApp(to, body) {
   const phoneId     = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const apiVersion  = process.env.WHATSAPP_API_VERSION || "v19.0";
 
+  console.log("[demo-requests][sendWhatsApp] Attempting to send to:", to);
+  console.log("[demo-requests][sendWhatsApp] Access token present:", !!accessToken);
+  console.log("[demo-requests][sendWhatsApp] Phone ID present:", !!phoneId);
+  console.log("[demo-requests][sendWhatsApp] Phone ID value:", phoneId);
+
   if (!accessToken || !phoneId) {
-    console.warn("[demo-requests] WhatsApp env vars missing — skipping notification");
+    console.error("[demo-requests] WhatsApp env vars missing — skipping notification");
+    console.error("  WHATSAPP_ACCESS_TOKEN present:", !!accessToken);
+    console.error("  WHATSAPP_PHONE_NUMBER_ID present:", !!phoneId);
     return;
   }
 
-  const res = await fetch(
-    `https://graph.facebook.com/${apiVersion}/${phoneId}/messages`,
-    {
+  const url = `https://graph.facebook.com/${apiVersion}/${phoneId}/messages`;
+  console.log("[demo-requests][sendWhatsApp] Calling:", url);
+  console.log("[demo-requests][sendWhatsApp] Message preview:", body.slice(0, 80));
+
+  try {
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -27,14 +37,20 @@ async function sendWhatsApp(to, body) {
         type: "text",
         text: { body },
       }),
-    }
-  );
+    });
 
-  if (!res.ok) {
-    const txt = await res.text();
-    console.error("[demo-requests] WhatsApp send failed:", res.status, txt);
-  } else {
-    console.log("[demo-requests] WhatsApp notification sent to", to);
+    const responseText = await res.text();
+    
+    if (!res.ok) {
+      console.error("[demo-requests] WhatsApp send failed. Status:", res.status);
+      console.error("[demo-requests] Response body:", responseText);
+    } else {
+      console.log("[demo-requests] WhatsApp sent successfully to", to);
+      console.log("[demo-requests] Response:", responseText);
+    }
+  } catch (err) {
+    console.error("[demo-requests] WhatsApp fetch error:", err.message);
+    console.error(err);
   }
 }
 
