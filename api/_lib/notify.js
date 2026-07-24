@@ -63,24 +63,14 @@ async function sendWhatsApp(to, body) {
   }
 }
 
-// ─── Send Email (SMTP) ──────────────────────────────────────────────────────
+// ─── Send Email (Resend API → SMTP fallback) ────────────────────────────────
 async function sendEmail(to, subject, htmlBody) {
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
   const fromEmail = process.env.FROM_EMAIL || "noreply@coolcare.ai";
 
-  if (!smtpHost) {
-    console.warn("[notify] SMTP not configured — skipping email");
-    return { ok: false, error: "SMTP not configured" };
-  }
-
-  try {
-    // Use nodemailer-style raw SMTP or a simple HTTP email API
-    // For Vercel serverless, we recommend Resend/SendGrid API
-    const resendKey = process.env.RESEND_API_KEY;
-    if (resendKey) {
+  // Primary: Resend API (recommended for Vercel serverless)
+  const resendKey = process.env.RESEND_API_KEY;
+  if (resendKey) {
+    try {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -99,14 +89,21 @@ async function sendEmail(to, subject, htmlBody) {
         return { ok: false, status: res.status };
       }
       return { ok: true };
+    } catch (err) {
+      console.error("[notify] Resend error:", err.message);
+      return { ok: false, error: err.message };
     }
-
-    console.warn("[notify] No email provider configured (set RESEND_API_KEY)");
-    return { ok: false, error: "No email provider" };
-  } catch (err) {
-    console.error("[notify] Email error:", err.message);
-    return { ok: false, error: err.message };
   }
+
+  // Fallback: SMTP (if configured)
+  const smtpHost = process.env.SMTP_HOST;
+  if (smtpHost) {
+    console.warn("[notify] SMTP configured but not implemented for serverless — use RESEND_API_KEY");
+    return { ok: false, error: "SMTP not supported on Vercel — set RESEND_API_KEY" };
+  }
+
+  console.warn("[notify] No email provider configured (set RESEND_API_KEY)");
+  return { ok: false, error: "No email provider" };
 }
 
 // ─── Log notification to DB ─────────────────────────────────────────────────
@@ -152,12 +149,13 @@ async function notifyStatusChange(booking, newStatus) {
   // Send email if customer email available
   if (booking.customer_email) {
     const subject = `CoolCare Booking #${booking.id} — ${newStatus.replace(/_/g, " ").toUpperCase()}`;
-    const htmlBody = `<div style="font-family:sans-serif;padding:20px;">
-      <h2 style="color:#D4AF37;">CoolCare Booking Update</h2>
-      <p>${body.replace(/\*/g, "").replace(/\n/g, "<br>")}</p>
-      <hr style="border:1px solid #eee;">
-      <p style="color:#888;font-size:12px;">CoolCare — Better service, one conversation at a time.</p>
-    </div>`;
+    const htmlBody = `<div style="font-family:Inter,sans-serif;padding:24px;background:#0a0a0a;color:#ededed;">
+      <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #222;border-radius:12px;padding:32px;">
+      <h2 style="color:#fff;margin:0 0 16px;font-size:20px;">CoolCare Booking Update</h2>
+      <p style="color:#a3a3a3;line-height:1.6;">${body.replace(/\*/g, "").replace(/\n/g, "<br>")}</p>
+      <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
+      <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
+      </div></div>`;
     const emailResult = await sendEmail(booking.customer_email, subject, htmlBody);
     await logNotification(
       shopId, booking.id, "email", booking.customer_email,
@@ -175,10 +173,11 @@ async function notifyAdmin(shopId, subject, message) {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) return;
 
-  const htmlBody = `<div style="font-family:sans-serif;padding:20px;">
-    <h2 style="color:#D4AF37;">CoolCare Admin Alert</h2>
-    <p>${message.replace(/\n/g, "<br>")}</p>
-  </div>`;
+  const htmlBody = `<div style="font-family:Inter,sans-serif;padding:24px;background:#0a0a0a;color:#ededed;">
+    <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #222;border-radius:12px;padding:32px;">
+    <h2 style="color:#fff;margin:0 0 16px;font-size:20px;">CoolCare Admin Alert</h2>
+    <p style="color:#a3a3a3;line-height:1.6;">${message.replace(/\n/g, "<br>")}</p>
+    </div></div>`;
 
   const result = await sendEmail(adminEmail, subject, htmlBody);
   await logNotification(shopId, null, "email", adminEmail, "admin_alert", result.ok ? "sent" : "failed", result.ok ? null : result.error);

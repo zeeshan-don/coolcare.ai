@@ -136,11 +136,12 @@ async function requireShopOwner(auth, sql, response) {
 // ─── Log admin action to audit trail ──────────────────────────────────────────
 async function logAdminAction(sql, { actorType, actorId, action, targetType, targetId, details, ip }) {
   try {
-    await sql`
-      INSERT INTO admin_action_log (actor_type, actor_id, action, target_type, target_id, details, ip_address)
-      VALUES (${actorType}, ${actorId}, ${action}, ${targetType || null}, ${targetId || null},
-              ${details ? sql.json(details) : sql.json({})}, ${ip || null})
-    `;
+    const detailsJson = details ? JSON.stringify(details) : '{}';
+    await sql.unsafe(
+      `INSERT INTO admin_action_log (actor_type, actor_id, action, target_type, target_id, details, ip_address)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
+      [actorType, actorId, action, targetType || null, targetId || null, detailsJson, ip || null]
+    );
   } catch (e) {
     console.warn("[auth] Admin log insert failed:", e.message);
   }

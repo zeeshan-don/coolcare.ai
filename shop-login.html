@@ -2,158 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>CoolCare | Repair Shop Login</title>
+  <title>CoolCare | Login</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{
-      --bg:#F7F5F0;
-      --bg2:#FFFFFF;
-      --bg3:#F1EFE9;
-      --border:rgba(197,160,89,0.15);
-      --border2:rgba(197,160,89,0.35);
-      --blue:#C5A059;
-      --blue2:#D4AF37;
-      --glow:rgba(197,160,89,0.12);
-      --green:#6E8B68;
-      --green-bg:#EBF0EA;
-      --paper:#F7F5F0;
-      --line:#E2E0D9;
-      --ink:#0D0D0E;
-      --muted:#7E7A72;
-      --muted2:#B5B1A8;
-      --red:#B85A5A;
-      --red-bg:#FBEAEA;
-    }
-    *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,var(--paper),#F1EFE9);color:var(--ink);font:15px/1.6 'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,sans-serif;min-height:100vh}
-    body::before{content:'';position:fixed;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,transparent,var(--blue),var(--blue2),transparent);z-index:100}
-    h1,h2,h3,.brand{font-family:'Playfair Display',Georgia,serif;font-weight:700}
-    a{color:var(--blue);text-decoration:none;transition:color 0.3s cubic-bezier(0.16, 1, 0.3, 1)}
-    a:hover{color:var(--blue2)}
-    .page{min-height:100vh;display:grid;place-items:center;padding:20px;position:relative}
-    .page::before{content:'';position:absolute;top:30%;left:50%;transform:translate(-50%,-50%);width:600px;height:600px;background:radial-gradient(ellipse,rgba(197,160,89,0.04),transparent 70%);pointer-events:none}
-    .card{background:#fff;border:1px solid var(--border2);border-radius:16px;padding:48px 40px;width:min(440px,100%);box-shadow:0 20px 60px rgba(197,160,89,0.08),0 0 0 1px rgba(197,160,89,0.04);position:relative}
-    .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue2),transparent)}
-    .brand{font-weight:700;letter-spacing:1.5px;font-size:24px;display:block;margin-bottom:32px;text-transform:uppercase}.brand b{color:var(--blue);font-weight:900}
-    h1{font-size:28px;letter-spacing:-0.3px;margin:0 0 8px}
-    .sub{color:var(--muted);font-size:14px;margin:0 0 30px;letter-spacing:0.1px}
-    .field{margin-bottom:16px}
-    label{display:block;font-weight:700;font-size:12px;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted)}
-    input{width:100%;border:1px solid var(--line);border-radius:10px;padding:13px 15px;font:inherit;transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1);background:var(--bg2)}
-    input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 4px var(--glow)}
-    input.error{border-color:var(--red)}
-    .err-msg{color:var(--red);font-size:12px;margin-top:4px;display:none}
-    .err-msg.show{display:block}
-    .forgot{font-size:12px;color:var(--muted);text-align:right;margin-top:-8px;margin-bottom:16px}
-    .btn{width:100%;background:linear-gradient(135deg,var(--blue),var(--blue2));color:#090A0F;border:0;border-radius:10px;padding:14px;font:700 15px inherit;cursor:pointer;transition:all 0.4s cubic-bezier(0.16, 1, 0.3, 1);box-shadow:0 4px 16px var(--glow);letter-spacing:0.3px}
-    .btn:hover{background:linear-gradient(135deg,var(--blue2),#E8C96A);transform:translateY(-2px);box-shadow:0 8px 24px rgba(197,160,89,0.3)}.btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-    .divider{text-align:center;color:var(--muted);font-size:12px;margin:18px 0;position:relative}
-    .divider::before,.divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:var(--line)}
-    .divider::before{left:0}.divider::after{right:0}
-    .alert{padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:16px;display:none}
-    .alert.show{display:block}
-    .alert.error{background:var(--red-bg);border:1px solid rgba(184,90,90,0.2);color:var(--red)}
-    .signup-link{text-align:center;margin-top:22px;font-size:13px;color:var(--muted)}
-    .home-link{text-align:center;margin-top:12px;font-size:12px;color:var(--muted)}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0a0a0a;color:#ededed;font:15px/1.6 'Inter',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    p{color:#737373;font-size:14px}
+    a{color:#a3a3a3;text-decoration:none}
+    a:hover{color:#fff}
   </style>
+  <script>window.location.href='/login.html';</script>
 </head>
 <body>
-<div class="page">
-  <div class="card">
-    <a class="brand" href="/">cool<b>care</b></a>
-    <h1>Welcome back</h1>
-    <p class="sub">Sign in to your repair shop portal</p>
-
-    <div id="alert" class="alert error"></div>
-
-    <form id="loginForm" novalidate>
-      <div class="field">
-        <label for="identifier">Email or Mobile Number</label>
-        <input id="identifier" type="text" placeholder="email@example.com or 9876543210" autocomplete="username">
-        <div class="err-msg" id="identifier-err"></div>
-      </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input id="password" type="password" placeholder="Your password" autocomplete="current-password">
-        <div class="err-msg" id="password-err"></div>
-      </div>
-      <button type="submit" class="btn" id="loginBtn">Log In →</button>
-    </form>
-
-    <div class="divider">or</div>
-    <p class="signup-link">New to CoolCare? <a href="/shop-signup.html">Register your shop</a></p>
-    <p class="home-link"><a href="/">← Back to CoolCare home</a></p>
-  </div>
-</div>
-
-<script>
-  // Redirect to unified login page
-  window.location.href = '/login.html';
-  // --- Legacy code below (kept for reference) ---
-  // Redirect if already logged in
-  if (localStorage.getItem('cc_token')) window.location.href = '/shop-dashboard.html';
-
-  const form    = document.getElementById('loginForm');
-  const loginBtn = document.getElementById('loginBtn');
-  const alertEl = document.getElementById('alert');
-
-  function showAlert(msg) {
-    alertEl.textContent = msg;
-    alertEl.classList.add('show');
-  }
-  function fieldError(id, msg) {
-    const el  = document.getElementById(id + '-err');
-    const inp = document.getElementById(id);
-    if (el)  { el.textContent = msg; el.classList.toggle('show', !!msg); }
-    if (inp) inp.classList.toggle('error', !!msg);
-  }
-  function clearErrors() {
-    alertEl.classList.remove('show');
-    document.querySelectorAll('.err-msg').forEach(e => e.classList.remove('show'));
-    document.querySelectorAll('.error').forEach(e => e.classList.remove('error'));
-  }
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    clearErrors();
-
-    const identifier = document.getElementById('identifier').value.trim();
-    const password   = document.getElementById('password').value;
-
-    if (!identifier) { fieldError('identifier', 'Please enter your email or mobile number'); return; }
-    if (!password)   { fieldError('password',   'Please enter your password'); return; }
-
-    loginBtn.disabled = true;
-    loginBtn.textContent = 'Signing in…';
-
-    try {
-      const res  = await fetch('/api/auth', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ action: 'login', identifier, password }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        showAlert(data.error || 'Login failed. Please check your credentials.');
-        return;
-      }
-
-      localStorage.setItem('cc_token', data.token);
-      localStorage.setItem('cc_shop', JSON.stringify(data.shop));
-      // Role-based redirect
-      const role = data.user?.role || data.shop?.role || 'shop';
-      if (['super_admin','admin','support'].includes(role)) window.location.href = '/admin.html';
-      else window.location.href = '/shop-dashboard.html';
-    } catch (err) {
-      console.error('[login] Network error:', err);
-      showAlert('Network error. Please check your connection.');
-    } finally {
-      loginBtn.disabled = false;
-      loginBtn.textContent = 'Log In →';
-    }
-  });
-</script>
+  <p>Redirecting to <a href="/login.html">login</a>…</p>
 </body>
 </html>

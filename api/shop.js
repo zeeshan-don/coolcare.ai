@@ -297,7 +297,7 @@ async function handleAdminGet(request, response, sql, auth, action) {
   }
 }
 
-// ─── ADMIN DASHBOARD (enhanced analytics) ────────────────────────────────────
+// ─── ADMIN DASHBOARD (enhanced analytics with error handling) ────────────────
 async function adminDashboard(request, response, sql, auth) {
   const page = parseInt(request.query?.page || "1", 10);
   const limit = parseInt(request.query?.limit || "20", 10);
@@ -308,36 +308,102 @@ async function adminDashboard(request, response, sql, auth) {
   const qp = [];
   if (search) { qp.push(`%${search}%`); whereClause += ` AND (rs.shop_name ILIKE $${qp.length} OR rs.email ILIKE $${qp.length} OR rs.owner_name ILIKE $${qp.length})`; }
 
-  const shops = await sql.unsafe(`
-    SELECT rs.id, rs.shop_name, rs.owner_name, rs.email, rs.mobile, rs.city, rs.role,
-           rs.subscription_status, rs.suspended_at, rs.created_at,
-           (SELECT COUNT(*) FROM bookings WHERE repair_shop_id = rs.id) as total_bookings,
-           (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE repair_shop_id = rs.id AND status = 'completed') as total_revenue,
-           (SELECT sp.name FROM subscriptions s JOIN subscription_plans sp ON sp.id = s.plan_id WHERE s.repair_shop_id = rs.id ORDER BY s.created_at DESC LIMIT 1) as plan_name
-    FROM repair_shops rs ${whereClause}
-    ORDER BY rs.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
-  `, [...qp, limit, offset]);
+  // Fetch shops — use safe columns only (work even if migrations partially applied)
+  let shops = [];
+  try {
+    shops = await sql.unsafe(`
+      SELECT rs.id, rs.shop_name, rs.owner_name, rs.email, rs.mobile, rs.city, rs.role,
+             COALESCE(rs.subscription_status, 'trial') as subscription_status,
+             rs.suspended_at, rs.created_at,
+             (SELECT COUNT(*) FROM bookings WHERE repair_shop_id = rs.id) as total_bookings,
+             (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE repair_shop_id = rs.id AND status = 'completed') as total_revenue,
+             (SELECT sp.name FROM subscriptions s JOIN subscription_plans sp ON sp.id = s.plan_id WHERE s.repair_shop_id = rs.id ORDER BY s.created_at DESC LIMIT 1) as plan_name
+      FROM repair_shops rs ${whereClause}
+      ORDER BY rs.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
+    `, [...qp, limit, offset]);
+  } catch (e) {
+    // Fallback: query without subscription/plan joins
+    console.warn("[admin/dashboard] Full query failed, using fallback:", e.message);
+    try {
+      shops = await sql.unsafe(`
+        SELECT rs.id, rs.shop_name, rs.owner_name, rs.email, rs.mobile, rs.city,
+               COALESCE(rs.role, 'owner') as role,
+               COALESCE(rs.subscription_status, 'trial') as subscription_status,
+               rs.suspended_at, rs.created_at,
+               (SELECT COUNT(*) FROM bookings WHERE repair_shop_id = rs.id) as total_bookings,
+               (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE repair_shop_id = rs.id AND status = 'completed') as total_revenue,
+               NULL as plan_name
+        FROM repair_shops rs ${whereClause}
+        ORDER BY rs.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
+      `, [...qp, limit, offset]);
+    } catch (e2) {
+      // Minimal fallback
+      console.error("[admin/dashboard] Fallback query also failed:", e2.message);
+      shops = await sql`SELECT id, shop_name, owner_name, email, mobile, city, created_at, 'owner' as role, 'trial' as subscription_status, NULL as suspended_at, 0 as total_bookings, 0 as total_revenue, NULL as plan_name FROM repair_shops ORDER BY created_at DESC LIMIT 20`;
+    }
+  }
 
-  const analytics = await sql`
-    SELECT
-      (SELECT COUNT(*) FROM repair_shops) as total_shops,
-      (SELECT COUNT(*) FROM repair_shops WHERE suspended_at IS NULL AND is_active = true) as active_shops,
-      (SELECT COUNT(*) FROM repair_shops WHERE suspended_at IS NOT NULL) as suspended_shops,
-      (SELECT COUNT(*) FROM repair_shops WHERE subscription_status = 'trial') as pending_shops,
-      (SELECT COUNT(*) FROM bookings) as total_bookings,
-      (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE status = 'completed') as total_revenue,
-      (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE status = 'completed' AND created_at >= date_trunc('month', now())) as monthly_revenue,
-      (SELECT COUNT(*) FROM subscriptions WHERE status = 'active') as active_subscriptions,
-      (SELECT COUNT(*) FROM bookings WHERE created_at >= date_trunc('day', now())) as bookings_today,
-      (SELECT COUNT(*) FROM payments WHERE status = 'failed') as failed_payments,
-      (SELECT COUNT(*) FROM subscription_plans WHERE is_active = true) as active_plans
-  `;
+  // Analytics — each sub-query wrapped in try-catch for resilience
+  let analytics = {};
+  try {
+    const rows = await sql`
+      SELECT
+        (SELECT COUNT(*) FROM repair_shops) as total_shops,
+        (SELECT COUNT(*) FROM repair_shops WHERE suspended_at IS NULL AND COALESCE(is_active, true) = true) as active_shops,
+        (SELECT COUNT(*) FROM repair_shops WHERE suspended_at IS NOT NULL) as suspended_shops,
+        (SELECT COUNT(*) FROM repair_shops WHERE COALESCE(subscription_status, 'trial') = 'trial') as pending_shops,
+        (SELECT COUNT(*) FROM bookings) as total_bookings,
+        (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE status = 'completed') as total_revenue,
+        (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE status = 'completed' AND created_at >= date_trunc('month', now())) as monthly_revenue,
+        (SELECT COUNT(*) FROM bookings WHERE created_at >= date_trunc('day', now())) as bookings_today
+    `;
+    analytics = rows[0] || {};
+  } catch (e) {
+    console.warn("[admin/dashboard] Analytics main query failed:", e.message);
+    // Fallback: basic counts
+    try {
+      const basic = await sql`SELECT COUNT(*) as total_shops FROM repair_shops`;
+      const bookings = await sql`SELECT COUNT(*) as total_bookings FROM bookings`;
+      analytics = {
+        total_shops: parseInt(basic[0]?.total_shops || "0", 10),
+        active_shops: analytics.total_shops,
+        suspended_shops: 0,
+        pending_shops: analytics.total_shops,
+        total_bookings: parseInt(bookings[0]?.total_bookings || "0", 10),
+        total_revenue: 0,
+        monthly_revenue: 0,
+        bookings_today: 0,
+      };
+    } catch (e2) {
+      analytics = { total_shops: shops.length, active_shops: shops.length, suspended_shops: 0, pending_shops: 0, total_bookings: 0, total_revenue: 0, monthly_revenue: 0, bookings_today: 0 };
+    }
+  }
 
-  const countResult = await sql.unsafe(`SELECT COUNT(*) as total FROM repair_shops rs ${whereClause}`, qp);
+  // Additional analytics (subscriptions, payments, plans) — may not exist yet
+  try {
+    const subCount = await sql`SELECT COUNT(*) as cnt FROM subscriptions WHERE status = 'active'`;
+    analytics.active_subscriptions = parseInt(subCount[0]?.cnt || "0", 10);
+  } catch (e) { analytics.active_subscriptions = 0; }
+
+  try {
+    const failCount = await sql`SELECT COUNT(*) as cnt FROM payments WHERE status = 'failed'`;
+    analytics.failed_payments = parseInt(failCount[0]?.cnt || "0", 10);
+  } catch (e) { analytics.failed_payments = 0; }
+
+  try {
+    const planCount = await sql`SELECT COUNT(*) as cnt FROM subscription_plans WHERE is_active = true`;
+    analytics.active_plans = parseInt(planCount[0]?.cnt || "0", 10);
+  } catch (e) { analytics.active_plans = 0; }
+
+  let total = shops.length;
+  try {
+    const countResult = await sql.unsafe(`SELECT COUNT(*) as total FROM repair_shops rs ${whereClause}`, qp);
+    total = parseInt(countResult[0]?.total || "0", 10);
+  } catch (e) { /* use shops.length */ }
 
   return response.status(200).json({
-    shops, analytics: analytics[0] || {},
-    pagination: { page, limit, total: parseInt(countResult[0]?.total || "0", 10) },
+    shops, analytics,
+    pagination: { page, limit, total },
   });
 }
 

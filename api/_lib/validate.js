@@ -49,7 +49,7 @@ const email = z.string().email("Invalid email address").transform((s) => s.toLow
 
 const mobile = z
   .string()
-  .regex(/^(?:\+?91)?[6-9]\d{9}$/, "Invalid Indian mobile number")
+  .regex(/^\+?[1-9]\d{6,14}$/, "Invalid mobile number")
   .transform((s) => s.replace(/\s/g, ""));
 
 const password = z
@@ -189,10 +189,28 @@ const settingsSchema = z.object({
   settings: z.record(z.string(), z.any()),
 });
 
-// ─── Reset password schema ───────────────────────────────────────────────────
+// ─── Reset password schema (admin reset) ──────────────────────────────────────
 const resetPasswordSchema = z.object({
   targetId: z.coerce.number().int().positive("targetId is required"),
   targetType: z.enum(["user", "shop"]).default("shop"),
+});
+
+// ─── Forgot password schema (user requests reset) ─────────────────────────────
+const forgotPasswordSchema = z.object({
+  email: z.string().min(1, "Email is required").email("Invalid email").transform((s) => s.toLowerCase().trim()),
+});
+
+// ─── Reset password with token schema (user sets new password) ───────────────
+const resetPasswordTokenSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  password: z.string().min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Must contain an uppercase letter")
+    .regex(/[a-z]/, "Must contain a lowercase letter")
+    .regex(/[0-9]/, "Must contain a number"),
+  confirmPassword: z.string().min(1, "Please confirm your password"),
+}).refine((d) => d.password === d.confirmPassword, {
+  message: "Passwords do not match",
+  path: ["confirmPassword"],
 });
 
 module.exports = {
@@ -213,6 +231,8 @@ module.exports = {
   editPlanSchema,
   settingsSchema,
   resetPasswordSchema,
+  forgotPasswordSchema,
+  resetPasswordTokenSchema,
   platformRoles,
   shopRoles,
   allRoles,
