@@ -1,8 +1,10 @@
 // api/payments/index.js
-// Consolidated payments endpoint — create checkout, manage subscription.
-// POST /api/payments  body: { action: "checkout", planName, billingCycle, … } → create checkout
-// POST /api/payments  body: { action: "cancel" | "upgrade" | "downgrade" | "reactivate", planName? } → manage subscription
+// Consolidated payments endpoint — create checkout, manage subscription, view invoices.
+// POST /api/payments  body: { action: "checkout", billingCycle, currency } → create checkout
+// POST /api/payments  body: { action: "cancel" | "reactivate" } → manage subscription
 // GET  /api/payments  → view current subscription + payment history
+// GET  /api/payments?action=invoices → view invoices
+// GET  /api/payments?action=invoice&id=123 → single invoice
 // Security: auth required, rate-limited, validated.
 
 const { neon } = require("@neondatabase/serverless");
@@ -11,18 +13,27 @@ const { withErrorHandler } = require("../_lib/errors");
 const { validate, z } = require("../_lib/validate");
 const { apiLimiter, applyLimit } = require("../_lib/rate-limit");
 const { setSecurityHeaders } = require("../_lib/security");
-const { convertPrice, detectCurrency, CURRENCIES } = require("../_lib/currency");
+const { PLAN_PRICING, detectCurrency, CURRENCIES } = require("../_lib/currency");
+const { createOrder, calculateAmount, getActiveGateway } = require("../_lib/gateway");
+
+// Accept "pro" and legacy plan names (backward compat)
+const PLAN_NAMES = ["pro", "starter", "professional", "enterprise"];
+const normalizePlanName = (name) => {
+  if (!name || name === "pro") return "pro";
+  // Legacy plan names → map to pro
+  if (["starter", "professional", "enterprise"].includes(name)) return "pro";
+  return name;
+};
 
 const checkoutSchema = z.object({
-  planName: z.enum(["starter", "professional", "enterprise"]),
+  planName: z.enum(PLAN_NAMES).optional().default("pro"),
   billingCycle: z.enum(["monthly", "quarterly", "halfyearly", "yearly"]).default("monthly"),
   currency: z.string().optional(),
   couponCode: z.string().optional(),
 });
 
 const subActionSchema = z.object({
-  action: z.enum(["cancel", "upgrade", "downgrade", "reactivate"]),
-  planName: z.enum(["starter", "professional", "enterprise"]).optional(),
+  action: z.enum(["cancel", "reactivate"]),
 });
 
 module.exports = withErrorHandler(async (request, response) => {
@@ -35,8 +46,11 @@ module.exports = withErrorHandler(async (request, response) => {
   const shopId = parseInt(auth.sub, 10);
   const sql = neon(process.env.DATABASE_URL);
 
-  // GET: view current subscription + payments
+  // GET: view subscription, invoices, payment history
   if (request.method === "GET") {
+    const action = request.query?.action || "subscription";
+    if (action === "invoices") return handleInvoices(request, response, sql, shopId);
+    if (action === "invoice") return handleInvoiceDetail(request, response, sql, shopId);
     return handleViewSubscription(request, response, sql, shopId);
   }
 
@@ -48,21 +62,25 @@ module.exports = withErrorHandler(async (request, response) => {
   const action = body.action;
 
   if (action === "checkout") return handleCheckout(request, response, sql, shopId, body);
-  if (action === "cancel" || action === "upgrade" || action === "downgrade" || action === "reactivate") {
+  if (action === "cancel" || action === "reactivate") {
     return handleSubscriptionAction(request, response, sql, shopId, body);
   }
 
-  return response.status(400).json({ error: "Invalid action. Use: checkout, cancel, upgrade, downgrade, reactivate" });
+  return response.status(400).json({ error: "Invalid action. Use: checkout, cancel, reactivate" });
 });
 
 // ─── VIEW SUBSCRIPTION ───────────────────────────────────
 async function handleViewSubscription(request, response, sql, shopId) {
-  const subs = await sql`
-    SELECT s.*, sp.name as plan_name, sp.display_name, sp.price_monthly_usd,
-           sp.price_yearly_usd, sp.max_bookings, sp.max_technicians, sp.features
-    FROM subscriptions s JOIN subscription_plans sp ON sp.id = s.plan_id
-    WHERE s.repair_shop_id = ${shopId} ORDER BY s.created_at DESC LIMIT 1
-  `;
+  let subscription = null;
+  try {
+    const subs = await sql`
+      SELECT s.*, sp.name as plan_name, sp.display_name, sp.features,
+             sp.price_monthly_usd, sp.price_yearly_usd
+      FROM subscriptions s JOIN subscription_plans sp ON sp.id = s.plan_id
+      WHERE s.repair_shop_id = ${shopId} ORDER BY s.created_at DESC LIMIT 1
+    `;
+    subscription = subs[0] || null;
+  } catch (e) { /* table may not exist yet */ }
 
   const payments = await sql`
     SELECT id, payment_id, transaction_id, gateway, currency, amount, status,
@@ -70,7 +88,45 @@ async function handleViewSubscription(request, response, sql, shopId) {
     FROM payments WHERE repair_shop_id = ${shopId} ORDER BY created_at DESC LIMIT 20
   `;
 
-  return response.status(200).json({ subscription: subs[0] || null, payments });
+  // Invoice count
+  let invoiceCount = 0;
+  try {
+    const ic = await sql`SELECT COUNT(*) as cnt FROM invoices WHERE repair_shop_id = ${shopId} AND status = 'paid'`;
+    invoiceCount = parseInt(ic[0]?.cnt || "0", 10);
+  } catch (e) { /* table may not exist */ }
+
+  return response.status(200).json({ subscription, payments, invoiceCount });
+}
+
+// ─── INVOICES LIST ───────────────────────────────────────
+async function handleInvoices(request, response, sql, shopId) {
+  try {
+    const invoices = await sql`
+      SELECT id, invoice_number, plan_name, billing_cycle, currency,
+             subtotal, tax_rate, tax_amount, total, status,
+             business_name, issued_at, paid_at, created_at
+      FROM invoices WHERE repair_shop_id = ${shopId}
+      ORDER BY created_at DESC LIMIT 50
+    `;
+    return response.status(200).json({ invoices });
+  } catch (e) {
+    return response.status(200).json({ invoices: [], error: "Invoices table not available" });
+  }
+}
+
+// ─── INVOICE DETAIL ──────────────────────────────────────
+async function handleInvoiceDetail(request, response, sql, shopId) {
+  const invoiceId = parseInt(request.query?.id, 10);
+  if (!invoiceId) return response.status(400).json({ error: "Invoice ID required" });
+  try {
+    const invoices = await sql`
+      SELECT * FROM invoices WHERE id = ${invoiceId} AND repair_shop_id = ${shopId} LIMIT 1
+    `;
+    if (!invoices.length) return response.status(404).json({ error: "Invoice not found" });
+    return response.status(200).json({ invoice: invoices[0] });
+  } catch (e) {
+    return response.status(404).json({ error: "Invoice not found" });
+  }
 }
 
 // ─── CREATE CHECKOUT ─────────────────────────────────────
@@ -78,145 +134,150 @@ async function handleCheckout(request, response, sql, shopId, body) {
   const data = validate({ ...request, body }, response, checkoutSchema);
   if (!data) return;
 
-  const currency = data.currency || detectCurrency(request);
-  const planRows = await sql`
-    SELECT sp.*, spp.price_monthly, spp.price_quarterly, spp.price_halfyearly, spp.price_yearly
-    FROM subscription_plans sp
-    LEFT JOIN subscription_plan_prices spp
-      ON sp.id = spp.plan_id AND spp.currency = ${currency}
-    WHERE sp.name = ${data.planName} AND sp.is_active = true
-    LIMIT 1
-  `;
-  if (planRows.length === 0) return response.status(404).json({ error: "Plan not found" });
-  const plan = planRows[0];
+  const planName = normalizePlanName(data.planName);
+  const currency = (data.currency || detectCurrency(request)).toUpperCase();
+  const billingCycle = data.billingCycle || "monthly";
 
-  const usdAmount = (() => {
-    switch (data.billingCycle) {
-      case "quarterly": return plan.price_quarterly_usd || plan.price_monthly_usd * 3 * 0.9;
-      case "halfyearly": return plan.price_halfyearly_usd || plan.price_monthly_usd * 6 * 0.85;
-      case "yearly": return plan.price_yearly_usd;
-      default: return plan.price_monthly_usd;
-    }
-  })();
+  // Calculate amount from PLAN_PRICING constant (authoritative source)
+  const { amount: baseAmount } = calculateAmount(currency, billingCycle);
 
-  let finalAmount;
-  const customAmount = plan[`price_${data.billingCycle}`];
-  if (customAmount !== null && customAmount !== undefined) {
-    finalAmount = parseFloat(customAmount);
-  } else if (currency === "USD") {
-    finalAmount = parseFloat(usdAmount);
-  } else {
-    finalAmount = (await convertPrice(parseFloat(usdAmount), currency)).amount;
-  }
-
-  // Apply coupon
+  // Apply coupon if provided
   let discount = 0;
+  let couponId = null;
   if (data.couponCode) {
-    const coupons = await sql`
-      SELECT * FROM coupons WHERE code = ${data.couponCode.toUpperCase()} AND is_active = true
-        AND used_count < COALESCE(max_uses, 999999) AND valid_from <= now()
-        AND (valid_until IS NULL OR valid_until >= now())
-        AND (applicable_plans IS NULL OR ${data.planName} = ANY(applicable_plans))
-      LIMIT 1
-    `;
-    if (coupons.length > 0) {
-      const coupon = coupons[0];
-      discount = coupon.discount_type === "percent"
-        ? converted.amount * (parseFloat(coupon.discount_value) / 100)
-        : parseFloat(coupon.discount_value);
-      await sql`UPDATE coupons SET used_count = used_count + 1 WHERE id = ${coupon.id}`;
-    }
+    try {
+      const coupons = await sql`
+        SELECT * FROM coupons WHERE code = ${data.couponCode.toUpperCase()} AND is_active = true
+          AND used_count < COALESCE(max_uses, 999999) AND valid_from <= now()
+          AND (valid_until IS NULL OR valid_until >= now())
+        LIMIT 1
+      `;
+      if (coupons.length > 0) {
+        const coupon = coupons[0];
+        couponId = coupon.id;
+        discount = coupon.discount_type === "percent"
+          ? baseAmount * (parseFloat(coupon.discount_value) / 100)
+          : parseFloat(coupon.discount_value);
+        await sql`UPDATE coupons SET used_count = used_count + 1 WHERE id = ${coupon.id}`;
+      }
+    } catch (e) { /* coupons table may not exist */ }
   }
 
-  const finalAmount = Math.max(0, converted.amount - discount);
+  const finalAmount = Math.max(0, Math.round((baseAmount - discount) * 100) / 100);
   const invoiceNumber = `INV-${Date.now()}-${shopId}`;
 
+  // Prevent duplicate pending payments (idempotency)
+  try {
+    const pending = await sql`
+      SELECT id, created_at FROM payments
+      WHERE repair_shop_id = ${shopId} AND status = 'pending'
+        AND created_at > now() - INTERVAL '15 minutes'
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    if (pending.length > 0) {
+      const minsAgo = Math.floor((Date.now() - new Date(pending[0].created_at).getTime()) / 60000);
+      if (minsAgo < 10) {
+        return response.status(429).json({
+          error: "A payment is already in progress. Please complete or cancel it first.",
+          retryAfter: 10 - minsAgo,
+        });
+      }
+    }
+  } catch (e) { /* ok */ }
+
+  // Create payment record
   const payment = await sql`
-    INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description)
+    INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description, metadata)
     VALUES (${shopId}, 'pending', ${currency}, ${finalAmount}, 'pending', ${invoiceNumber},
-            ${`${plan.display_name} — ${data.billingCycle}`})
+            ${`CoolCare Pro — ${billingCycle}`},
+            ${JSON.stringify({ billingCycle, planName, couponId, discount })}::jsonb)
     RETURNING id
   `;
 
-  // Stripe
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  if (stripeKey) {
+  // Log payment attempt
+  try {
+    await sql`
+      INSERT INTO payment_logs (payment_id, repair_shop_id, gateway, event_type, severity, message)
+      VALUES (${payment[0].id}, ${shopId}, 'system', 'checkout_created', 'info',
+              ${`Checkout created: ${currency} ${finalAmount} for ${billingCycle}`})
+    `;
+  } catch (e) { /* table may not exist */ }
+
+  // Create order via gateway library
+  const originUrl = request.headers["origin"] || "https://coolcare.ai";
+  const orderResult = await createOrder({
+    shopId,
+    billingCycle,
+    currency,
+    amount: finalAmount,
+    invoiceNumber,
+    paymentDbId: payment[0].id,
+    originUrl,
+  });
+
+  if (orderResult.error) {
+    // Log failure
     try {
-      const stripeRes = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${stripeKey}`, "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          mode: "subscription",
-          "line_items[0][price_data][currency]": currency.toLowerCase(),
-          "line_items[0][price_data][unit_amount]": String(Math.round(finalAmount * 100)),
-          "line_items[0][price_data][recurring][interval]": data.billingCycle === "yearly" ? "year" : "month",
-          "line_items[0][quantity]": "1",
-          "metadata[shop_id]": String(shopId), "metadata[plan]": data.planName,
-          "metadata[payment_id]": String(payment[0].id), "metadata[invoice]": invoiceNumber,
-          "metadata[billing_cycle]": data.billingCycle,
-          success_url: `${request.headers["origin"] || "https://coolcare.ai"}/payment-success.html`,
-          cancel_url: `${request.headers["origin"] || "https://coolcare.ai"}/payment-failed.html`,
-        }),
-      });
-      if (stripeRes.ok) {
-        const session = await stripeRes.json();
-        await sql`UPDATE payments SET gateway = 'stripe', payment_id = ${session.id} WHERE id = ${payment[0].id}`;
-        return response.status(200).json({ checkoutUrl: session.url, gateway: "stripe", amount: finalAmount, currency, invoiceNumber });
-      }
-    } catch (e) { console.error("[payments/checkout] Stripe error:", e.message); }
+      await sql`
+        INSERT INTO payment_logs (payment_id, repair_shop_id, gateway, event_type, severity, message, error_message)
+        VALUES (${payment[0].id}, ${shopId}, ${orderResult.gateway}, 'checkout_failed', 'error',
+                'Gateway order creation failed', ${orderResult.error})
+      `;
+    } catch (e) { /* ok */ }
+    return response.status(500).json({ error: orderResult.error, gateway: orderResult.gateway });
   }
 
-  // Razorpay fallback
-  const razorpayKey = process.env.RAZORPAY_KEY_ID;
-  const razorpaySecret = process.env.RAZORPAY_KEY_SECRET;
-  if (razorpayKey && razorpaySecret) {
-    try {
-      const rpRes = await fetch("https://api.razorpay.com/v1/orders", {
-        method: "POST",
-        headers: { Authorization: "Basic " + Buffer.from(`${razorpayKey}:${razorpaySecret}`).toString("base64"), "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: Math.round(finalAmount * 100), currency, receipt: invoiceNumber, notes: { shop_id: shopId, plan: data.planName, payment_id: payment[0].id, billing_cycle: data.billingCycle } }),
-      });
-      if (rpRes.ok) {
-        const order = await rpRes.json();
-        await sql`UPDATE payments SET gateway = 'razorpay', payment_id = ${order.id} WHERE id = ${payment[0].id}`;
-        return response.status(200).json({ orderId: order.id, gateway: "razorpay", amount: finalAmount, currency, keyId: razorpayKey, invoiceNumber });
-      }
-    } catch (e) { console.error("[payments/checkout] Razorpay error:", e.message); }
+  // Update payment record with gateway info
+  if (orderResult.gateway !== "none") {
+    const gatewayId = orderResult.orderId || orderResult.sessionId || null;
+    await sql`UPDATE payments SET gateway = ${orderResult.gateway}, payment_id = ${gatewayId} WHERE id = ${payment[0].id}`;
   }
 
   return response.status(200).json({
-    gateway: "none", amount: finalAmount, currency, invoiceNumber,
-    message: "No payment gateway configured. Set STRIPE_SECRET_KEY or RAZORPAY_KEY_ID.",
+    ...orderResult,
+    paymentId: payment[0].id,
   });
 }
 
-// ─── SUBSCRIPTION ACTION (cancel/upgrade/downgrade/reactivate) ──
+// ─── SUBSCRIPTION ACTION (cancel/reactivate) ─────────────
 async function handleSubscriptionAction(request, response, sql, shopId, body) {
   const data = validate({ ...request, body }, response, subActionSchema);
   if (!data) return;
 
-  const current = await sql`
-    SELECT s.*, sp.name as plan_name FROM subscriptions s
-    JOIN subscription_plans sp ON sp.id = s.plan_id
-    WHERE s.repair_shop_id = ${shopId} ORDER BY s.created_at DESC LIMIT 1
-  `;
-  if (current.length === 0) return response.status(404).json({ error: "No active subscription found" });
+  let current;
+  try {
+    current = await sql`
+      SELECT s.*, sp.name as plan_name FROM subscriptions s
+      JOIN subscription_plans sp ON sp.id = s.plan_id
+      WHERE s.repair_shop_id = ${shopId} ORDER BY s.created_at DESC LIMIT 1
+    `;
+  } catch (e) {
+    return response.status(404).json({ error: "No subscription found" });
+  }
+  if (!current?.length) return response.status(404).json({ error: "No active subscription found" });
   const sub = current[0];
 
   if (data.action === "cancel") {
     await sql`UPDATE subscriptions SET status = 'cancelled', cancel_at = current_period_end, updated_at = now() WHERE id = ${sub.id}`;
+    try {
+      await sql`
+        INSERT INTO subscription_history (subscription_id, repair_shop_id, action, old_status, new_status, actor_type)
+        VALUES (${sub.id}, ${shopId}, 'cancelled', ${sub.status}, 'cancelled', 'shop')
+      `;
+    } catch (e) { /* ok */ }
     return response.status(200).json({ message: "Subscription cancelled. Access continues until period end." });
   }
+
   if (data.action === "reactivate") {
     await sql`UPDATE subscriptions SET status = 'active', cancel_at = NULL, updated_at = now() WHERE id = ${sub.id}`;
+    await sql`UPDATE repair_shops SET subscription_status = 'active', updated_at = now() WHERE id = ${shopId}`;
+    try {
+      await sql`
+        INSERT INTO subscription_history (subscription_id, repair_shop_id, action, old_status, new_status, actor_type)
+        VALUES (${sub.id}, ${shopId}, 'reactivated', ${sub.status}, 'active', 'shop')
+      `;
+    } catch (e) { /* ok */ }
     return response.status(200).json({ message: "Subscription reactivated." });
-  }
-  if (data.action === "upgrade" || data.action === "downgrade") {
-    if (!data.planName) return response.status(400).json({ error: "planName is required for upgrade/downgrade" });
-    const newPlan = await sql`SELECT * FROM subscription_plans WHERE name = ${data.planName} LIMIT 1`;
-    if (newPlan.length === 0) return response.status(404).json({ error: "Plan not found" });
-    await sql`UPDATE subscriptions SET plan_id = ${newPlan[0].id}, updated_at = now() WHERE id = ${sub.id}`;
-    return response.status(200).json({ message: `Subscription ${data.action}d to ${data.planName}.`, newPlan: newPlan[0] });
   }
 
   return response.status(400).json({ error: "Invalid action" });

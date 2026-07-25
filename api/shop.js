@@ -23,6 +23,8 @@ const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
+const { encrypt, decrypt, mask } = require("./_lib/encrypt");
+const { getGatewayList, invalidateCache } = require("./_lib/gateway");
 const { z } = require("zod");
 const bcrypt = require("bcryptjs");
 
@@ -45,13 +47,14 @@ const planPricingSchema = z.object({
 });
 
 // Admin GET actions
-const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-pricing", "admin-payments", "admin-settings", "admin-analytics"]);
+const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-pricing", "admin-payments", "admin-settings", "admin-analytics", "admin-gateways", "admin-subscriptions", "admin-invoices", "admin-payment-logs"]);
 // Admin POST actions
 const ADMIN_POST_ACTIONS = new Set([
   "suspend", "activate", "delete", "edit-shop", "approve-shop", "reset-password",
   "create-user", "edit-user", "delete-user", "invite-user",
   "create-plan", "edit-plan", "delete-plan", "duplicate-plan", "save-plan-pricing", "save-settings",
   "extend-subscription", "change-plan",
+  "save-gateway", "toggle-gateway",
 ]);
 // Gated shop actions (require active subscription)
 const GATED_POST_ACTIONS = new Set(["update"]);
@@ -381,6 +384,10 @@ async function handleAdminGet(request, response, sql, auth, action) {
     case "admin-payments": return adminListPayments(request, response, sql, auth);
     case "admin-settings": return adminGetSettings(request, response, sql, auth);
     case "admin-analytics": return adminAnalytics(request, response, sql, auth);
+    case "admin-gateways": return adminListGateways(request, response, sql, auth);
+    case "admin-subscriptions": return adminListSubscriptions(request, response, sql, auth);
+    case "admin-invoices": return adminListInvoices(request, response, sql, auth);
+    case "admin-payment-logs": return adminListPaymentLogs(request, response, sql, auth);
     default: return response.status(400).json({ error: "Unknown admin GET action" });
   }
 }
@@ -719,6 +726,10 @@ async function handleAdminPost(request, response, sql, auth, body) {
     // ── Subscription management ──────────────────────────────
     case "extend-subscription": return adminExtendSubscription(sql, response, body, actorType, actorId, ip);
     case "change-plan": return adminChangePlan(sql, response, body, actorType, actorId, ip);
+
+    // ── Gateway management (Super Admin only) ────────────────
+    case "save-gateway": return adminSaveGateway(request, response, sql, auth, body, actorType, actorId, ip);
+    case "toggle-gateway": return adminToggleGateway(request, response, sql, auth, body, actorType, actorId, ip);
 
     default: return response.status(400).json({ error: "Unknown admin action" });
   }
@@ -1289,4 +1300,112 @@ async function handleSaveShopSettings(request, response, sql, shopId, body) {
   setValues.push(shopId);
   await sql.unsafe(`UPDATE repair_shops SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${setValues.length}`, setValues);
   return response.status(200).json({ message: "Settings saved" });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GATEWAY MANAGEMENT (Super Admin only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function adminListGateways(request, response, sql, auth) {
+  const admin = await requireSuperAdmin(auth, sql, response);
+  if (!admin) return;
+  const gateways = await getGatewayList();
+  try {
+    const rows = await sql`SELECT provider, key_id FROM payment_gateways`;
+    const keyMap = {};
+    rows.forEach(r => { keyMap[r.provider] = r.key_id ? mask(decrypt(r.key_id)) : null; });
+    gateways.forEach(gw => { gw.maskedKeyId = keyMap[gw.provider] || null; });
+  } catch (e) { /* ok */ }
+  return response.status(200).json({ gateways });
+}
+
+async function adminSaveGateway(request, response, sql, auth, body, actorType, actorId, ip) {
+  const admin = await requireSuperAdmin(auth, sql, response);
+  if (!admin) return;
+  const { provider, keyId, keySecret, webhookSecret, isTestMode, extraConfig } = body;
+  if (!provider) return response.status(400).json({ error: "provider is required" });
+  const validProviders = ["razorpay", "stripe", "paypal", "phonepe", "cashfree"];
+  if (!validProviders.includes(provider)) return response.status(400).json({ error: "Invalid provider" });
+  const existing = await sql`SELECT id FROM payment_gateways WHERE provider = ${provider} LIMIT 1`;
+  const updates = []; const params = [];
+  if (keyId !== undefined && keyId !== null && keyId !== "") { params.push(encrypt(keyId)); updates.push(`key_id = $${params.length}`); }
+  if (keySecret !== undefined && keySecret !== null && keySecret !== "") { params.push(encrypt(keySecret)); updates.push(`key_secret = $${params.length}`); }
+  if (webhookSecret !== undefined && webhookSecret !== null && webhookSecret !== "") { params.push(encrypt(webhookSecret)); updates.push(`webhook_secret = $${params.length}`); }
+  if (isTestMode !== undefined) { params.push(!!isTestMode); updates.push(`is_test_mode = $${params.length}`); }
+  if (extraConfig !== undefined) { params.push(JSON.stringify(extraConfig)); updates.push(`extra_config = $${params.length}::jsonb`); }
+  updates.push("updated_at = now()"); params.push(actorId); updates.push(`updated_by = $${params.length}`);
+  if (existing.length > 0) {
+    params.push(existing[0].id);
+    await sql.unsafe(`UPDATE payment_gateways SET ${updates.join(", ")} WHERE id = $${params.length}`, params);
+  } else {
+    const displayName = provider.charAt(0).toUpperCase() + provider.slice(1);
+    const allCols = ["provider", "display_name", ...updates.map(u => u.split(" = ")[0])];
+    const allParams = [provider, displayName, ...params];
+    const placeholders = allParams.map((_, i) => `$${i + 1}`);
+    await sql.unsafe(`INSERT INTO payment_gateways (${allCols.join(", ")}) VALUES (${placeholders.join(", ")})`, allParams);
+  }
+  invalidateCache();
+  await logAdminAction(sql, { actorType, actorId, action: "save-gateway", targetType: "gateway", details: { provider }, ip });
+  return response.status(200).json({ message: `${provider} gateway saved` });
+}
+
+async function adminToggleGateway(request, response, sql, auth, body, actorType, actorId, ip) {
+  const admin = await requireSuperAdmin(auth, sql, response);
+  if (!admin) return;
+  const { provider, isEnabled } = body;
+  if (!provider) return response.status(400).json({ error: "provider is required" });
+  await sql`UPDATE payment_gateways SET is_enabled = ${!!isEnabled}, updated_at = now(), updated_by = ${actorId} WHERE provider = ${provider}`;
+  invalidateCache();
+  await logAdminAction(sql, { actorType, actorId, action: isEnabled ? "enable-gateway" : "disable-gateway", targetType: "gateway", details: { provider }, ip });
+  return response.status(200).json({ message: `${provider} ${isEnabled ? "enabled" : "disabled"}` });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SUBSCRIPTION / INVOICE / LOG ADMIN VIEWS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function adminListSubscriptions(request, response, sql, auth) {
+  const page = parseInt(request.query?.page || "1", 10);
+  const limit = parseInt(request.query?.limit || "20", 10);
+  const status = request.query?.status || "";
+  const offset = (page - 1) * limit;
+  let whereClause = "WHERE 1=1"; const qp = [];
+  if (status) { qp.push(status); whereClause += ` AND s.status = $${qp.length}`; }
+  try {
+    const subs = await sql.unsafe(`SELECT s.id, s.repair_shop_id, s.status, s.billing_cycle, s.gateway, s.current_period_start, s.current_period_end, s.amount_paid, s.currency, s.created_at, sp.name as plan_name, sp.display_name, rs.shop_name, rs.owner_name, rs.email FROM subscriptions s JOIN subscription_plans sp ON sp.id = s.plan_id JOIN repair_shops rs ON rs.id = s.repair_shop_id ${whereClause} ORDER BY s.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, [...qp, limit, offset]);
+    const cnt = await sql.unsafe(`SELECT COUNT(*) as total FROM subscriptions s ${whereClause}`, qp);
+    return response.status(200).json({ subscriptions: subs, pagination: { page, limit, total: parseInt(cnt[0]?.total || "0", 10) } });
+  } catch (e) { return response.status(200).json({ subscriptions: [], pagination: { page, limit, total: 0 } }); }
+}
+
+async function adminListInvoices(request, response, sql, auth) {
+  const page = parseInt(request.query?.page || "1", 10);
+  const limit = parseInt(request.query?.limit || "20", 10);
+  const status = request.query?.status || "";
+  const offset = (page - 1) * limit;
+  let whereClause = "WHERE 1=1"; const qp = [];
+  if (status) { qp.push(status); whereClause += ` AND i.status = $${qp.length}`; }
+  try {
+    const invoices = await sql.unsafe(`SELECT i.id, i.invoice_number, i.plan_name, i.billing_cycle, i.currency, i.subtotal, i.tax_rate, i.tax_amount, i.total, i.status, i.business_name, i.issued_at, i.paid_at, i.created_at, rs.shop_name, rs.owner_name FROM invoices i JOIN repair_shops rs ON rs.id = i.repair_shop_id ${whereClause} ORDER BY i.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, [...qp, limit, offset]);
+    const cnt = await sql.unsafe(`SELECT COUNT(*) as total FROM invoices i ${whereClause}`, qp);
+    return response.status(200).json({ invoices, pagination: { page, limit, total: parseInt(cnt[0]?.total || "0", 10) } });
+  } catch (e) { return response.status(200).json({ invoices: [], pagination: { page, limit, total: 0 } }); }
+}
+
+async function adminListPaymentLogs(request, response, sql, auth) {
+  const page = parseInt(request.query?.page || "1", 10);
+  const limit = parseInt(request.query?.limit || "30", 10);
+  const gateway = request.query?.gateway || "";
+  const eventType = request.query?.event_type || "";
+  const severity = request.query?.severity || "";
+  const offset = (page - 1) * limit;
+  let whereClause = "WHERE 1=1"; const qp = [];
+  if (gateway) { qp.push(gateway); whereClause += ` AND pl.gateway = $${qp.length}`; }
+  if (eventType) { qp.push(eventType); whereClause += ` AND pl.event_type = $${qp.length}`; }
+  if (severity) { qp.push(severity); whereClause += ` AND pl.severity = $${qp.length}`; }
+  try {
+    const logs = await sql.unsafe(`SELECT pl.id, pl.payment_id, pl.repair_shop_id, pl.gateway, pl.event_type, pl.severity, pl.message, pl.error_message, pl.created_at, rs.shop_name FROM payment_logs pl LEFT JOIN repair_shops rs ON rs.id = pl.repair_shop_id ${whereClause} ORDER BY pl.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, [...qp, limit, offset]);
+    const cnt = await sql.unsafe(`SELECT COUNT(*) as total FROM payment_logs pl ${whereClause}`, qp);
+    return response.status(200).json({ logs, pagination: { page, limit, total: parseInt(cnt[0]?.total || "0", 10) } });
+  } catch (e) { return response.status(200).json({ logs: [], pagination: { page, limit, total: 0 } }); }
 }
