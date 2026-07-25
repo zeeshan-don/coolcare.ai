@@ -347,36 +347,44 @@ async function handleBootstrap(request, response, body) {
   });
 }
 
-// ─── BOOTSTRAP CHECK (check if super admin exists — no auth required) ────────
+// ─── BOOTSTRAP CHECK (check if admin exists — no auth required) ────────
+// Determines whether the login page shows the Setup form (no admin exists) vs Login form (admin exists).
 async function handleBootstrapCheck(request, response) {
   if (!applyLimit(request, response, apiLimiter)) return;
 
   const sql = neon(process.env.DATABASE_URL);
   // Default: assume an admin exists (safe default — show normal login page).
-  // Only set to true when we explicitly verify zero admins exist.
+  // Only set to true when we explicitly verify zero platform admins exist.
   let needsBootstrap = false;
 
   try {
-    const count = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'super_admin'`;
+    // Check for ANY platform admin role (super_admin, admin, support), not just super_admin.
+    // Admins may be created via the admin panel with role='admin'.
+    const count = await sql`SELECT COUNT(*) as cnt FROM users WHERE role IN ('super_admin', 'admin', 'support')`;
     const userCount = parseInt(count[0]?.cnt || "0", 10);
+    console.log("[auth/bootstrap-check] users with admin role:", userCount);
+
     if (userCount === 0) {
-      // No super_admin found in users table — check repair_shops as fallback
+      // No platform admins found in users table — check repair_shops as fallback
       try {
-        const count2 = await sql`SELECT COUNT(*) as cnt FROM repair_shops WHERE role = 'super_admin'`;
+        const count2 = await sql`SELECT COUNT(*) as cnt FROM repair_shops WHERE role IN ('super_admin', 'admin', 'support')`;
         const shopCount = parseInt(count2[0]?.cnt || "0", 10);
+        console.log("[auth/bootstrap-check] repair_shops with admin role:", shopCount);
         needsBootstrap = shopCount === 0;
       } catch (e2) {
-        // repair_shops check failed — trust the users result
+        // repair_shops check failed — trust the users result (no admins found)
+        console.warn("[auth/bootstrap-check] Failed to query repair_shops table:", e2.message);
         needsBootstrap = true;
       }
     }
-    // If userCount > 0, needsBootstrap stays false (correct)
+    // If userCount > 0, needsBootstrap stays false (correct — admin exists)
   } catch (e) {
     // Database error — cannot verify. Default to safe: show login page.
     console.error("[auth/bootstrap-check] Failed to query users table:", e.message);
     needsBootstrap = false;
   }
 
+  console.log("[auth/bootstrap-check] result:", { needsBootstrap });
   return response.status(200).json({ needsBootstrap });
 }
 
