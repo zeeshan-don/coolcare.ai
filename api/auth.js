@@ -276,12 +276,24 @@ async function handleBootstrap(request, response, body) {
 
   const sql = neon(process.env.DATABASE_URL);
 
-  // Check if any super_admin already exists in users table
+  // Check if any super_admin already exists in users table.
+  // If we cannot verify (DB error), default to BLOCKING bootstrap
+  // rather than risking a duplicate super admin.
+  let superAdminCheckOk = false;
   let superAdminCount = 0;
   try {
     const count = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'super_admin'`;
     superAdminCount = parseInt(count[0]?.cnt || "0", 10);
-  } catch (e) { /* table may not exist yet — allow bootstrap */ }
+    superAdminCheckOk = true;
+  } catch (e) {
+    console.error("[auth/bootstrap] Failed to check users table:", e.message);
+  }
+
+  if (!superAdminCheckOk) {
+    return response.status(503).json({
+      error: "Unable to verify Super Admin status. Please try again later.",
+    });
+  }
 
   if (superAdminCount > 0) {
     return response.status(403).json({ error: "A Super Admin already exists. Bootstrap is disabled." });
@@ -293,7 +305,9 @@ async function handleBootstrap(request, response, body) {
     if (parseInt(count2[0]?.cnt || "0", 10) > 0) {
       return response.status(403).json({ error: "A Super Admin already exists. Bootstrap is disabled." });
     }
-  } catch (e) { /* ok */ }
+  } catch (e) {
+    console.warn("[auth/bootstrap] Could not check repair_shops table:", e.message);
+  }
 
   // Check email uniqueness
   try {
@@ -338,18 +352,29 @@ async function handleBootstrapCheck(request, response) {
   if (!applyLimit(request, response, apiLimiter)) return;
 
   const sql = neon(process.env.DATABASE_URL);
-  let needsBootstrap = true;
+  // Default: assume an admin exists (safe default — show normal login page).
+  // Only set to true when we explicitly verify zero admins exist.
+  let needsBootstrap = false;
 
   try {
     const count = await sql`SELECT COUNT(*) as cnt FROM users WHERE role = 'super_admin'`;
-    if (parseInt(count[0]?.cnt || "0", 10) > 0) needsBootstrap = false;
-  } catch (e) { /* table may not exist — bootstrap needed */ }
-
-  if (needsBootstrap) {
-    try {
-      const count2 = await sql`SELECT COUNT(*) as cnt FROM repair_shops WHERE role = 'super_admin'`;
-      if (parseInt(count2[0]?.cnt || "0", 10) > 0) needsBootstrap = false;
-    } catch (e) { /* ok */ }
+    const userCount = parseInt(count[0]?.cnt || "0", 10);
+    if (userCount === 0) {
+      // No super_admin found in users table — check repair_shops as fallback
+      try {
+        const count2 = await sql`SELECT COUNT(*) as cnt FROM repair_shops WHERE role = 'super_admin'`;
+        const shopCount = parseInt(count2[0]?.cnt || "0", 10);
+        needsBootstrap = shopCount === 0;
+      } catch (e2) {
+        // repair_shops check failed — trust the users result
+        needsBootstrap = true;
+      }
+    }
+    // If userCount > 0, needsBootstrap stays false (correct)
+  } catch (e) {
+    // Database error — cannot verify. Default to safe: show login page.
+    console.error("[auth/bootstrap-check] Failed to query users table:", e.message);
+    needsBootstrap = false;
   }
 
   return response.status(200).json({ needsBootstrap });
