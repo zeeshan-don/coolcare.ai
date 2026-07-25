@@ -769,7 +769,7 @@ async function loadGateways() {
       </div>
       <div class="plan-actions">
         <button class="act" onclick="editGateway(${g.id})">Edit</button>
-        <button class="act ${g.isEnabled ? 'danger' : ''}" onclick="toggleGateway(${g.id}, ${!g.isEnabled})">${g.isEnabled ? 'Disable' : 'Enable'}</button>
+        <button class="act ${g.isEnabled ? 'danger' : ''}" onclick="toggleGateway('${g.provider}', ${!g.isEnabled})">${g.isEnabled ? 'Disable' : 'Enable'}</button>
       </div>
     </div>`;
   }).join('');
@@ -850,10 +850,10 @@ async function saveGateway() {
   }
 }
 
-async function toggleGateway(id, enable) {
+async function toggleGateway(provider, enable) {
   const res = await api('/api/shop', {
     method: 'POST',
-    body: JSON.stringify({ action: 'toggle-gateway', id, isEnabled: enable })
+    body: JSON.stringify({ action: 'toggle-gateway', provider, isEnabled: enable })
   });
   if (res) {
     toast(`Gateway ${enable ? 'enabled' : 'disabled'}`);

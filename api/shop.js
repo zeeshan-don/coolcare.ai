@@ -1056,7 +1056,7 @@ async function adminCreatePlan(request, response, sql, body, actorType, actorId,
       (${data.name}, ${data.display_name}, ${data.description}, ${data.price_monthly_usd}, ${data.price_yearly_usd},
        ${data.max_bookings || null}, ${data.max_technicians || null}, ${data.max_staff || null},
        ${data.whatsapp_conversations || null}, ${data.ai_credits || null},
-       ${sql.json(data.features || {})}, ${data.trial_days}, ${data.currency}, ${data.is_active})
+       ${JSON.stringify(data.features || {})}, ${data.trial_days}, ${data.currency}, ${data.is_active})
     RETURNING *
   `;
   await logAdminAction(sql, { actorType, actorId, action: "create_plan", targetType: "plan", targetId: rows[0].id, ip });
@@ -1077,7 +1077,7 @@ async function adminEditPlan(request, response, sql, body, actorType, actorId, i
 
   const setParts = []; const setValues = [];
   for (const [col, val] of Object.entries(updates)) {
-    setValues.push(col === "features" ? sql.json(val) : val);
+    setValues.push(col === "features" ? JSON.stringify(val) : val);
     setParts.push(`${col} = $${setValues.length}`);
   }
   setValues.push(data.planId);
@@ -1148,7 +1148,7 @@ async function adminDuplicatePlan(sql, response, body, actorType, actorId, ip) {
     VALUES
       (${newName}, ${newDisplay}, ${p.description || ''}, ${p.price_monthly_usd}, ${p.price_yearly_usd},
        ${p.max_bookings}, ${p.max_technicians}, ${p.max_staff}, ${p.whatsapp_conversations}, ${p.ai_credits},
-       ${sql.json(p.features || {})}, ${p.trial_days || 14}, ${p.currency || 'USD'}, false)
+       ${JSON.stringify(p.features || {})}, ${p.trial_days || 14}, ${p.currency || 'USD'}, false)
     RETURNING *
   `;
   await logAdminAction(sql, { actorType, actorId, action: "duplicate_plan", targetType: "plan", targetId: rows[0].id, ip });
@@ -1165,8 +1165,8 @@ async function adminSaveSettings(request, response, sql, body, actorType, actorI
   for (const [key, value] of Object.entries(data.settings)) {
     await sql`
       INSERT INTO platform_settings (key, value, updated_by, updated_at)
-      VALUES (${key}, ${sql.json(typeof value === "object" ? value : { value })}, ${actorId}, now())
-      ON CONFLICT (key) DO UPDATE SET value = ${sql.json(typeof value === "object" ? value : { value })},
+      VALUES (${key}, ${JSON.stringify(typeof value === "object" ? value : { value })}, ${actorId}, now())
+      ON CONFLICT (key) DO UPDATE SET value = ${JSON.stringify(typeof value === "object" ? value : { value })},
         updated_by = ${actorId}, updated_at = now()
     `;
   }
@@ -1296,10 +1296,10 @@ async function handleSaveAiSettings(request, response, sql, shopId, body) {
   try {
     const result = await sql`
       INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days, supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
-      VALUES (${shopId}, ${greetingMessage || ''}, ${sql.json(businessHours || {})}, ${workingDays || ['mon','tue','wed','thu','fri','sat']},
+      VALUES (${shopId}, ${greetingMessage || ''},        ${JSON.stringify(businessHours || {})}, ${workingDays || ['mon','tue','wed','thu','fri','sat']},
               ${supportedServices || []}, ${knowledgeBase || ''}, ${fallbackResponse || ''}, ${transferToHuman !== false}, now())
       ON CONFLICT (repair_shop_id) DO UPDATE SET
-        greeting_message = ${greetingMessage || ''}, business_hours = ${sql.json(businessHours || {})},
+        greeting_message = ${greetingMessage || ''}, business_hours = ${JSON.stringify(businessHours || {})},
         working_days = ${workingDays || ['mon','tue','wed','thu','fri','sat']},
         supported_services = ${supportedServices || []}, knowledge_base = ${knowledgeBase || ''},
         fallback_response = ${fallbackResponse || ''}, transfer_to_human = ${transferToHuman !== false}, updated_at = now()
@@ -1335,10 +1335,10 @@ async function handleSaveAiSettings(request, response, sql, shopId, body) {
         // Retry the original INSERT once after creating the table
         const retryResult = await sql`
           INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days, supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
-          VALUES (${shopId}, ${greetingMessage || ''}, ${sql.json(businessHours || {})}, ${workingDays || ['mon','tue','wed','thu','fri','sat']},
-                  ${supportedServices || []}, ${knowledgeBase || ''}, ${fallbackResponse || ''}, ${transferToHuman !== false}, now())
+          VALUES (${shopId}, ${greetingMessage || ''},        ${JSON.stringify(businessHours || {})}, ${workingDays || ['mon','tue','wed','thu','fri','sat']},
+                ${supportedServices || []}, ${knowledgeBase || ''}, ${fallbackResponse || ''}, ${transferToHuman !== false}, now())
           ON CONFLICT (repair_shop_id) DO UPDATE SET
-            greeting_message = ${greetingMessage || ''}, business_hours = ${sql.json(businessHours || {})},
+            greeting_message = ${greetingMessage || ''}, business_hours = ${JSON.stringify(businessHours || {})},
             working_days = ${workingDays || ['mon','tue','wed','thu','fri','sat']},
             supported_services = ${supportedServices || []}, knowledge_base = ${knowledgeBase || ''},
             fallback_response = ${fallbackResponse || ''}, transfer_to_human = ${transferToHuman !== false}, updated_at = now()
