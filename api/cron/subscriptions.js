@@ -93,7 +93,7 @@ module.exports = withErrorHandler(async (request, response) => {
                AND pl.event_type = $2
                AND pl.created_at > now() - interval '23 hours'
            )`,
-        d, eventType
+        [d, eventType]
       );
 
       for (const sub of subs) {

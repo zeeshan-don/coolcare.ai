@@ -140,7 +140,7 @@ async function logAdminAction(sql, { actorType, actorId, action, targetType, tar
     await sql(
       `INSERT INTO admin_action_log (actor_type, actor_id, action, target_type, target_id, details, ip_address)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)`,
-      actorType, actorId, action, targetType || null, targetId || null, detailsJson, ip || null
+      [actorType, actorId, action, targetType || null, targetId || null, detailsJson, ip || null]
     );
   } catch (e) {
     console.warn("[auth] Admin log insert failed:", e.message);

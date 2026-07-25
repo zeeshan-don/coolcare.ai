@@ -141,9 +141,9 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     WHERE ${whereClause}
     ORDER BY b.${sortCol} ${sortDir}
     LIMIT $${sqlParams.length + 1} OFFSET $${sqlParams.length + 2}
-  `, ...[...sqlParams, params.limit, offset]);
+  `, [...sqlParams, params.limit, offset]);
 
-  const countResult = await sql(`SELECT COUNT(*) as total FROM bookings b WHERE ${whereClause}`, ...sqlParams);
+  const countResult = await sql(`SELECT COUNT(*) as total FROM bookings b WHERE ${whereClause}`, sqlParams);
   const total = parseInt(countResult[0]?.total || "0", 10);
 
   const counts = await sql`SELECT status, COUNT(*) as count FROM bookings WHERE repair_shop_id = ${shopId} GROUP BY status`;
@@ -304,7 +304,7 @@ async function handleExport(request, response, sql, shopId) {
   if (to) { qp.push(to + "T23:59:59"); query += ` AND b.created_at <= $${qp.length}::timestamptz`; }
   query += " ORDER BY b.created_at DESC LIMIT 5000";
 
-  const bookings = await sql(query, ...qp);
+  const bookings = await sql(query, qp);
   const headers = ["ID","Customer Phone","Customer Name","Service","Area","Address","Urgency","Status","Priority","Technician","Notes","Est. Cost","Final Cost","Invoice","Created","Updated"];
   const esc = (v) => { if (v == null) return ""; const s = String(v); return (s.includes(",") || s.includes('"') || s.includes("\n")) ? `"${s.replace(/"/g, '""')}"` : s; };
   const rows = [headers.join(",")];
@@ -351,7 +351,7 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
   if (setParts.length === 0) return response.status(400).json({ error: "No valid fields provided" });
 
   setValues.push(data.bookingId, shopId);
-  await sql(`UPDATE bookings SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length - 1} AND repair_shop_id = $${setValues.length}`, ...setValues);
+  await sql(`UPDATE bookings SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length - 1} AND repair_shop_id = $${setValues.length}`, setValues);
 
   if (data.status && data.status !== oldStatus) {
     await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, actor_id) VALUES (${data.bookingId}, 'status_change', ${oldStatus}, ${data.status}, 'shop', ${shopId})`;
@@ -456,7 +456,7 @@ async function adminDashboard(request, response, sql, auth) {
              (SELECT sp.name FROM subscriptions s JOIN subscription_plans sp ON sp.id = s.plan_id WHERE s.repair_shop_id = rs.id ORDER BY s.created_at DESC LIMIT 1) as plan_name
       FROM repair_shops rs ${whereClause}
       ORDER BY rs.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
-    `, ...[...qp, limit, offset]);
+    `, [...qp, limit, offset]);
   } catch (e) {
     // Fallback: query without subscription/plan joins
     console.warn("[admin/dashboard] Full query failed, using fallback:", e.message);
@@ -471,7 +471,7 @@ async function adminDashboard(request, response, sql, auth) {
                NULL as plan_name
         FROM repair_shops rs ${whereClause}
         ORDER BY rs.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
-      `, ...[...qp, limit, offset]);
+      `, [...qp, limit, offset]);
     } catch (e2) {
       // Minimal fallback
       console.error("[admin/dashboard] Fallback query also failed:", e2.message);
@@ -565,7 +565,7 @@ async function adminDashboard(request, response, sql, auth) {
 
   let total = shops.length;
   try {
-    const countResult = await sql(`SELECT COUNT(*) as total FROM repair_shops rs ${whereClause}`, ...qp);
+    const countResult = await sql(`SELECT COUNT(*) as total FROM repair_shops rs ${whereClause}`, qp);
     total = parseInt(countResult[0]?.total || "0", 10);
   } catch (e) { /* use shops.length */ }
 
@@ -596,9 +596,9 @@ async function adminListUsers(request, response, sql, auth) {
     FROM users u LEFT JOIN repair_shops rs ON rs.id = u.repair_shop_id
     ${whereClause}
     ORDER BY u.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
-  `, ...[...qp, limit, offset]);
+  `, [...qp, limit, offset]);
 
-  const countResult = await sql(`SELECT COUNT(*) as total FROM users u ${whereClause}`, ...qp);
+  const countResult = await sql(`SELECT COUNT(*) as total FROM users u ${whereClause}`, qp);
 
   return response.status(200).json({
     users,
@@ -633,9 +633,9 @@ async function adminListPayments(request, response, sql, auth) {
     FROM payments p LEFT JOIN repair_shops rs ON rs.id = p.repair_shop_id
     ${whereClause}
     ORDER BY p.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
-  `, ...[...qp, limit, offset]);
+  `, [...qp, limit, offset]);
 
-  const countResult = await sql(`SELECT COUNT(*) as total FROM payments p ${whereClause}`, ...qp);
+  const countResult = await sql(`SELECT COUNT(*) as total FROM payments p ${whereClause}`, qp);
 
   return response.status(200).json({
     payments,
@@ -794,7 +794,7 @@ async function adminEditShop(sql, response, body, actorType, actorId, ip) {
   const setParts = []; const setValues = [];
   for (const [col, val] of Object.entries(updates)) { setValues.push(val); setParts.push(`${col} = $${setValues.length}`); }
   setValues.push(shopId);
-  await sql(`UPDATE repair_shops SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length}`, ...setValues);
+  await sql(`UPDATE repair_shops SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length}`, setValues);
   await logAdminAction(sql, { actorType, actorId, action: "edit_shop", targetType: "shop", targetId: shopId, details: updates, ip });
   return response.status(200).json({ message: "Shop updated" });
 }
@@ -1005,7 +1005,7 @@ async function adminEditUser(sql, response, body, actorType, actorId, ip) {
   const setParts = []; const setValues = [];
   for (const [col, val] of Object.entries(updates)) { setValues.push(val); setParts.push(`${col} = $${setValues.length}`); }
   setValues.push(data.userId);
-  await sql(`UPDATE users SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length}`, ...setValues);
+  await sql(`UPDATE users SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length}`, setValues);
   await logAdminAction(sql, { actorType, actorId, action: "edit_user", targetType: "user", targetId: data.userId, details: updates, ip });
   return response.status(200).json({ message: "User updated" });
 }
@@ -1081,7 +1081,7 @@ async function adminEditPlan(request, response, sql, body, actorType, actorId, i
     setParts.push(`${col} = $${setValues.length}`);
   }
   setValues.push(data.planId);
-  await sql(`UPDATE subscription_plans SET ${setParts.join(", ")} WHERE id = $${setValues.length}`, ...setValues);
+  await sql(`UPDATE subscription_plans SET ${setParts.join(", ")} WHERE id = $${setValues.length}`, setValues);
   await logAdminAction(sql, { actorType, actorId, action: "edit_plan", targetType: "plan", targetId: data.planId, ip });
   return response.status(200).json({ message: "Plan updated" });
 }
@@ -1516,7 +1516,7 @@ async function handleSaveShopSettings(request, response, sql, shopId, body) {
     }
   }
   setValues.push(shopId);
-  await sql(`UPDATE repair_shops SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${setValues.length}`, ...setValues);
+  await sql(`UPDATE repair_shops SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${setValues.length}`, setValues);
   return response.status(200).json({ message: "Settings saved" });
 }
 
@@ -1566,7 +1566,7 @@ async function adminSaveGateway(request, response, sql, auth, body, actorType, a
 
   if (existing.length > 0) {
     params.push(existing[0].id);
-    await sql(`UPDATE payment_gateways SET ${allSetClauses.join(", ")} WHERE id = $${params.length}`, ...params);
+    await sql(`UPDATE payment_gateways SET ${allSetClauses.join(", ")} WHERE id = $${params.length}`, params);
   } else {
     const displayName = provider.charAt(0).toUpperCase() + provider.slice(1);
     // For INSERT we need explicit column names. Static columns get their value in SQL directly.
@@ -1580,7 +1580,7 @@ async function adminSaveGateway(request, response, sql, auth, body, actorType, a
     const insertValues = ["$1", "$2", ...staticValues, ...dynamicPlaceholders];
     insertParams.push(...params);
 
-    await sql(`INSERT INTO payment_gateways (${insertCols.join(", ")}) VALUES (${insertValues.join(", ")})`, ...insertParams);
+    await sql(`INSERT INTO payment_gateways (${insertCols.join(", ")}) VALUES (${insertValues.join(", ")})`, insertParams);
   }
   invalidateCache();
   await logAdminAction(sql, { actorType, actorId, action: "save-gateway", targetType: "gateway", details: { provider }, ip });
@@ -1610,8 +1610,8 @@ async function adminListSubscriptions(request, response, sql, auth) {
   let whereClause = "WHERE 1=1"; const qp = [];
   if (status) { qp.push(status); whereClause += ` AND s.status = $${qp.length}`; }
   try {
-    const subs = await sql(`SELECT s.id, s.repair_shop_id, s.status, s.billing_cycle, s.gateway, s.current_period_start, s.current_period_end, s.amount_paid, s.currency, s.created_at, sp.name as plan_name, sp.display_name, rs.shop_name, rs.owner_name, rs.email FROM subscriptions s JOIN subscription_plans sp ON sp.id = s.plan_id JOIN repair_shops rs ON rs.id = s.repair_shop_id ${whereClause} ORDER BY s.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, ...[...qp, limit, offset]);
-    const cnt = await sql(`SELECT COUNT(*) as total FROM subscriptions s ${whereClause}`, ...qp);
+    const subs = await sql(`SELECT s.id, s.repair_shop_id, s.status, s.billing_cycle, s.gateway, s.current_period_start, s.current_period_end, s.amount_paid, s.currency, s.created_at, sp.name as plan_name, sp.display_name, rs.shop_name, rs.owner_name, rs.email FROM subscriptions s JOIN subscription_plans sp ON sp.id = s.plan_id JOIN repair_shops rs ON rs.id = s.repair_shop_id ${whereClause} ORDER BY s.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, [...qp, limit, offset]);
+    const cnt = await sql(`SELECT COUNT(*) as total FROM subscriptions s ${whereClause}`, qp);
     return response.status(200).json({ subscriptions: subs, pagination: { page, limit, total: parseInt(cnt[0]?.total || "0", 10) } });
   } catch (e) { return response.status(200).json({ subscriptions: [], pagination: { page, limit, total: 0 } }); }
 }
@@ -1624,8 +1624,8 @@ async function adminListInvoices(request, response, sql, auth) {
   let whereClause = "WHERE 1=1"; const qp = [];
   if (status) { qp.push(status); whereClause += ` AND i.status = $${qp.length}`; }
   try {
-    const invoices = await sql(`SELECT i.id, i.invoice_number, i.plan_name, i.billing_cycle, i.currency, i.subtotal, i.tax_rate, i.tax_amount, i.total, i.status, i.business_name, i.issued_at, i.paid_at, i.created_at, rs.shop_name, rs.owner_name FROM invoices i JOIN repair_shops rs ON rs.id = i.repair_shop_id ${whereClause} ORDER BY i.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, ...[...qp, limit, offset]);
-    const cnt = await sql(`SELECT COUNT(*) as total FROM invoices i ${whereClause}`, ...qp);
+    const invoices = await sql(`SELECT i.id, i.invoice_number, i.plan_name, i.billing_cycle, i.currency, i.subtotal, i.tax_rate, i.tax_amount, i.total, i.status, i.business_name, i.issued_at, i.paid_at, i.created_at, rs.shop_name, rs.owner_name FROM invoices i JOIN repair_shops rs ON rs.id = i.repair_shop_id ${whereClause} ORDER BY i.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, [...qp, limit, offset]);
+    const cnt = await sql(`SELECT COUNT(*) as total FROM invoices i ${whereClause}`, qp);
     return response.status(200).json({ invoices, pagination: { page, limit, total: parseInt(cnt[0]?.total || "0", 10) } });
   } catch (e) { return response.status(200).json({ invoices: [], pagination: { page, limit, total: 0 } }); }
 }
@@ -1642,8 +1642,8 @@ async function adminListPaymentLogs(request, response, sql, auth) {
   if (eventType) { qp.push(eventType); whereClause += ` AND pl.event_type = $${qp.length}`; }
   if (severity) { qp.push(severity); whereClause += ` AND pl.severity = $${qp.length}`; }
   try {
-    const logs = await sql(`SELECT pl.id, pl.payment_id, pl.repair_shop_id, pl.gateway, pl.event_type, pl.severity, pl.message, pl.error_message, pl.created_at, rs.shop_name FROM payment_logs pl LEFT JOIN repair_shops rs ON rs.id = pl.repair_shop_id ${whereClause} ORDER BY pl.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, ...[...qp, limit, offset]);
-    const cnt = await sql(`SELECT COUNT(*) as total FROM payment_logs pl ${whereClause}`, ...qp);
+    const logs = await sql(`SELECT pl.id, pl.payment_id, pl.repair_shop_id, pl.gateway, pl.event_type, pl.severity, pl.message, pl.error_message, pl.created_at, rs.shop_name FROM payment_logs pl LEFT JOIN repair_shops rs ON rs.id = pl.repair_shop_id ${whereClause} ORDER BY pl.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}`, [...qp, limit, offset]);
+    const cnt = await sql(`SELECT COUNT(*) as total FROM payment_logs pl ${whereClause}`, qp);
     return response.status(200).json({ logs, pagination: { page, limit, total: parseInt(cnt[0]?.total || "0", 10) } });
   } catch (e) { return response.status(200).json({ logs: [], pagination: { page, limit, total: 0 } }); }
 }
