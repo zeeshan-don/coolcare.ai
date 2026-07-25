@@ -172,6 +172,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
     Plans
   </div>
+  <div class="sidebar-item" data-tab="pricing" onclick="switchTab('pricing',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 3h12v4H6z"/><path d="M6 9h12v12H6z"/></svg>
+    Pricing
+  </div>
   <div class="sidebar-item" data-tab="payments" onclick="switchTab('payments',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
     Payments
@@ -259,6 +263,14 @@
 <div class="tab-panel" id="panel-plans">
   <div class="section-head"><h1>Subscription Plans</h1><button class="btn btn-primary" onclick="openPlanModal()">+ Create Plan</button></div>
   <div class="plan-grid" id="plansGrid"><div class="empty-state"><div class="skel" style="width:60%;margin:8px auto"></div></div></div>
+</div>
+
+<div class="tab-panel" id="panel-pricing">
+  <div class="section-head"><h1>Plan Pricing</h1><button class="btn btn-primary" onclick="openPricingModal()">+ Create Pricing</button></div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Plan</th><th>Currency</th><th>Monthly</th><th>Quarterly</th><th>Half-yearly</th><th>Yearly</th><th>Actions</th></tr></thead>
+    <tbody id="pricingBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody></table>
+  </div>
 </div>
 
 <!-- ═══ PAYMENTS ═══ -->
@@ -354,6 +366,21 @@
   </div>
 </div>
 
+<div class="modal-backdrop" id="pricingModal" onclick="if(event.target===this)closeModal('pricingModal')">
+  <div class="modal">
+    <h2 id="pricingModalTitle">Create Pricing</h2>
+    <div class="field"><label>Plan</label><select id="pp_planId"></select></div>
+    <div class="field"><label>Currency</label><select id="pp_currency"><option value="USD">USD</option><option value="INR">INR</option><option value="AED">AED</option><option value="KWD">KWD</option></select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label>Monthly</label><input id="pp_monthly" type="number" step="0.01" placeholder="0"></div>
+      <div class="field"><label>Quarterly</label><input id="pp_quarterly" type="number" step="0.01" placeholder="0"></div>
+      <div class="field"><label>Half-yearly</label><input id="pp_halfyearly" type="number" step="0.01" placeholder="0"></div>
+      <div class="field"><label>Yearly</label><input id="pp_yearly" type="number" step="0.01" placeholder="0"></div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('pricingModal')">Cancel</button><button class="btn btn-primary" onclick="savePricing()">Save Pricing</button></div>
+  </div>
+</div>
+
 <!-- Extend Subscription Modal -->
 <div class="modal-backdrop" id="extendModal" onclick="if(event.target===this)closeModal('extendModal')">
   <div class="modal">
@@ -391,6 +418,7 @@ document.getElementById('navRole').textContent = (userData.role || '').replace(/
 const P = { dash: 1, all: 1, user: 1, pay: 1 };
 let loadedTabs = new Set(['dashboard']);
 let plansCache = [];
+let pricingCache = [];
 
 /* ── HELPERS ── */
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -430,6 +458,7 @@ function switchTab(name, el) {
     shops: () => loadAllShops(1),
     users: () => loadUsers(1),
     plans: loadPlans,
+    pricing: loadPricingAdmin,
     payments: () => loadPayments(1),
     analytics: loadAnalytics,
     settings: loadSettings
@@ -655,6 +684,59 @@ function openPlanModal() {
   document.getElementById('mp_trial').value = 14; document.getElementById('mp_currency').value = 'USD'; document.getElementById('mp_active').value = 'true';
   ['mp_bookings','mp_techs','mp_staff','mp_whatsapp','mp_ai'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('planModal').classList.add('open');
+}
+
+function openPricingModal(planId = '', currency = '') {
+  document.getElementById('pricingModalTitle').textContent = currency ? 'Edit Pricing' : 'Create Pricing';
+  const planSelect = document.getElementById('pp_planId');
+  if (!plansCache.length) {
+    api('/api/shop?action=admin-plans').then((res) => res ? res.json() : { plans: [] }).then((data) => {
+      plansCache = data.plans || [];
+      planSelect.innerHTML = plansCache.map((p) => `<option value="${p.id}">${esc(p.display_name)} (${esc(p.name)})</option>`).join('');
+      if (planId) planSelect.value = planId;
+    });
+  } else {
+    planSelect.innerHTML = plansCache.map((p) => `<option value="${p.id}">${esc(p.display_name)} (${esc(p.name)})</option>`).join('');
+    if (planId) planSelect.value = planId;
+  }
+
+  document.getElementById('pp_currency').value = currency || 'USD';
+  const existing = pricingCache.find((p) => p.plan_id === Number(planId))?.pricing[currency] || null;
+  document.getElementById('pp_monthly').value = existing ? existing.monthly : '';
+  document.getElementById('pp_quarterly').value = existing ? existing.quarterly : '';
+  document.getElementById('pp_halfyearly').value = existing ? existing.halfyearly : '';
+  document.getElementById('pp_yearly').value = existing ? existing.yearly : '';
+  document.getElementById('pricingModal').classList.add('open');
+}
+
+async function savePricing() {
+  const planId = parseInt(document.getElementById('pp_planId').value, 10);
+  const currency = document.getElementById('pp_currency').value.trim().toUpperCase();
+  const price_monthly = parseFloat(document.getElementById('pp_monthly').value || '0');
+  const price_quarterly = parseFloat(document.getElementById('pp_quarterly').value || '0');
+  const price_halfyearly = parseFloat(document.getElementById('pp_halfyearly').value || '0');
+  const price_yearly = parseFloat(document.getElementById('pp_yearly').value || '0');
+
+  if (!planId || !currency) { toast('Select plan and currency'); return; }
+  if ([price_monthly, price_quarterly, price_halfyearly, price_yearly].some((v) => Number.isNaN(v) || v < 0)) { toast('Enter valid pricing values'); return; }
+
+  const res = await api('/api/shop', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'save-plan-pricing',
+      planId,
+      currency,
+      price_monthly,
+      price_quarterly,
+      price_halfyearly,
+      price_yearly,
+    }),
+  });
+  if (!res) return;
+  toast('Pricing saved');
+  closeModal('pricingModal');
+  loadedTabs.delete('pricing');
+  loadPricingAdmin();
 }
 
 function editPlan(id) {

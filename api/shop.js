@@ -35,13 +35,22 @@ const querySchema = z.object({
   sortDir: z.enum(["asc", "desc"]).default("desc"),
 });
 
+const planPricingSchema = z.object({
+  planId: z.coerce.number().int().positive("planId is required"),
+  currency: z.string().min(1, "Currency is required").max(10).trim(),
+  price_monthly: z.coerce.number().min(0, "Monthly price must be >= 0"),
+  price_quarterly: z.coerce.number().min(0, "Quarterly price must be >= 0"),
+  price_halfyearly: z.coerce.number().min(0, "Half-yearly price must be >= 0"),
+  price_yearly: z.coerce.number().min(0, "Yearly price must be >= 0"),
+});
+
 // Admin GET actions
-const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-payments", "admin-settings", "admin-analytics"]);
+const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-pricing", "admin-payments", "admin-settings", "admin-analytics"]);
 // Admin POST actions
 const ADMIN_POST_ACTIONS = new Set([
   "suspend", "activate", "delete", "edit-shop", "approve-shop", "reset-password",
   "create-user", "edit-user", "delete-user", "invite-user",
-  "create-plan", "edit-plan", "delete-plan", "duplicate-plan", "save-settings",
+  "create-plan", "edit-plan", "delete-plan", "duplicate-plan", "save-plan-pricing", "save-settings",
   "extend-subscription", "change-plan",
 ]);
 // Gated shop actions (require active subscription)
@@ -368,11 +377,46 @@ async function handleAdminGet(request, response, sql, auth, action) {
     case "admin": return adminDashboard(request, response, sql, auth);
     case "admin-users": return adminListUsers(request, response, sql, auth);
     case "admin-plans": return adminListPlans(request, response, sql, auth);
+    case "admin-pricing": return adminListPricing(request, response, sql, auth);
     case "admin-payments": return adminListPayments(request, response, sql, auth);
     case "admin-settings": return adminGetSettings(request, response, sql, auth);
     case "admin-analytics": return adminAnalytics(request, response, sql, auth);
     default: return response.status(400).json({ error: "Unknown admin GET action" });
   }
+}
+
+async function adminListPricing(request, response, sql, auth) {
+  const plans = await sql`
+    SELECT sp.id as plan_id, sp.name as plan_name, sp.display_name,
+           spp.id as pricing_id, spp.currency, spp.price_monthly, spp.price_quarterly,
+           spp.price_halfyearly, spp.price_yearly
+    FROM subscription_plans sp
+    LEFT JOIN subscription_plan_prices spp ON sp.id = spp.plan_id
+    ORDER BY sp.id, spp.currency
+  `;
+
+  const result = plans.reduce((acc, row) => {
+    if (!acc[row.plan_id]) {
+      acc[row.plan_id] = {
+        plan_id: row.plan_id,
+        plan_name: row.plan_name,
+        display_name: row.display_name,
+        pricing: {},
+      };
+    }
+    if (row.currency) {
+      acc[row.plan_id].pricing[row.currency] = {
+        pricing_id: row.pricing_id,
+        monthly: parseFloat(row.price_monthly || 0),
+        quarterly: parseFloat(row.price_quarterly || 0),
+        halfyearly: parseFloat(row.price_halfyearly || 0),
+        yearly: parseFloat(row.price_yearly || 0),
+      };
+    }
+    return acc;
+  }, {});
+
+  return response.status(200).json({ plans: Object.values(result) });
 }
 
 // ─── ADMIN DASHBOARD (enhanced analytics with error handling) ────────────────
@@ -667,6 +711,7 @@ async function handleAdminPost(request, response, sql, auth, body) {
     case "edit-plan": return adminEditPlan(request, response, sql, body, actorType, actorId, ip);
     case "delete-plan": return adminDeletePlan(sql, response, body, actorType, actorId, ip);
     case "duplicate-plan": return adminDuplicatePlan(sql, response, body, actorType, actorId, ip);
+    case "save-plan-pricing": return adminSavePlanPricing(sql, response, body, actorType, actorId, ip);
 
     // ── Settings ────────────────────────────────────────────────
     case "save-settings": return adminSaveSettings(request, response, sql, body, actorType, actorId, ip);
@@ -869,6 +914,41 @@ async function adminEditPlan(request, response, sql, body, actorType, actorId, i
   await sql.unsafe(`UPDATE subscription_plans SET ${setParts.join(", ")} WHERE id = $${setValues.length}`, setValues);
   await logAdminAction(sql, { actorType, actorId, action: "edit_plan", targetType: "plan", targetId: data.planId, ip });
   return response.status(200).json({ message: "Plan updated" });
+}
+
+async function adminSavePlanPricing(sql, response, body, actorType, actorId, ip) {
+  const data = validate({ body }, response, planPricingSchema);
+  if (!data) return;
+  const currency = data.currency.toUpperCase();
+
+  const existing = await sql`
+    SELECT id FROM subscription_plan_prices
+    WHERE plan_id = ${data.planId} AND currency = ${currency}
+    LIMIT 1
+  `;
+
+  if (existing.length > 0) {
+    await sql`
+      UPDATE subscription_plan_prices
+      SET price_monthly = ${data.price_monthly},
+          price_quarterly = ${data.price_quarterly},
+          price_halfyearly = ${data.price_halfyearly},
+          price_yearly = ${data.price_yearly},
+          updated_at = now()
+      WHERE id = ${existing[0].id}
+    `;
+    await logAdminAction(sql, { actorType, actorId, action: "update_plan_pricing", targetType: "plan_pricing", targetId: existing[0].id, ip });
+    return response.status(200).json({ message: "Pricing updated" });
+  }
+
+  const rows = await sql`
+    INSERT INTO subscription_plan_prices
+      (plan_id, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
+    VALUES (${data.planId}, ${data.currency}, ${data.price_monthly}, ${data.price_quarterly}, ${data.price_halfyearly}, ${data.price_yearly})
+    RETURNING id
+  `;
+  await logAdminAction(sql, { actorType, actorId, action: "create_plan_pricing", targetType: "plan_pricing", targetId: rows[0].id, ip });
+  return response.status(201).json({ message: "Pricing saved" });
 }
 
 async function adminDeletePlan(sql, response, body, actorType, actorId, ip) {

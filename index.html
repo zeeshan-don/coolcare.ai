@@ -455,67 +455,122 @@
 
   // ── Currency & Dynamic Pricing ──
   const PLANS = [
-    { name: 'Starter', key: 'starter', features: ['100 bookings/mo', '3 technicians', 'WhatsApp bot', 'Dashboard', 'Notifications'] },
-    { name: 'Professional', key: 'professional', features: ['500 bookings/mo', '10 technicians', 'Everything in Starter', 'Analytics', 'Priority support'], popular: true },
-    { name: 'Enterprise', key: 'enterprise', features: ['Unlimited bookings', 'Unlimited technicians', 'Everything in Pro', 'Custom branding', 'API access'] },
+    {
+      name: 'Starter',
+      key: 'starter',
+      features: ['WhatsApp bot', 'Live dashboard', 'Unlimited technicians', 'Fast setup'],
+    },
+    {
+      name: 'Professional',
+      key: 'professional',
+      features: ['Automated booking flow', 'Reminders & follow-ups', 'Team management', 'Growth analytics'],
+    },
+    {
+      name: 'Enterprise',
+      key: 'enterprise',
+      features: ['Custom workflows', 'Priority support', 'Advanced reporting', 'Dedicated onboarding'],
+    },
   ];
 
-  let currentCurrency = localStorage.getItem('cc_currency') || 'USD';
+  const cycleLabels = { monthly: '/mo', quarterly: '/qtr', halfyearly: '/6mo', yearly: '/yr' };
+  const cycleMonths = { monthly: 1, quarterly: 3, halfyearly: 6, yearly: 12 };
+
+  function detectBrowserCurrency() {
+    const saved = localStorage.getItem('cc_currency');
+    if (saved) return saved;
+    const locale = navigator.language || 'en-US';
+    const parts = locale.split(/[-_]/);
+    const country = (parts[1] || parts[0]).toUpperCase();
+    const map = { IN: 'INR', KW: 'KWD', AE: 'AED', US: 'USD', GB: 'USD', CA: 'USD', AU: 'USD', NZ: 'USD', SG: 'USD' };
+    return map[country] || 'USD';
+  }
+
+  let currentCurrency = localStorage.getItem('cc_currency') || detectBrowserCurrency();
   let currentCycle = 'monthly';
-  document.getElementById('currencySelect').value = currentCurrency;
+  const currencySelect = document.getElementById('currencySelect');
+
+  const currencyLabels = {
+    USD: '🇺🇸 USD ($)',
+    INR: '🇮🇳 INR (₹)',
+    AED: '🇦🇪 AED (د.إ)',
+    KWD: '🇰🇼 KWD (KD)',
+  };
+
+  function buildCurrencyOption(currency) {
+    return `<option value="${currency.code}">${currencyLabels[currency.code] || currency.code} (${currency.symbol})</option>`;
+  }
+
+  async function initCurrencySelect() {
+    try {
+      const res = await fetch(`/api/currency?currency=${encodeURIComponent(currentCurrency)}`);
+      const data = await res.json();
+      const supported = data.supported || [];
+      currencySelect.innerHTML = supported.map(buildCurrencyOption).join('');
+      currencySelect.value = currentCurrency;
+    } catch (err) {
+      currencySelect.value = currentCurrency;
+    }
+  }
+
+  initCurrencySelect();
 
   function switchBilling(cycle) {
     currentCycle = cycle;
-    document.querySelectorAll('.billing-toggle').forEach(b => b.classList.toggle('active', b.dataset.cycle === cycle));
+    document.querySelectorAll('.billing-toggle').forEach((b) => b.classList.toggle('active', b.dataset.cycle === cycle));
     loadPricing(currentCurrency);
   }
 
-  const cycleMultipliers = { monthly: 1, quarterly: 2.7, halfyearly: 5.1, yearly: 9.6 };
-  const cycleSavings = { monthly: 0, quarterly: 10, halfyearly: 15, yearly: 20 };
-  const cycleLabels = { monthly: '/mo', quarterly: '/qtr', halfyearly: '/6mo', yearly: '/yr' };
+  function formatPrice(symbol, amount) {
+    if (amount == null || Number.isNaN(amount)) return '—';
+    const decimals = Number.isInteger(amount) ? 0 : 2;
+    return `${symbol}${amount.toFixed(decimals)}`;
+  }
 
   async function loadPricing(currency) {
     currentCurrency = currency || currentCurrency;
     localStorage.setItem('cc_currency', currentCurrency);
+    currencySelect.value = currentCurrency;
+
     try {
-      const res = await fetch(`/api/currency?currency=${currentCurrency}`);
+      const res = await fetch(`/api/currency?currency=${encodeURIComponent(currentCurrency)}`);
       const data = await res.json();
       const pricing = data.pricing || {};
-      const sym = data.symbol || '$';
+      const symbol = data.symbol || '$';
 
-      document.getElementById('pricingCards').innerHTML = PLANS.map(plan => {
-        const monthly = pricing[plan.key + '_monthly'];
-        const yearly = pricing[plan.key + '_yearly'];
-        const baseMonthly = monthly ? parseFloat(monthly.raw || monthly.price || 29) : 29;
-        const cyclePrice = Math.round(baseMonthly * cycleMultipliers[currentCycle] * 100) / 100;
-        const sym2 = data.symbol || '$';
-        const priceDisplay = monthly ? `${sym2}${cyclePrice.toFixed(currentCycle === 'monthly' ? 0 : 2)}${cycleLabels[currentCycle]}` : `$${cyclePrice.toFixed(0)}${cycleLabels[currentCycle]}`;
-        const savingsPct = cycleSavings[currentCycle];
-        return `<div style="background:var(--bg2);border:1px solid ${plan.popular ? '#fff' : 'var(--border)'};border-radius:14px;padding:32px 24px;text-align:center;position:relative;${plan.popular ? 'transform:scale(1.03);' : ''}">
-          ${plan.popular ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#fff;color:#000;font:700 10px sans-serif;padding:3px 12px;border-radius:20px;letter-spacing:0.5px">Most Popular</div>' : ''}
+      document.getElementById('pricingCards').innerHTML = PLANS.map((plan) => {
+        const planPrices = pricing[plan.key] || {};
+        const priceValue = planPrices[currentCycle] != null ? parseFloat(planPrices[currentCycle]) : null;
+        const monthlyValue = planPrices.monthly != null ? parseFloat(planPrices.monthly) : null;
+        const displayPrice = priceValue != null
+          ? `${formatPrice(symbol, priceValue)}${cycleLabels[currentCycle]}`
+          : `${formatPrice(symbol, monthlyValue || 29)}${cycleLabels[currentCycle]}`;
+        const savings = (currentCycle !== 'monthly' && priceValue != null && monthlyValue)
+          ? Math.round((1 - priceValue / (monthlyValue * cycleMonths[currentCycle])) * 100)
+          : 0;
+
+        return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:32px 24px;text-align:center;position:relative;">
           <h3 style="font-size:20px;margin-bottom:8px;color:#fff">${plan.name}</h3>
-          <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">${priceDisplay}</div>
-          ${savingsPct > 0 ? `<div style="color:var(--green);font-size:11px;font-weight:600;margin-bottom:4px">Save ${savingsPct}% vs monthly</div>` : '<div style="height:15px;margin-bottom:4px"></div>'}
-          <div style="text-align:left;margin:20px 0">${plan.features.map(f => `<div class="pf">${f}</div>`).join('')}</div>
+          <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">${displayPrice}</div>
+          ${savings > 0 ? `<div style="color:var(--green);font-size:11px;font-weight:600;margin-bottom:4px">Save ${savings}% vs monthly</div>` : '<div style="height:15px;margin-bottom:4px"></div>'}
+          <div style="text-align:left;margin:20px 0">${plan.features.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
           <a href="/shop-signup.html?plan=${plan.key}&billing=${currentCycle}"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
         </div>`;
       }).join('');
     } catch (err) {
-      // Fallback static pricing
-      document.getElementById('pricingCards').innerHTML = PLANS.map(plan => {
-        const baseMonthly = 29;
-        const cyclePrice = Math.round(baseMonthly * cycleMultipliers[currentCycle]);
-        const savingsPct = cycleSavings[currentCycle];
-        return `<div style="background:var(--bg2);border:1px solid ${plan.popular ? '#fff' : 'var(--border)'};border-radius:14px;padding:32px 24px;text-align:center">
+      const fallback = 29;
+      document.getElementById('pricingCards').innerHTML = PLANS.map((plan) => {
+        const cyclePrice = Math.round(fallback * cycleMonths[currentCycle]);
+        return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:32px 24px;text-align:center;">
           <h3 style="font-size:20px;margin-bottom:8px;color:#fff">${plan.name}</h3>
           <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">$${cyclePrice}${cycleLabels[currentCycle]}</div>
-          ${savingsPct > 0 ? `<div style="color:var(--green);font-size:11px;font-weight:600;margin-bottom:4px">Save ${savingsPct}% vs monthly</div>` : '<div style="height:15px;margin-bottom:4px"></div>'}
-          <div style="text-align:left;margin:20px 0">${plan.features.map(f => `<div class="pf">${f}</div>`).join('')}</div>
+          <div style="height:15px;margin-bottom:4px"></div>
+          <div style="text-align:left;margin:20px 0">${plan.features.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
           <a href="/shop-signup.html?plan=${plan.key}&billing=${currentCycle}"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
         </div>`;
       }).join('');
     }
   }
+
   loadPricing(currentCurrency);
 </script>
 </body>

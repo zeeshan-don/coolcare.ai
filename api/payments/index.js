@@ -79,11 +79,18 @@ async function handleCheckout(request, response, sql, shopId, body) {
   if (!data) return;
 
   const currency = data.currency || detectCurrency(request);
-  const plans = await sql`SELECT * FROM subscription_plans WHERE name = ${data.planName} AND is_active = true LIMIT 1`;
-  if (plans.length === 0) return response.status(404).json({ error: "Plan not found" });
-  const plan = plans[0];
+  const planRows = await sql`
+    SELECT sp.*, spp.price_monthly, spp.price_quarterly, spp.price_halfyearly, spp.price_yearly
+    FROM subscription_plans sp
+    LEFT JOIN subscription_plan_prices spp
+      ON sp.id = spp.plan_id AND spp.currency = ${currency}
+    WHERE sp.name = ${data.planName} AND sp.is_active = true
+    LIMIT 1
+  `;
+  if (planRows.length === 0) return response.status(404).json({ error: "Plan not found" });
+  const plan = planRows[0];
 
-  const priceUsd = (() => {
+  const usdAmount = (() => {
     switch (data.billingCycle) {
       case "quarterly": return plan.price_quarterly_usd || plan.price_monthly_usd * 3 * 0.9;
       case "halfyearly": return plan.price_halfyearly_usd || plan.price_monthly_usd * 6 * 0.85;
@@ -91,7 +98,16 @@ async function handleCheckout(request, response, sql, shopId, body) {
       default: return plan.price_monthly_usd;
     }
   })();
-  const converted = await convertPrice(parseFloat(priceUsd), currency);
+
+  let finalAmount;
+  const customAmount = plan[`price_${data.billingCycle}`];
+  if (customAmount !== null && customAmount !== undefined) {
+    finalAmount = parseFloat(customAmount);
+  } else if (currency === "USD") {
+    finalAmount = parseFloat(usdAmount);
+  } else {
+    finalAmount = (await convertPrice(parseFloat(usdAmount), currency)).amount;
+  }
 
   // Apply coupon
   let discount = 0;
