@@ -100,6 +100,13 @@
         </div>
       </div>
 
+      <div class="section-label">Referral Code (Optional)</div>
+      <div class="field">
+        <label for="referralCode">Referral Code</label>
+        <input id="referralCode" type="text" placeholder="COOLCARE-XXXXX" style="text-transform:uppercase">
+        <div style="color:var(--muted);font-size:11px;margin-top:4px">Enter a referral code if you were invited by another shop</div>
+      </div>
+
       <div class="section-label">Services Offered</div>
       <div class="services-grid" id="servicesGrid">
         <label class="service-chip"><input type="checkbox" value="AC"> AC</label>
@@ -186,8 +193,8 @@
     const address        = document.getElementById('address').value.trim();
     const city           = document.getElementById('city').value.trim();
     const serviceAreasRaw = document.getElementById('serviceAreas').value;
-    const serviceAreas   = serviceAreasRaw.split(',').map(s => s.trim()).filter(Boolean);
-    const servicesOffered = [...document.querySelectorAll('#servicesGrid input:checked')].map(c => c.value);
+    const serviceAreas   = serviceAreasRaw.split(',').map(s => s.trim()).filter(Boolean);      const referralCode = document.getElementById('referralCode').value.trim().toUpperCase();
+      const servicesOffered = [...document.querySelectorAll('#servicesGrid input:checked')].map(c => c.value);
 
     // Client-side validation
     let valid = true;
@@ -214,7 +221,7 @@
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'signup', shopName, ownerName, email, mobile, password, confirmPassword, address, city, serviceAreas, servicesOffered }),
+        body: JSON.stringify({ action: 'signup', shopName, ownerName, email, mobile, password, confirmPassword, address, city, serviceAreas, servicesOffered, referralCode: referralCode || undefined }),
       });
       const data = await res.json();
 

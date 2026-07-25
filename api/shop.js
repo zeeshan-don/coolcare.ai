@@ -1540,7 +1540,7 @@ async function adminListGateways(request, response, sql, auth) {
 async function adminSaveGateway(request, response, sql, auth, body, actorType, actorId, ip) {
   const admin = await requireSuperAdmin(auth, sql, response);
   if (!admin) return;
-  const { provider, keyId, keySecret, webhookSecret, isTestMode, extraConfig } = body;
+  const { provider, keyId, keySecret, webhookSecret, isTestMode, isEnabled, extraConfig } = body;
   if (!provider) return response.status(400).json({ error: "provider is required" });
   const validProviders = ["razorpay", "stripe", "paypal", "phonepe", "cashfree"];
   if (!validProviders.includes(provider)) return response.status(400).json({ error: "Invalid provider" });
@@ -1555,6 +1555,7 @@ async function adminSaveGateway(request, response, sql, auth, body, actorType, a
   if (webhookSecret !== undefined && webhookSecret !== null && webhookSecret !== "") { params.push(encrypt(webhookSecret)); dynamicClauses.push(`webhook_secret = $${params.length}`); }
   if (isTestMode !== undefined) { params.push(!!isTestMode); dynamicClauses.push(`is_test_mode = $${params.length}`); }
   if (extraConfig !== undefined) { params.push(JSON.stringify(extraConfig)); dynamicClauses.push(`extra_config = $${params.length}::jsonb`); }
+  if (isEnabled !== undefined) { params.push(!!isEnabled); dynamicClauses.push(`is_enabled = $${params.length}`); }
 
   // Build the rest (updated_by also needs a param; updated_at is a static SQL expression)
   const staticClauses = ["updated_at = now()"];

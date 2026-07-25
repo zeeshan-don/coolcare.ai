@@ -13,6 +13,16 @@
     a{color:var(--ink2);text-decoration:none}a:hover{color:#fff}
     .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
     .brand{font-weight:700;letter-spacing:0.5px;font-size:24px;color:#fff;text-transform:lowercase}.brand b{color:#fff;font-weight:900}
+    .hamburger{display:none;flex-direction:column;gap:4px;cursor:pointer;padding:8px;background:none;border:none}
+    .hamburger span{display:block;width:20px;height:2px;background:var(--ink2);border-radius:2px;transition:all 0.3s}
+    .hamburger.open span:nth-child(1){transform:rotate(45deg) translate(4px,4px)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:rotate(-45deg) translate(4px,-4px)}
+    .mobile-menu{display:none;position:fixed;top:72px;left:0;right:0;background:rgba(10,10,10,0.98);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:49;padding:12px 20px;flex-direction:column;gap:4px}
+    .mobile-menu.open{display:flex}
+    .mobile-menu a,.mobile-menu button{display:block;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;color:var(--ink2);background:transparent;border:none;text-align:left;cursor:pointer;transition:all 0.2s;width:100%;text-decoration:none}
+    .mobile-menu a:hover,.mobile-menu button:hover{background:var(--bg3);color:#fff}
+    .mobile-menu .divider{border-top:1px solid var(--border);margin:6px 0}
     .wrap{max-width:700px;margin:auto;padding:28px 24px 60px}
     h1{font-size:28px;letter-spacing:-0.5px;margin:0 0 6px;color:#fff}
     .sub{color:var(--ink2);margin-bottom:24px;font-size:14px;display:flex;justify-content:space-between;align-items:center}
@@ -27,14 +37,31 @@
     .pager{display:flex;gap:8px;justify-content:center;margin-top:20px}
     .pager button{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 12px inherit;cursor:pointer;color:var(--muted)}
     .pager button:disabled{opacity:0.3;cursor:not-allowed}
-    @media(max-width:680px){.wrap{padding:20px 16px}h1{font-size:24px}}
+    @media(max-width:680px){
+      .wrap{padding:20px 16px}
+      h1{font-size:24px}
+      .nav a[href*="dashboard"]{display:none}
+      .hamburger{display:flex}
+    }
   </style>
 </head>
 <body>
 <nav class="nav">
   <a class="brand" href="/shop-dashboard.html">cool<b>care</b></a>
-  <div><a href="/shop-dashboard.html" style="font-size:12px;font-weight:600;color:var(--muted)">← Dashboard</a></div>
+  <div style="display:flex;gap:12px;align-items:center">
+    <a href="/shop-dashboard.html" style="font-size:12px;font-weight:600;color:var(--muted)">← Dashboard</a>
+    <button class="hamburger" id="hamburger" onclick="toggleMobileMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
 </nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/shop-dashboard.html">Dashboard</a>
+  <a href="/shop-ai-settings.html">AI Settings</a>
+  <a href="/shop-settings.html">Settings</a>
+  <a href="/shop-referrals.html">Referrals</a>
+  <a href="/shop-notifications.html">Notifications</a>
+  <div class="divider"></div>
+  <button onclick="logout()">Log Out</button>
+</div>
 <div class="wrap">
   <h1>Notifications</h1>
   <div class="sub">
@@ -51,6 +78,26 @@
 <script>
 const token = localStorage.getItem('cc_token');
 if (!token) window.location.href = '/login.html';
+
+function toggleMobileMenu() {
+  document.getElementById('mobileMenu').classList.toggle('open');
+  document.getElementById('hamburger').classList.toggle('open');
+}
+document.addEventListener('click', function(e) {
+  const menu = document.getElementById('mobileMenu');
+  const hamburger = document.getElementById('hamburger');
+  if (!hamburger.contains(e.target) && !menu.contains(e.target) && menu.classList.contains('open')) {
+    menu.classList.remove('open');
+    hamburger.classList.remove('open');
+  }
+});
+
+function logout() {
+  fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
+  localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user');
+  window.location.href = '/login.html';
+}
+
 let currentPage = 1;
 
 function timeAgo(date) {
