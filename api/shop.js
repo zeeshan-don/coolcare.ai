@@ -1545,22 +1545,42 @@ async function adminSaveGateway(request, response, sql, auth, body, actorType, a
   const validProviders = ["razorpay", "stripe", "paypal", "phonepe", "cashfree"];
   if (!validProviders.includes(provider)) return response.status(400).json({ error: "Invalid provider" });
   const existing = await sql`SELECT id FROM payment_gateways WHERE provider = ${provider} LIMIT 1`;
-  const updates = []; const params = [];
-  if (keyId !== undefined && keyId !== null && keyId !== "") { params.push(encrypt(keyId)); updates.push(`key_id = $${params.length}`); }
-  if (keySecret !== undefined && keySecret !== null && keySecret !== "") { params.push(encrypt(keySecret)); updates.push(`key_secret = $${params.length}`); }
-  if (webhookSecret !== undefined && webhookSecret !== null && webhookSecret !== "") { params.push(encrypt(webhookSecret)); updates.push(`webhook_secret = $${params.length}`); }
-  if (isTestMode !== undefined) { params.push(!!isTestMode); updates.push(`is_test_mode = $${params.length}`); }
-  if (extraConfig !== undefined) { params.push(JSON.stringify(extraConfig)); updates.push(`extra_config = $${params.length}::jsonb`); }
-  updates.push("updated_at = now()"); params.push(actorId); updates.push(`updated_by = $${params.length}`);
+
+  // Build parameterized SET clauses and their values separately from static SQL expressions.
+  // Example: dynamicClauses = ["key_id = $1", "key_secret = $2"], params = [encKeyId, encKeySecret]
+  // Static SQL: "updated_at = now()" goes into staticClauses (no param needed).
+  const dynamicClauses = []; const params = [];
+  if (keyId !== undefined && keyId !== null && keyId !== "") { params.push(encrypt(keyId)); dynamicClauses.push(`key_id = $${params.length}`); }
+  if (keySecret !== undefined && keySecret !== null && keySecret !== "") { params.push(encrypt(keySecret)); dynamicClauses.push(`key_secret = $${params.length}`); }
+  if (webhookSecret !== undefined && webhookSecret !== null && webhookSecret !== "") { params.push(encrypt(webhookSecret)); dynamicClauses.push(`webhook_secret = $${params.length}`); }
+  if (isTestMode !== undefined) { params.push(!!isTestMode); dynamicClauses.push(`is_test_mode = $${params.length}`); }
+  if (extraConfig !== undefined) { params.push(JSON.stringify(extraConfig)); dynamicClauses.push(`extra_config = $${params.length}::jsonb`); }
+
+  // Build the rest (updated_by also needs a param; updated_at is a static SQL expression)
+  const staticClauses = ["updated_at = now()"];
+  params.push(actorId);
+  dynamicClauses.push(`updated_by = $${params.length}`);
+
+  // Combine both for UPDATE (static + dynamic parts all go to SET clause)
+  const allSetClauses = [...staticClauses, ...dynamicClauses];
+
   if (existing.length > 0) {
     params.push(existing[0].id);
-    await sql(`UPDATE payment_gateways SET ${updates.join(", ")} WHERE id = $${params.length}`, ...params);
+    await sql(`UPDATE payment_gateways SET ${allSetClauses.join(", ")} WHERE id = $${params.length}`, ...params);
   } else {
     const displayName = provider.charAt(0).toUpperCase() + provider.slice(1);
-    const allCols = ["provider", "display_name", ...updates.map(u => u.split(" = ")[0])];
-    const allParams = [provider, displayName, ...params];
-    const placeholders = allParams.map((_, i) => `$${i + 1}`);
-    await sql(`INSERT INTO payment_gateways (${allCols.join(", ")}) VALUES (${placeholders.join(", ")})`, ...allParams);
+    // For INSERT we need explicit column names. Static columns get their value in SQL directly.
+    // Dynamic parameterized columns get $N placeholders.
+    const dynamicCols = dynamicClauses.map(c => c.split(" = ")[0]);
+    const insertCols = ["provider", "display_name", ...staticClauses.map(c => c.split(" = ")[0]), ...dynamicCols];
+    const insertParams = [provider, displayName];
+    // Static values are SQL expressions (e.g. now()), not parameters — they go directly in the VALUES list
+    const staticValues = staticClauses.map(c => c.split(" = ")[1]);
+    const dynamicPlaceholders = dynamicCols.map((_, i) => `$${i + 1 + insertParams.length}`);
+    const insertValues = ["$1", "$2", ...staticValues, ...dynamicPlaceholders];
+    insertParams.push(...params);
+
+    await sql(`INSERT INTO payment_gateways (${insertCols.join(", ")}) VALUES (${insertValues.join(", ")})`, ...insertParams);
   }
   invalidateCache();
   await logAdminAction(sql, { actorType, actorId, action: "save-gateway", targetType: "gateway", details: { provider }, ip });
