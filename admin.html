@@ -982,6 +982,40 @@ function openPlanModal() {
   document.getElementById('planModal').classList.add('open');
 }
 
+/* ── PRICING ── */
+async function loadPricingAdmin() {
+  const res = await api('/api/shop?action=admin-pricing');
+  if (!res) return;
+  const data = await res.json();
+  pricingCache = data.plans || [];
+  const tbody = document.getElementById('pricingBody');
+  if (!pricingCache.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No pricing data found</td></tr>';
+    return;
+  }
+  const rows = [];
+  for (const plan of pricingCache) {
+    const currencies = Object.keys(plan.pricing || {});
+    if (!currencies.length) {
+      rows.push(`<tr><td><strong>${esc(plan.display_name)}</strong></td><td colspan="6" class="empty-state">No pricing configured</td></tr>`);
+      continue;
+    }
+    for (const cur of currencies) {
+      const p = plan.pricing[cur];
+      rows.push(`<tr>
+        <td><strong>${esc(plan.display_name)}</strong></td>
+        <td><span class="badge badge-blue">${esc(cur)}</span></td>
+        <td>${fmt(p.monthly)}</td>
+        <td>${fmt(p.quarterly)}</td>
+        <td>${fmt(p.halfyearly)}</td>
+        <td>${fmt(p.yearly)}</td>
+        <td><button class="act" onclick="openPricingModal(${plan.plan_id},'${cur}')">Edit</button></td>
+      </tr>`);
+    }
+  }
+  tbody.innerHTML = rows.join('');
+}
+
 function openPricingModal(planId = '', currency = '') {
   document.getElementById('pricingModalTitle').textContent = currency ? 'Edit Pricing' : 'Create Pricing';
   const planSelect = document.getElementById('pp_planId');
