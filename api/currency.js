@@ -7,7 +7,7 @@ const { neon } = require("@neondatabase/serverless");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
-const { CURRENCIES, convertPrice, getExchangeRates, detectCurrency } = require("./_lib/currency");
+const { CURRENCIES, PLAN_PRICING, getExchangeRates, detectCurrency } = require("./_lib/currency");
 
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -34,66 +34,28 @@ module.exports = withErrorHandler(async (request, response) => {
 
   const supported = [...supportedCodes].sort().map(currencyMeta);
 
-  let pricing = {
-    starter: { monthly: null, quarterly: null, halfyearly: null, yearly: null },
-    professional: { monthly: null, quarterly: null, halfyearly: null, yearly: null },
-    enterprise: { monthly: null, quarterly: null, halfyearly: null, yearly: null },
-  };
+  let pricing = { pro: null };
 
-  try {
-    const rows = await sql`
-      SELECT sp.name as plan_name,
-             sp.price_monthly_usd,
-             sp.price_quarterly_usd,
-             sp.price_halfyearly_usd,
-             sp.price_yearly_usd,
-             spp.price_monthly,
-             spp.price_quarterly,
-             spp.price_halfyearly,
-             spp.price_yearly
-      FROM subscription_plans sp
-      LEFT JOIN subscription_plan_prices spp
-        ON sp.id = spp.plan_id AND spp.currency = ${currency}
-      WHERE sp.is_active = true
-      ORDER BY sp.id
-    `;
-
-    for (const row of rows) {
-      const plan = row.plan_name;
-      if (!plan) continue;
-      const hasCustom = row.price_monthly !== null && row.price_monthly !== undefined;
-      if (hasCustom) {
-        pricing[plan] = {
-          monthly: parseFloat(row.price_monthly),
-          quarterly: parseFloat(row.price_quarterly),
-          halfyearly: parseFloat(row.price_halfyearly),
-          yearly: parseFloat(row.price_yearly),
-        };
-      } else {
-        const monthlyUsd = parseFloat(row.price_monthly_usd || 0);
-        const quarterlyUsd = parseFloat(row.price_quarterly_usd || monthlyUsd * 3 * 0.9);
-        const halfyearlyUsd = parseFloat(row.price_halfyearly_usd || monthlyUsd * 6 * 0.85);
-        const yearlyUsd = parseFloat(row.price_yearly_usd || monthlyUsd * 12 * 0.8);
-        if (currency === "USD") {
-          pricing[plan] = {
-            monthly: monthlyUsd,
-            quarterly: quarterlyUsd,
-            halfyearly: halfyearlyUsd,
-            yearly: yearlyUsd,
-          };
-        } else {
-          const [monthly, quarterly, halfyearly, yearly] = await Promise.all([
-            convertPrice(monthlyUsd, currency),
-            convertPrice(quarterlyUsd, currency),
-            convertPrice(halfyearlyUsd, currency),
-            convertPrice(yearlyUsd, currency),
-          ]).then((results) => results.map((r) => r.amount));
-          pricing[plan] = { monthly, quarterly, halfyearly, yearly };
-        }
-      }
+  // Use authoritative pricing from PLAN_PRICING constant — no DB lookup needed.
+  const prices = PLAN_PRICING[currency];
+  if (prices) {
+    pricing.pro = { ...prices };
+  } else {
+    // Unknown currency — derive from USD using live exchange rates
+    try {
+      const { convertPrice } = require("./_lib/currency");
+      const usd = PLAN_PRICING.USD;
+      const [monthly, quarterly, halfyearly, yearly] = await Promise.all([
+        convertPrice(usd.monthly, currency),
+        convertPrice(usd.quarterly, currency),
+        convertPrice(usd.halfyearly, currency),
+        convertPrice(usd.yearly, currency),
+      ]);
+      pricing.pro = { monthly: monthly.amount, quarterly: quarterly.amount, halfyearly: halfyearly.amount, yearly: yearly.amount };
+    } catch (err) {
+      console.error("[currency] Conversion failed for unknown currency:", currency, err.message);
+      pricing.pro = { ...PLAN_PRICING.USD };
     }
-  } catch (err) {
-    console.error("[currency] Pricing query failed:", err.message);
   }
 
   let rates = null;

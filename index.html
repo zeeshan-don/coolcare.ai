@@ -186,7 +186,7 @@
       .queue{border-right:0;border-bottom:1px solid var(--border)}
       .section,.how{padding:65px 20px}
       .testimonials{grid-template-columns:1fr !important}
-      #pricingCards{grid-template-columns:1fr !important}
+      #pricingCard{max-width:100% !important}
     }
     @media(max-width:480px){
       .nav{padding:0 18px}
@@ -354,14 +354,14 @@
         <option value="AED">🇦🇪 AED (د.إ)</option>
       </select>
     </div>
-    <div class="price">
+    <div class="price" style="max-width:520px;">
       <div class="tag">Pricing</div>
       <h2>Simple, honest pricing.</h2>
-      <p class="price-sub">Choose the plan that fits your team.</p>
-      <div id="pricingCards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px;">
+      <p class="price-sub">One plan. Everything included.</p>
+      <div id="pricingCard" style="margin-top:28px;">
         <!-- Filled dynamically -->
       </div>
-      <p style="color:var(--muted);font-size:12px;margin-top:18px">No hidden fees. Cancel anytime. All plans include WhatsApp bot, dashboard, and notifications.</p>
+      <p style="color:var(--muted);font-size:12px;margin-top:18px">No hidden fees. Cancel anytime. Includes WhatsApp bot, dashboard, and notifications.</p>
     </div>
   </section>
 
@@ -398,7 +398,7 @@
       <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Do I need a separate WhatsApp number?</div><div class="faq-a">No. CoolCare connects to your existing WhatsApp Business account through the Meta API. Your customers keep messaging the same number they already know.</div></div>
       <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Can I customize the AI responses?</div><div class="faq-a">Yes. You can configure the greeting message, business hours, supported services, knowledge base, fallback responses, and when to transfer to a human agent — all from the AI Settings page.</div></div>
       <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">What happens if my subscription expires?</div><div class="faq-a">Your dashboard remains accessible in view-only mode. The WhatsApp bot stops creating new bookings. You can renew anytime and pick up right where you left off.</div></div>
-      <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Can I switch plans later?</div><div class="faq-a">Absolutely. You can upgrade or downgrade at any time. Changes take effect at the start of your next billing cycle.</div></div>
+      <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Can I change my billing cycle?</div><div class="faq-a">Absolutely. You can switch between monthly, quarterly, half-yearly, and yearly billing at any time. Changes take effect at the start of your next billing cycle.</div></div>
       <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Is there a referral program?</div><div class="faq-a">Yes! Every shop gets a unique referral code. When another shop signs up using your code and subscribes, you earn a $10 credit. Check the Referrals page in your dashboard.</div></div>
     </div>
   </section>
@@ -454,26 +454,19 @@
   setInterval(loadQueue, 15000);
 
   // ── Currency & Dynamic Pricing ──
-  const PLANS = [
-    {
-      name: 'Starter',
-      key: 'starter',
-      features: ['WhatsApp bot', 'Live dashboard', 'Unlimited technicians', 'Fast setup'],
-    },
-    {
-      name: 'Professional',
-      key: 'professional',
-      features: ['Automated booking flow', 'Reminders & follow-ups', 'Team management', 'Growth analytics'],
-    },
-    {
-      name: 'Enterprise',
-      key: 'enterprise',
-      features: ['Custom workflows', 'Priority support', 'Advanced reporting', 'Dedicated onboarding'],
-    },
+  const PRO_FEATURES = [
+    'WhatsApp AI assistant',
+    'Live booking dashboard',
+    'Unlimited technicians',
+    'Automated booking flow',
+    'Reminders & follow-ups',
+    'Growth analytics',
+    'Priority support',
+    'Custom AI responses',
   ];
 
   const cycleLabels = { monthly: '/mo', quarterly: '/qtr', halfyearly: '/6mo', yearly: '/yr' };
-  const cycleMonths = { monthly: 1, quarterly: 3, halfyearly: 6, yearly: 12 };
+  const cycleDiscounts = { monthly: 0, quarterly: 10, halfyearly: 15, yearly: 20 };
 
   function detectBrowserCurrency() {
     const saved = localStorage.getItem('cc_currency');
@@ -531,43 +524,35 @@
     localStorage.setItem('cc_currency', currentCurrency);
     currencySelect.value = currentCurrency;
 
+    const cardEl = document.getElementById('pricingCard');
+
     try {
       const res = await fetch(`/api/currency?currency=${encodeURIComponent(currentCurrency)}`);
       const data = await res.json();
-      const pricing = data.pricing || {};
+      const proPrices = data.pricing?.pro;
       const symbol = data.symbol || '$';
 
-      document.getElementById('pricingCards').innerHTML = PLANS.map((plan) => {
-        const planPrices = pricing[plan.key] || {};
-        const priceValue = planPrices[currentCycle] != null ? parseFloat(planPrices[currentCycle]) : null;
-        const monthlyValue = planPrices.monthly != null ? parseFloat(planPrices.monthly) : null;
-        const displayPrice = priceValue != null
-          ? `${formatPrice(symbol, priceValue)}${cycleLabels[currentCycle]}`
-          : `${formatPrice(symbol, monthlyValue || 29)}${cycleLabels[currentCycle]}`;
-        const savings = (currentCycle !== 'monthly' && priceValue != null && monthlyValue)
-          ? Math.round((1 - priceValue / (monthlyValue * cycleMonths[currentCycle])) * 100)
-          : 0;
+      if (!proPrices) {
+        cardEl.innerHTML = `<div style="color:var(--muted);padding:24px">Pricing unavailable. Please try another currency.</div>`;
+        return;
+      }
 
-        return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:32px 24px;text-align:center;position:relative;">
-          <h3 style="font-size:20px;margin-bottom:8px;color:#fff">${plan.name}</h3>
-          <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">${displayPrice}</div>
-          ${savings > 0 ? `<div style="color:var(--green);font-size:11px;font-weight:600;margin-bottom:4px">Save ${savings}% vs monthly</div>` : '<div style="height:15px;margin-bottom:4px"></div>'}
-          <div style="text-align:left;margin:20px 0">${plan.features.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
-          <a href="/shop-signup.html?plan=${plan.key}&billing=${currentCycle}"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
+      const priceValue = parseFloat(proPrices[currentCycle]);
+      const monthlyValue = parseFloat(proPrices.monthly);
+      const displayPrice = `${formatPrice(symbol, priceValue)}${cycleLabels[currentCycle]}`;
+      const discount = cycleDiscounts[currentCycle] || 0;
+
+      cardEl.innerHTML = `
+        <div style="background:var(--bg);border:1px solid var(--border2);border-radius:14px;padding:36px 32px;text-align:center;">
+          <h3 style="font-size:22px;margin-bottom:4px;color:#fff">CoolCare Pro</h3>
+          <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Everything you need to grow</p>
+          <div style="font-size:48px;font-weight:800;color:#fff;margin:12px 0;letter-spacing:-1px">${displayPrice}</div>
+          ${discount > 0 ? `<div style="display:inline-block;color:var(--green);font-size:12px;font-weight:700;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:99px;padding:4px 12px;margin-bottom:8px">Save ${discount}% vs monthly</div>` : '<div style="height:24px"></div>'}
+          <div style="text-align:left;margin:24px auto;max-width:260px">${PRO_FEATURES.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
+          <a href="/shop-signup.html?billing=${currentCycle}"><button class="btn-hero" style="width:100%;font-size:14px;padding:14px">Get started →</button></a>
         </div>`;
-      }).join('');
     } catch (err) {
-      const fallback = 29;
-      document.getElementById('pricingCards').innerHTML = PLANS.map((plan) => {
-        const cyclePrice = Math.round(fallback * cycleMonths[currentCycle]);
-        return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:32px 24px;text-align:center;">
-          <h3 style="font-size:20px;margin-bottom:8px;color:#fff">${plan.name}</h3>
-          <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">$${cyclePrice}${cycleLabels[currentCycle]}</div>
-          <div style="height:15px;margin-bottom:4px"></div>
-          <div style="text-align:left;margin:20px 0">${plan.features.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
-          <a href="/shop-signup.html?plan=${plan.key}&billing=${currentCycle}"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
-        </div>`;
-      }).join('');
+      cardEl.innerHTML = `<div style="color:var(--muted);padding:24px">Could not load pricing. Please refresh the page.</div>`;
     }
   }
 

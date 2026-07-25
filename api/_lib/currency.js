@@ -1,6 +1,6 @@
 // api/_lib/currency.js
 // Multi-currency support with live exchange rates.
-// Prices stored in USD base, converted dynamically for display.
+// Single CoolCare Pro plan with exact per-currency pricing.
 
 const CURRENCIES = {
   USD: { symbol: "$", name: "US Dollar", locale: "en-US" },
@@ -9,16 +9,14 @@ const CURRENCIES = {
   AED: { symbol: "د.إ", name: "UAE Dirham", locale: "ar-AE" },
 };
 
-// Base prices in USD — all conversions derive from these
-const BASE_PRICES_USD = {
-  starter_monthly: 29,
-  starter_yearly: 290,
-  professional_monthly: 59,
-  professional_yearly: 590,
-  enterprise_monthly: 149,
-  enterprise_yearly: 1490,
-  // Legacy single plan
-  legacy_monthly: 59,
+// CoolCare Pro — exact prices per currency per billing cycle.
+// These are the authoritative prices shown to customers.
+// Quarterly = monthly × 3 × 0.90, Half-Yearly = × 6 × 0.85, Yearly = × 12 × 0.80
+const PLAN_PRICING = {
+  USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
+  INR: { monthly: 1299, quarterly: 3156, halfyearly: 6625, yearly: 12470 },
+  AED: { monthly: 75, quarterly: 202.5, halfyearly: 382.5, yearly: 720 },
+  KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
 };
 
 // Fallback exchange rates (updated periodically via API)
@@ -95,14 +93,22 @@ async function convertPrice(amountUsd, targetCurrency = "USD") {
 }
 
 /**
- * Get all pricing plans converted to a target currency.
+ * Get CoolCare Pro pricing for a target currency.
+ * Returns exact prices from PLAN_PRICING if available, otherwise converts from USD.
  */
 async function getPricing(currency = "USD") {
-  const plans = {};
-  for (const [key, usdPrice] of Object.entries(BASE_PRICES_USD)) {
-    plans[key] = await convertPrice(usdPrice, currency);
+  const prices = PLAN_PRICING[currency];
+  if (prices) {
+    return { pro: prices };
   }
-  return plans;
+  // Unknown currency — convert from USD base
+  const usd = PLAN_PRICING.USD;
+  const converted = {};
+  for (const [cycle, amount] of Object.entries(usd)) {
+    const result = await convertPrice(amount, currency);
+    converted[cycle] = result.amount;
+  }
+  return { pro: converted };
 }
 
 /**
@@ -133,7 +139,7 @@ function detectCurrency(request) {
 
 module.exports = {
   CURRENCIES,
-  BASE_PRICES_USD,
+  PLAN_PRICING,
   FALLBACK_RATES,
   getExchangeRates,
   convertPrice,
