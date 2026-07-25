@@ -184,6 +184,21 @@ const editPlanSchema = z.object({
   is_active: z.boolean().optional(),
 });
 
+// ─── AI settings schema (shop saves AI assistant config) ──────────────────────
+const aiSettingsSchema = z.object({
+  action: z.literal('save-ai-settings'),
+  greetingMessage: z.string().max(2000).optional().default(''),
+  fallbackResponse: z.string().max(2000).optional().default(''),
+  knowledgeBase: z.string().max(10000).optional().default(''),
+  businessHours: z.record(z.object({
+    open: z.string().optional().default('09:00'),
+    close: z.string().optional().default('18:00'),
+  })).optional().default({}),
+  workingDays: z.array(z.string()).max(10).optional().default(['mon','tue','wed','thu','fri','sat']),
+  supportedServices: z.array(z.string()).optional().default([]),
+  transferToHuman: z.boolean().optional().default(true),
+});
+
 // ─── Settings schema ─────────────────────────────────────────────────────────
 const settingsSchema = z.object({
   settings: z.record(z.string(), z.any()),
@@ -215,6 +230,7 @@ const resetPasswordTokenSchema = z.object({
 
 module.exports = {
   validate,
+  aiSettingsSchema,
   cleanString,
   email,
   mobile,

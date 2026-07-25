@@ -162,9 +162,9 @@ async function requireActiveSubscription(auth, sql, response) {
     }
   }
 
-  // Check repair_shops subscription_status
+  // Check repair_shops subscription_status and approval_status
   const shop = await sql`
-    SELECT subscription_status, suspended_at FROM repair_shops WHERE id = ${shopId} LIMIT 1
+    SELECT subscription_status, approval_status, suspended_at FROM repair_shops WHERE id = ${shopId} LIMIT 1
   `;
   if (shop.length === 0) {
     response.status(403).json({ error: "Account not found." });
@@ -176,6 +176,23 @@ async function requireActiveSubscription(auth, sql, response) {
   }
 
   const subStatus = shop[0].subscription_status || "inactive";
+  const approvalStatus = shop[0].approval_status || "none";
+
+  // Check approval status — only approve shops can use features
+  if (subStatus === "active" && approvalStatus !== "approved") {
+    const msg = approvalStatus === 'pending'
+      ? 'Your account is pending approval. A super admin will review and activate your account shortly.'
+      : approvalStatus === 'rejected'
+        ? 'Your account application was not approved. Please contact support.'
+        : 'Your account has not been approved yet. Please wait for admin approval.';
+    response.status(403).json({
+      error: msg,
+      errorType: 'approval_required',
+      approvalStatus: approvalStatus || 'none',
+    });
+    return null;
+  }
+
   if (subStatus === "active") {
     // Double-check expiry hasn't passed
     try {

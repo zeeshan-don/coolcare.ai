@@ -18,9 +18,9 @@
 
 const { neon } = require("@neondatabase/serverless");
 const { requireAuth, requireRole, requirePlatformAdmin, requireSuperAdmin, requireActiveSubscription, logAdminAction } = require("./_lib/auth");
-const { notifyStatusChange } = require("./_lib/notify");
+const { notifyStatusChange, sendEmail, sendWhatsApp } = require("./_lib/notify");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
-const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
+const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, aiSettingsSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
@@ -47,10 +47,10 @@ const planPricingSchema = z.object({
 });
 
 // Admin GET actions
-const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-pricing", "admin-payments", "admin-settings", "admin-analytics", "admin-gateways", "admin-subscriptions", "admin-invoices", "admin-payment-logs"]);
+const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-pricing", "admin-payments", "admin-settings", "admin-analytics", "admin-gateways", "admin-subscriptions", "admin-invoices", "admin-payment-logs", "admin-pending-activations"]);
 // Admin POST actions
 const ADMIN_POST_ACTIONS = new Set([
-  "suspend", "activate", "delete", "edit-shop", "approve-shop", "reset-password",
+  "suspend", "activate", "delete", "edit-shop", "approve-shop", "reject-shop", "reset-password",
   "create-user", "edit-user", "delete-user", "invite-user",
   "create-plan", "edit-plan", "delete-plan", "duplicate-plan", "save-plan-pricing", "save-settings",
   "extend-subscription", "change-plan",
@@ -229,13 +229,17 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     subscription = subRows[0] || null;
   } catch (e) { /* table may not exist yet */ }
 
-  // Check subscription status for gating UI
+  // Check subscription status and approval status for gating UI
   let subscriptionRequired = false;
   let subscriptionStatus = "active";
+  let approvalStatus = "approved";
+  let rejectionReason = null;
   try {
-    const shopCheck = await sql`SELECT subscription_status FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    const shopCheck = await sql`SELECT subscription_status, approval_status, rejection_reason FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
     subscriptionStatus = shopCheck[0]?.subscription_status || "inactive";
-    subscriptionRequired = subscriptionStatus !== "active";
+    approvalStatus = shopCheck[0]?.approval_status || "none";
+    rejectionReason = shopCheck[0]?.rejection_reason || null;
+    subscriptionRequired = subscriptionStatus !== "active" || (approvalStatus !== "approved" && approvalStatus !== "none");
   } catch (e) { /* ok */ }
 
   return response.status(200).json({
@@ -252,6 +256,8 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     subscription,
     subscriptionRequired,
     subscriptionStatus,
+    approvalStatus,
+    rejectionReason,
   });
 }
 
@@ -386,6 +392,7 @@ async function handleAdminGet(request, response, sql, auth, action) {
     case "admin-analytics": return adminAnalytics(request, response, sql, auth);
     case "admin-gateways": return adminListGateways(request, response, sql, auth);
     case "admin-subscriptions": return adminListSubscriptions(request, response, sql, auth);
+    case "admin-pending-activations": return adminPendingActivations(request, response, sql, auth);
     case "admin-invoices": return adminListInvoices(request, response, sql, auth);
     case "admin-payment-logs": return adminListPaymentLogs(request, response, sql, auth);
     default: return response.status(400).json({ error: "Unknown admin GET action" });
@@ -528,6 +535,16 @@ async function adminDashboard(request, response, sql, auth) {
     const expired = await sql`SELECT COUNT(*) as cnt FROM repair_shops WHERE subscription_status = 'expired'`;
     analytics.expired_shops = parseInt(expired[0]?.cnt || '0', 10);
   } catch (e) { analytics.expired_shops = 0; }
+
+  try {
+    const pendingActivations = await sql`SELECT COUNT(*) as cnt FROM repair_shops WHERE approval_status = 'pending'`;
+    analytics.pending_activations = parseInt(pendingActivations[0]?.cnt || '0', 10);
+  } catch (e) { analytics.pending_activations = 0; }
+
+  try {
+    const rejectedShops = await sql`SELECT COUNT(*) as cnt FROM repair_shops WHERE approval_status = 'rejected'`;
+    analytics.rejected_shops = parseInt(rejectedShops[0]?.cnt || '0', 10);
+  } catch (e) { analytics.rejected_shops = 0; }
 
   try {
     const renewals = await sql`SELECT COUNT(*) as cnt FROM subscriptions WHERE status = 'active' AND current_period_end <= now() + INTERVAL '7 days' AND current_period_end > now()`;
@@ -704,7 +721,8 @@ async function handleAdminPost(request, response, sql, auth, body) {
     case "activate": return adminActivateShop(sql, response, body, actorType, actorId, ip);
     case "delete": return adminDeleteShop(sql, response, body, actorType, actorId, ip);
     case "edit-shop": return adminEditShop(sql, response, body, actorType, actorId, ip);
-    case "approve-shop": return adminApproveShop(sql, response, body, actorType, actorId, ip);
+    case "approve-shop": return adminApproveShop(request, response, sql, body, actorType, actorId, ip);
+    case "reject-shop": return adminRejectShop(request, response, sql, body, actorType, actorId, ip);
     case "reset-password": return adminResetPassword(sql, response, body, actorType, actorId, ip);
 
     // ── User actions ────────────────────────────────────────────
@@ -781,12 +799,153 @@ async function adminEditShop(sql, response, body, actorType, actorId, ip) {
   return response.status(200).json({ message: "Shop updated" });
 }
 
-async function adminApproveShop(sql, response, body, actorType, actorId, ip) {
+async function adminApproveShop(request, response, sql, body, actorType, actorId, ip) {
   const shopId = body.shopId;
   if (!shopId) return response.status(400).json({ error: "shopId required" });
-  await sql`UPDATE repair_shops SET is_active = true, subscription_status = 'active', updated_at = now() WHERE id = ${shopId}`;
-  await logAdminAction(sql, { actorType, actorId, action: "approve_shop", targetType: "shop", targetId: shopId, ip });
-  return response.status(200).json({ message: "Shop approved" });
+  
+  // Get shop info before update
+  const shopRows = await sql`SELECT id, shop_name, owner_name, email, mobile, approval_status FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+  if (shopRows.length === 0) return response.status(404).json({ error: "Shop not found" });
+  if (shopRows[0].approval_status === 'approved') {
+    return response.status(409).json({ error: "Shop is already approved", approvalStatus: 'approved' });
+  }
+  const shop = shopRows[0];
+
+  await sql`UPDATE repair_shops SET is_active = true, subscription_status = 'active', approval_status = 'approved', approved_at = now(), approved_by = ${actorId}, rejection_reason = NULL, updated_at = now() WHERE id = ${shopId}`;
+  
+  // Log action
+  await logAdminAction(sql, { actorType, actorId, action: "approve_shop", targetType: "shop", targetId: shopId, details: { approval: 'granted' }, ip });
+
+  // In-app notification for shop owner
+  try {
+    await sql`
+      INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+      VALUES (${shopId}, 'account_approved', 'Account Approved! 🎉',
+              'Your CoolCare account has been approved! You can now use the AI chatbot, dashboard, WhatsApp integration, and all booking features.',
+              '/shop-dashboard.html')
+    `;
+  } catch (e) { /* ok */ }
+
+  // Send email notification
+  const subject = 'Your CoolCare Account Has Been Approved! 🎉';
+  const htmlBody = `<div style="font-family:Inter,sans-serif;padding:24px;background:#0a0a0a;color:#ededed;">
+    <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #222;border-radius:12px;padding:32px;">
+      <h2 style="color:#fff;margin:0 0 16px;font-size:20px;">Welcome to CoolCare! ✅</h2>
+      <p style="color:#a3a3a3;line-height:1.6;">Hi ${shop.owner_name},</p>
+      <p style="color:#e5e5e5;line-height:1.6;">Your CoolCare account has been approved! You can now start using all features:</p>
+      <ul style="color:#a3a3a3;line-height:1.8;padding-left:20px;">
+        <li>🤖 AI Assistant for WhatsApp</li>
+        <li>📊 Full Dashboard Access</li>
+        <li>🔧 Booking Management</li>
+        <li>💬 WhatsApp Integration</li>
+      </ul>
+      <p style="margin:24px 0 0;"><a href="${process.env.APP_URL || 'https://coolcare.ai'}/shop-dashboard.html"
+        style="display:inline-block;background:#fff;color:#000;font-weight:600;font-size:14px;padding:12px 32px;border-radius:8px;text-decoration:none;">Go to Dashboard</a></p>
+      <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
+      <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
+    </div></div>`;
+  try {
+    if (shop.email) await sendEmail(shop.email, subject, htmlBody);
+  } catch (e) { console.warn("[shop/approve] Email failed:", e.message); }
+
+  // Send WhatsApp notification
+  try {
+    const waMsg = `✅ *CoolCare Account Approved!*\n\nHi ${shop.owner_name}, your account has been approved! You can now use the AI chatbot, dashboard, and all booking features.\n\nStart here: ${process.env.APP_URL || 'https://coolcare.ai'}/shop-dashboard.html`;
+    if (shop.mobile) await sendWhatsApp(shop.mobile, waMsg);
+  } catch (e) { console.warn("[shop/approve] WhatsApp failed:", e.message); }
+
+  console.log("[shop/approve] Shop #" + shopId + " approved by actor #" + actorId);
+  return response.status(200).json({ message: "Shop approved. AI features activated.", approvalStatus: "approved" });
+}
+
+async function adminRejectShop(request, response, sql, body, actorType, actorId, ip) {
+  const shopId = body.shopId;
+  const reason = body.reason || "No reason provided";
+  if (!shopId) return response.status(400).json({ error: "shopId required" });
+  
+  const shopRows = await sql`SELECT id, shop_name, owner_name, email, approval_status FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+  if (shopRows.length === 0) return response.status(404).json({ error: "Shop not found" });
+  if (shopRows[0].approval_status === 'rejected') {
+    return response.status(409).json({ error: "Shop is already rejected", approvalStatus: 'rejected' });
+  }
+  const shop = shopRows[0];
+
+  await sql`UPDATE repair_shops SET approval_status = 'rejected', rejection_reason = ${reason}, updated_at = now() WHERE id = ${shopId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "reject_shop", targetType: "shop", targetId: shopId, details: { reason }, ip });
+
+  // In-app notification
+  try {
+    await sql`
+      INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+      VALUES (${shopId}, 'account_rejected', 'Account Application Update',
+              ${'Your CoolCare account application was not approved. Reason: ' + reason + '. Please contact support for more information.'},
+              '/contact.html')
+    `;
+  } catch (e) { /* ok */ }
+
+  // Email notification
+  try {
+    if (shop.email) {
+      const subject = 'CoolCare Account Application Status';
+      const htmlBody = `<div style="font-family:Inter,sans-serif;padding:24px;background:#0a0a0a;color:#ededed;">
+        <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #222;border-radius:12px;padding:32px;">
+          <h2 style="color:#fff;margin:0 0 16px;font-size:20px;">Application Update</h2>
+          <p style="color:#a3a3a3;line-height:1.6;">Hi ${shop.owner_name},</p>
+          <p style="color:#e5e5e5;line-height:1.6;">We reviewed your CoolCare account application, but we were unable to approve it at this time.</p>
+          <p style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:12px;color:#ef4444;font-size:14px;">
+            <strong>Reason:</strong> ${reason}
+          </p>
+          <p style="color:#a3a3a3;line-height:1.6;margin-top:16px;">If you have any questions, please contact our support team.</p>
+          <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
+          <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
+        </div></div>`;
+      await sendEmail(shop.email, subject, htmlBody);
+    }
+  } catch (e) { console.warn("[shop/reject] Email failed:", e.message); }
+
+  // WhatsApp notification
+  try {
+    if (shop.mobile) {
+      const waMsg = `ℹ️ *CoolCare Application Update*\n\nHi ${shop.owner_name}, we reviewed your application but were unable to approve it.\nReason: ${reason}\n\nPlease contact support for assistance.`;
+      await sendWhatsApp(shop.mobile, waMsg);
+    }
+  } catch (e) { console.warn("[shop/reject] WhatsApp failed:", e.message); }
+
+  console.log("[shop/reject] Shop #" + shopId + " rejected by actor #" + actorId + ":", reason);
+  return response.status(200).json({ message: "Shop rejected", reason });
+}
+
+async function adminPendingActivations(request, response, sql, auth) {
+  try {
+    const shops = await sql`
+      SELECT rs.id, rs.shop_name, rs.owner_name, rs.email, rs.mobile, rs.city, rs.created_at,
+             rs.approval_status, rs.rejection_reason,
+             p.amount as payment_amount, p.currency as payment_currency,
+             p.gateway as payment_gateway, p.payment_id, p.transaction_id,
+             p.created_at as payment_date,
+             s.billing_cycle, s.current_period_start, s.current_period_end
+      FROM repair_shops rs
+      LEFT JOIN payments p ON p.repair_shop_id = rs.id AND p.status = 'completed'
+      LEFT JOIN subscriptions s ON s.repair_shop_id = rs.id AND s.status = 'active'
+      WHERE rs.approval_status = 'pending'
+      ORDER BY rs.created_at DESC
+    `;
+    return response.status(200).json({ shops });
+  } catch (e) {
+    console.error("[shop/admin-pending-activations] Failed:", e.message);
+    // Fallback with minimal fields if columns don't exist
+    try {
+      const shops = await sql`
+        SELECT id, shop_name, owner_name, email, mobile, city, created_at,
+               'pending' as approval_status, NULL as rejection_reason
+        FROM repair_shops WHERE approval_status = 'pending'
+        ORDER BY created_at DESC
+      `;
+      return response.status(200).json({ shops });
+    } catch (e2) {
+      return response.status(500).json({ error: "Failed to fetch pending activations", detail: e2.message });
+    }
+  }
 }
 
 async function adminResetPassword(sql, response, body, actorType, actorId, ip) {
@@ -1115,7 +1274,9 @@ async function handleGetAiSettings(request, response, sql, shopId) {
   try {
     const rows = await sql`SELECT * FROM ai_settings WHERE repair_shop_id = ${shopId} LIMIT 1`;
     settings = rows[0] || null;
-  } catch (e) { /* table may not exist */ }
+  } catch (e) {
+    console.warn("[shop/ai-settings] GET: table may not exist:", e.message);
+  }
 
   if (!settings) {
     settings = {
@@ -1129,9 +1290,11 @@ async function handleGetAiSettings(request, response, sql, shopId) {
 }
 
 async function handleSaveAiSettings(request, response, sql, shopId, body) {
-  const { greetingMessage, businessHours, workingDays, supportedServices, knowledgeBase, fallbackResponse, transferToHuman } = body;
+  const data = validate({ body }, response, aiSettingsSchema);
+  if (!data) return;
+  const { greetingMessage, businessHours, workingDays, supportedServices, knowledgeBase, fallbackResponse, transferToHuman } = data;
   try {
-    await sql`
+    const result = await sql`
       INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days, supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
       VALUES (${shopId}, ${greetingMessage || ''}, ${sql.json(businessHours || {})}, ${workingDays || ['mon','tue','wed','thu','fri','sat']},
               ${supportedServices || []}, ${knowledgeBase || ''}, ${fallbackResponse || ''}, ${transferToHuman !== false}, now())
@@ -1140,10 +1303,65 @@ async function handleSaveAiSettings(request, response, sql, shopId, body) {
         working_days = ${workingDays || ['mon','tue','wed','thu','fri','sat']},
         supported_services = ${supportedServices || []}, knowledge_base = ${knowledgeBase || ''},
         fallback_response = ${fallbackResponse || ''}, transfer_to_human = ${transferToHuman !== false}, updated_at = now()
+      RETURNING id
     `;
+    console.log("[shop/ai-settings] Saved for shop #" + shopId + ", row id:", result[0]?.id);
   } catch (e) {
-    console.error("[shop/ai-settings] Save failed:", e.message);
-    return response.status(500).json({ error: "Failed to save AI settings" });
+    console.error("[shop/ai-settings] Save failed for shop #" + shopId + ":", {
+      message: e.message,
+      code: e.code,
+      detail: e.detail,
+      stack: e.stack?.split('\n').slice(0, 3).join('\n'),
+      body: JSON.stringify({ ...body, supportedServices: undefined }),
+    });
+    // Attempt auto-recovery: create table if missing and retry
+    if (e.code === '42P01' || e.message?.includes('does not exist')) {
+      try {
+        await sql`CREATE TABLE IF NOT EXISTS ai_settings (
+          id SERIAL PRIMARY KEY,
+          repair_shop_id INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
+          greeting_message TEXT DEFAULT \'\',
+          business_hours JSONB DEFAULT \'{}\',
+          working_days TEXT[] DEFAULT ARRAY[\'mon\',\'tue\',\'wed\',\'thu\',\'fri\',\'sat\'],
+          supported_services TEXT[] DEFAULT \'{}\',
+          knowledge_base TEXT DEFAULT \'\',
+          fallback_response TEXT DEFAULT \'I apologize, but I am unable to help with that right now. A team member will get back to you shortly.\',
+          transfer_to_human BOOLEAN NOT NULL DEFAULT true,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE(repair_shop_id)
+        )`;
+        console.log("[shop/ai-settings] Auto-created ai_settings table for shop #" + shopId);
+        // Retry the original INSERT once after creating the table
+        const retryResult = await sql`
+          INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days, supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
+          VALUES (${shopId}, ${greetingMessage || ''}, ${sql.json(businessHours || {})}, ${workingDays || ['mon','tue','wed','thu','fri','sat']},
+                  ${supportedServices || []}, ${knowledgeBase || ''}, ${fallbackResponse || ''}, ${transferToHuman !== false}, now())
+          ON CONFLICT (repair_shop_id) DO UPDATE SET
+            greeting_message = ${greetingMessage || ''}, business_hours = ${sql.json(businessHours || {})},
+            working_days = ${workingDays || ['mon','tue','wed','thu','fri','sat']},
+            supported_services = ${supportedServices || []}, knowledge_base = ${knowledgeBase || ''},
+            fallback_response = ${fallbackResponse || ''}, transfer_to_human = ${transferToHuman !== false}, updated_at = now()
+          RETURNING id
+        `;
+        console.log("[shop/ai-settings] Retry INSERT succeeded for shop #" + shopId + ", row id:", retryResult[0]?.id);
+        return response.status(200).json({ message: "AI settings saved (table auto-created)" });
+      } catch (createErr) {
+        console.error("[shop/ai-settings] Auto-recovery failed for shop #" + shopId + ":", {
+          message: createErr.message,
+          code: createErr.code,
+          detail: createErr.detail,
+        });
+        return response.status(500).json({
+          error: "Database configuration error: ai_settings table could not be created",
+          detail: process.env.NODE_ENV !== 'production' ? createErr.message : undefined,
+        });
+      }
+    }
+    return response.status(500).json({
+      error: "Failed to save AI settings",
+      detail: process.env.NODE_ENV !== 'production' ? e.message : undefined,
+    });
   }
   return response.status(200).json({ message: "AI settings saved" });
 }

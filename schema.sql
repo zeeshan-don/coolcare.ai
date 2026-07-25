@@ -6,8 +6,11 @@ CREATE TABLE IF NOT EXISTS conversations (
   id SERIAL PRIMARY KEY,
   customer_number TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('customer', 'bot')),
-  message TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
+  message TEXT NOT NULL,  created_at     TIMESTAMPTZ DEFAULT now(),
+  approval_status TEXT NOT NULL DEFAULT 'none' CHECK (approval_status IN ('none','pending','approved','rejected')),
+  approved_at    TIMESTAMPTZ,
+  approved_by    INTEGER,
+  rejection_reason TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_conversations_customer ON conversations(customer_number, created_at);
@@ -29,11 +32,14 @@ CREATE TABLE IF NOT EXISTS conversation_state (
   area          TEXT,
   urgency       TEXT,   -- e.g. "Today", "Tomorrow morning"
   booking_id    TEXT,   -- FK to bookings.id once confirmed
+  repair_shop_id INTEGER, -- FK to repair_shops.id for multi-tenancy
+  language      TEXT NOT NULL DEFAULT 'en', -- language preference: en, hi, ta, ar
   created_at    TIMESTAMPTZ DEFAULT now(),
   updated_at    TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_conversation_state_customer ON conversation_state(customer_number);
+CREATE INDEX IF NOT EXISTS idx_conv_state_shop ON conversation_state(repair_shop_id);
 
 -- Migration helper: if you already have the old table with a 'step' column, run this:
 -- ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'COLLECTING_APPLIANCE';
@@ -65,6 +71,22 @@ CREATE TABLE IF NOT EXISTS technicians (
   phone TEXT,
   services TEXT[] NOT NULL,
   active BOOLEAN DEFAULT true
+);
+
+-- AI settings: per-shop AI assistant configuration
+CREATE TABLE IF NOT EXISTS ai_settings (
+  id               SERIAL PRIMARY KEY,
+  repair_shop_id   INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
+  greeting_message TEXT DEFAULT '',
+  business_hours   JSONB DEFAULT '{}',
+  working_days     TEXT[] DEFAULT ARRAY['mon','tue','wed','thu','fri','sat'],
+  supported_services TEXT[] DEFAULT '{}',
+  knowledge_base   TEXT DEFAULT '',
+  fallback_response TEXT DEFAULT 'I apologize, but I am unable to help with that right now. A team member will get back to you shortly.',
+  transfer_to_human BOOLEAN NOT NULL DEFAULT true,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(repair_shop_id)
 );
 
 -- Sample technicians (edit with real names/numbers before going live)

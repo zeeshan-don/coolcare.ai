@@ -202,16 +202,30 @@
       if (res.status === 401) { logout(); return; }
       const data = await res.json();
 
-      // Subscription banner
-      const banner = document.getElementById('subBanner');
-      if (data.subscriptionRequired) {
-        const st = data.subscriptionStatus;
-        const isExpired = st === 'expired';
-        banner.className = 'sub-banner' + (isExpired || st === 'inactive' ? ' inactive' : '');
-        banner.style.display = 'flex';
-        const msg = isExpired ? 'Your subscription has expired. Renew now to continue using all features.'
-          : st === 'inactive' ? 'Your subscription is not active. Subscribe to unlock all features.'
-          : 'Your subscription needs attention.';
+      // Unified banner: approval status takes priority, then subscription status
+      const bannerEl = document.getElementById('subBanner');
+      
+      if (data.approvalStatus === 'pending') {
+        bannerEl.style.display = 'flex';
+        bannerEl.className = 'sub-banner';
+        bannerEl.innerHTML = '<div><div class="sub-banner-text" style="color:#eab308">🟡 Waiting for Activation</div><div class="sub-banner-sub">Your account is pending approval. You will be notified once your AI assistant is activated.</div></div>' +
+          '<a href="/shop-subscription.html">View Status</a>';
+        document.querySelector('.nav-link[href="/shop-ai-settings.html"]')?.style.setProperty('opacity', '0.4');
+        document.querySelector('.nav-link[href="/shop-ai-settings.html"]')?.style.setProperty('pointer-events', 'none');
+      } else if (data.approvalStatus === 'rejected') {
+        bannerEl.style.display = 'flex';
+        bannerEl.className = 'sub-banner inactive';
+        bannerEl.innerHTML = '<div><div class="sub-banner-text" style="color:#ef4444">❌ Account Rejected</div><div class="sub-banner-sub">' + (data.rejectionReason || 'Your account was not approved. Please contact support for details.') + '</div></div>' +
+          '<a href="/contact.html">Contact Support</a>';
+      } else if (data.subscriptionRequired) {
+        // Subscription status banner (only for approved/none shops)
+          const st = data.subscriptionStatus;
+          const isExpired = st === 'expired';
+          banner.className = 'sub-banner' + (isExpired || st === 'inactive' ? ' inactive' : '');
+          banner.style.display = 'flex';
+          const msg = isExpired ? 'Your subscription has expired. Renew now to continue using all features.'
+            : st === 'inactive' ? 'Your subscription is not active. Subscribe to unlock all features.'
+            : 'Your subscription needs attention.';
         banner.innerHTML = `<div><div class="sub-banner-text">${msg}</div><div class="sub-banner-sub">Status: ${st.charAt(0).toUpperCase() + st.slice(1)}</div></div><a href="/index.html#pricing">Subscribe Now →</a>`;
       } else { banner.style.display = 'none'; }
 

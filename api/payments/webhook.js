@@ -174,8 +174,25 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
     action = existing.length > 0 ? "reactivated" : "activated";
   }
 
-  // Activate shop
-  await sql`UPDATE repair_shops SET subscription_status = 'active', suspended_at = NULL, suspension_reason = NULL, updated_at = now() WHERE id = ${shopId}`;
+  // Set payment as verified but require admin approval before activation
+  await sql`UPDATE repair_shops SET subscription_status = 'active', approval_status = 'pending', suspended_at = NULL, suspension_reason = NULL, updated_at = now() WHERE id = ${shopId}`;
+
+  // Notify super admins about pending approval
+  try {
+    await sql`
+      INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+      VALUES (${shopId}, 'payment_received', 'Payment Received — Pending Approval',
+              'Payment received successfully. Your account is pending admin approval. You will be notified once activated.',
+              '/shop-subscription.html')
+    `;
+    // Also notify admin
+    const shop = await sql`SELECT shop_name, owner_name FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    if (shop[0]) {
+      await notifyAdmin(shopId, 'New Payment — Pending Approval',
+        `Shop "${shop[0].shop_name}" (${shop[0].owner_name}) has paid and is awaiting activation.\n\n` +
+        `Approve or reject in the admin dashboard: Pending Activations tab.`);
+    }
+  } catch (e) { /* ok */ }
 
   // Log subscription history
   await logSubHistory(sql, subId, shopId, action, oldStatus, "active", amount, currency, billingCycle, gateway, "webhook");
