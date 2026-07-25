@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#000;--bg2:#0a0a0a;--bg3:#111;--bg4:#1a1a1a;--bg5:#222;--border:#1a1a1a;--border2:#2a2a2a;--border3:#333;--ink:#ededed;--ink2:#a3a3a3;--ink3:#888;--muted:#737373;--muted2:#525252;--muted3:#404040;--red:#ef4444;--red-bg:rgba(239,68,68,.08);--green:#22c55e;--green-bg:rgba(34,197,94,.08);--blue:#3b82f6;--blue-bg:rgba(59,130,246,.08);--radius:10px;--radius-lg:14px;--radius-xl:18px;--shadow:0 1px 3px rgba(0,0,0,.4);--transition:all .15s ease}
+    :root{--bg:#000;--bg2:#0a0a0a;--bg3:#111;--bg4:#1a1a1a;--bg5:#222;--border:#1a1a1a;--border2:#2a2a2a;--border3:#333;--ink:#ededed;--ink2:#a3a3a3;--ink3:#888;--muted:#737373;--muted2:#525252;--muted3:#404040;--red:#ef4444;--red-bg:rgba(239,68,68,.08);--green:#22c55e;--green-bg:rgba(34,197,94,.08);--blue:#3b82f6;--blue-bg:rgba(59,130,246,.08);--yellow:#eab308;--radius:10px;--radius-lg:14px;--radius-xl:18px;--shadow:0 1px 3px rgba(0,0,0,.4);--transition:all .15s ease}
     *{box-sizing:border-box;margin:0;padding:0}
     html{scroll-behavior:smooth}
     body{background:var(--bg);color:var(--ink);font:14px/1.6 'Inter',system-ui,-apple-system,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
@@ -202,6 +202,18 @@
     <div class="stat-card"><div class="stat-label">Active Plans</div><div class="stat-value" id="s_activePlans">—</div></div>
     <div class="stat-card"><div class="stat-label">Failed Pay</div><div class="stat-value" id="s_failedPayments">—</div></div>
     <div class="stat-card"><div class="stat-label">Today</div><div class="stat-value" id="s_todayBookings">—</div></div>
+    <div class="stat-card"><div class="stat-label">Expired</div><div class="stat-value" id="s_expiredShops" style="color:var(--red)">—</div></div>
+    <div class="stat-card"><div class="stat-label">Renewals (7d)</div><div class="stat-value" id="s_pendingRenewals" style="color:var(--yellow)">—</div></div>
+  </div>
+  <div class="section-head"><h2>Recent Signups</h2></div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Shop</th><th>Owner</th><th>Email</th><th>City</th><th>Status</th><th>Date</th></tr></thead>
+    <tbody id="recentSignupsBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody></table>
+  </div>
+  <div class="section-head"><h2>Recent Payments</h2></div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Invoice</th><th>Shop</th><th>Amount</th><th>Gateway</th><th>Status</th><th>Date</th></tr></thead>
+    <tbody id="recentPaymentsBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody></table>
   </div>
   <div class="section-head"><h2>Recent Shops</h2></div>
   <div class="search-row">
@@ -342,6 +354,28 @@
   </div>
 </div>
 
+<!-- Extend Subscription Modal -->
+<div class="modal-backdrop" id="extendModal" onclick="if(event.target===this)closeModal('extendModal')">
+  <div class="modal">
+    <h2>Extend Subscription</h2>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Shop: <strong id="extendShopLabel" style="color:#fff"></strong></p>
+    <input type="hidden" id="extendShopId">
+    <div class="field"><label>Extend by (days)</label><input id="extendDays" type="number" value="30" min="1" max="365"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('extendModal')">Cancel</button><button class="btn btn-primary" onclick="doExtend()">Extend</button></div>
+  </div>
+</div>
+
+<!-- Change Plan Modal -->
+<div class="modal-backdrop" id="cpModal" onclick="if(event.target===this)closeModal('cpModal')">
+  <div class="modal">
+    <h2>Change Plan</h2>
+    <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Shop: <strong id="cpShopLabel" style="color:#fff"></strong></p>
+    <input type="hidden" id="cpShopId">
+    <div class="field"><label>Select Plan</label><select id="cpPlanName"></select></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('cpModal')">Cancel</button><button class="btn btn-primary" onclick="doChangePlan()">Change Plan</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -421,6 +455,21 @@ async function loadDashboard() {
   document.getElementById('s_activePlans').textContent = fmt(a.active_plans);
   document.getElementById('s_failedPayments').textContent = fmt(a.failed_payments);
   document.getElementById('s_todayBookings').textContent = fmt(a.bookings_today);
+  document.getElementById('s_expiredShops').textContent = fmt(a.expired_shops);
+  document.getElementById('s_pendingRenewals').textContent = fmt(a.pending_renewals);
+  // Recent signups
+  const signups = data.recentSignups || [];
+  document.getElementById('recentSignupsBody').innerHTML = signups.length ? signups.map(s => {
+    const st = s.subscription_status === 'active' ? 'active' : (s.subscription_status === 'expired' ? 'suspended' : 'trial');
+    const bc = st === 'active' ? 'badge-active' : (st === 'suspended' ? 'badge-suspended' : 'badge-trial');
+    return `<tr><td><strong>${esc(s.shop_name)}</strong></td><td>${esc(s.owner_name)}</td><td>${esc(s.email)}</td><td>${esc(s.city||'—')}</td><td><span class="badge ${bc}">${st}</span></td><td>${new Date(s.created_at).toLocaleDateString()}</td></tr>`;
+  }).join('') : '<tr><td colspan="6" class="empty-state">No signups yet</td></tr>';
+  // Recent payments
+  const pays = data.recentPayments || [];
+  document.getElementById('recentPaymentsBody').innerHTML = pays.length ? pays.map(p => {
+    const bc = p.status==='completed'?'badge-active':(p.status==='failed'?'badge-suspended':'badge-trial');
+    return `<tr><td>${esc(p.invoice_number||p.id)}</td><td>${esc(p.shop_name||'—')}</td><td>${esc(p.currency||'$')} ${fmt(p.amount)}</td><td>${esc(p.gateway||'—')}</td><td><span class="badge ${bc}">${p.status}</span></td><td>${new Date(p.created_at).toLocaleDateString()}</td></tr>`;
+  }).join('') : '<tr><td colspan="6" class="empty-state">No payments yet</td></tr>';
   renderShopTable(data, 'dashShopsBody', 'dashPageInfo', 'dashPrev', 'dashNext', P, 'dash');
 }
 
@@ -451,6 +500,8 @@ async function loadAllShops(page, search) {
       <td>${s.total_bookings||0}</td><td>$${fmt(s.total_revenue)}</td>
       <td><span class="badge ${bc}">${st}</span></td>
       <td>${st==='suspended'?`<button class="act" onclick="shopAct(${s.id},'activate')">Activate</button>`:`<button class="act danger" onclick="shopAct(${s.id},'suspend')">Suspend</button>`}
+      <button class="act" onclick="openExtendModal(${s.id},'${esc(s.shop_name)}')">Extend</button>
+      <button class="act" onclick="openChangePlanModal(${s.id},'${esc(s.shop_name)}')">Plan</button>
       <button class="act danger" onclick="shopAct(${s.id},'delete')">Delete</button></td></tr>`;
   }).join('');
   updatePager('allPageInfo','allPrev','allNext', data.pagination, P, 'all');
@@ -468,6 +519,8 @@ function renderShopTable(data, bodyId, pageInfoId, prevId, nextId, pagerObj, pag
       <td>${s.total_bookings||0}</td><td>$${fmt(s.total_revenue)}</td>
       <td><span class="badge ${bc}">${st}</span></td>
       <td>${st==='suspended'?`<button class="act" onclick="shopAct(${s.id},'activate')">Activate</button>`:`<button class="act danger" onclick="shopAct(${s.id},'suspend')">Suspend</button>`}
+      <button class="act" onclick="openExtendModal(${s.id},'${esc(s.shop_name)}')">Extend</button>
+      <button class="act" onclick="openChangePlanModal(${s.id},'${esc(s.shop_name)}')">Plan</button>
       <button class="act danger" onclick="shopAct(${s.id},'delete')">Delete</button></td></tr>`;
   }).join('');
   updatePager(pageInfoId, prevId, nextId, data.pagination, pagerObj, pagerKey);
@@ -718,6 +771,45 @@ async function saveSettings() {
 
 /* ── INIT ── */
 loadDashboard();
+
+/* ── EXTEND SUBSCRIPTION MODAL ── */
+function openExtendModal(shopId, shopName) {
+  document.getElementById('extendShopId').value = shopId;
+  document.getElementById('extendShopLabel').textContent = shopName;
+  document.getElementById('extendDays').value = 30;
+  document.getElementById('extendModal').classList.add('open');
+}
+async function doExtend() {
+  const shopId = parseInt(document.getElementById('extendShopId').value);
+  const days = parseInt(document.getElementById('extendDays').value);
+  if (!days || days < 1) { toast('Enter valid days'); return; }
+  await api('/api/shop', { method:'POST', body:JSON.stringify({ action:'extend-subscription', shopId, days }) });
+  toast('Subscription extended by ' + days + ' days');
+  closeModal('extendModal'); loadedTabs.delete('dashboard'); loadedTabs.delete('shops'); loadDashboard();
+}
+
+/* ── CHANGE PLAN MODAL ── */
+function openChangePlanModal(shopId, shopName) {
+  document.getElementById('cpShopId').value = shopId;
+  document.getElementById('cpShopLabel').textContent = shopName;
+  document.getElementById('cpPlanName').value = '';
+  // Populate plan select — load plans if cache is empty
+  const populate = () => {
+    const sel = document.getElementById('cpPlanName');
+    sel.innerHTML = plansCache.map(p => `<option value="${esc(p.name)}">${esc(p.display_name)} ($${p.price_monthly_usd}/mo)</option>`).join('') || '<option value="">No plans</option>';
+  };
+  if (plansCache.length) { populate(); }
+  else { api('/api/shop?action=admin-plans').then(r => r ? r.json() : { plans: [] }).then(d => { plansCache = d.plans || []; populate(); }); }
+  document.getElementById('cpModal').classList.add('open');
+}
+async function doChangePlan() {
+  const shopId = parseInt(document.getElementById('cpShopId').value);
+  const planName = document.getElementById('cpPlanName').value;
+  if (!planName) { toast('Select a plan'); return; }
+  await api('/api/shop', { method:'POST', body:JSON.stringify({ action:'change-plan', shopId, planName }) });
+  toast('Plan changed');
+  closeModal('cpModal'); loadedTabs.delete('dashboard'); loadedTabs.delete('shops'); loadDashboard();
+}
 </script>
 </body>
 </html>

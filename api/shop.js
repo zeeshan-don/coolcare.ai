@@ -17,7 +17,7 @@
 // POST /api/shop  body: { action: "save-settings", settings: {} } → settings
 
 const { neon } = require("@neondatabase/serverless");
-const { requireAuth, requireRole, requirePlatformAdmin, requireSuperAdmin, logAdminAction } = require("./_lib/auth");
+const { requireAuth, requireRole, requirePlatformAdmin, requireSuperAdmin, requireActiveSubscription, logAdminAction } = require("./_lib/auth");
 const { notifyStatusChange } = require("./_lib/notify");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
@@ -42,7 +42,13 @@ const ADMIN_POST_ACTIONS = new Set([
   "suspend", "activate", "delete", "edit-shop", "approve-shop", "reset-password",
   "create-user", "edit-user", "delete-user", "invite-user",
   "create-plan", "edit-plan", "delete-plan", "duplicate-plan", "save-settings",
+  "extend-subscription", "change-plan",
 ]);
+// Gated shop actions (require active subscription)
+const GATED_POST_ACTIONS = new Set(["update"]);
+const GATED_GET_ACTIONS = new Set(["export"]);
+// Non-gated shop GET actions (view-only, always allowed)
+const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "notifications", "shop-settings"]);
 
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -56,18 +62,37 @@ module.exports = withErrorHandler(async (request, response) => {
 
   if (request.method === "GET") {
     const action = request.query?.action || "dashboard";
-    if (action === "dashboard") return handleDashboard(request, response, sql, shopId);
-    if (action === "booking") return handleBookingDetail(request, response, sql, shopId);
-    if (action === "export") return handleExport(request, response, sql, shopId);
+    // Admin actions (platform admin check inside)
     if (ADMIN_GET_ACTIONS.has(action)) return handleAdminGet(request, response, sql, auth, action);
+    // Non-gated actions (view-only or shop config)
+    if (action === "dashboard") return handleDashboard(request, response, sql, shopId, auth);
+    if (action === "booking") return handleBookingDetail(request, response, sql, shopId);
+    if (OPEN_GET_ACTIONS.has(action)) return handleShopGet(request, response, sql, shopId, auth, action);
+    // Gated actions
+    if (GATED_GET_ACTIONS.has(action)) {
+      const sub = await requireActiveSubscription(auth, sql, response);
+      if (!sub) return;
+      if (action === "export") return handleExport(request, response, sql, shopId);
+    }
     return response.status(400).json({ error: "Invalid GET action" });
   }
 
   if (request.method === "POST") {
     const body = request.body || {};
     const action = body.action;
-    if (action === "update") return handleBookingUpdate(request, response, sql, shopId, body);
+    // Admin actions
     if (ADMIN_POST_ACTIONS.has(action)) return handleAdminPost(request, response, sql, auth, body);
+    // Gated actions (require active subscription)
+    if (GATED_POST_ACTIONS.has(action)) {
+      const sub = await requireActiveSubscription(auth, sql, response);
+      if (!sub) return;
+      if (action === "update") return handleBookingUpdate(request, response, sql, shopId, body);
+    }
+    // Non-gated POST actions
+    if (action === "save-ai-settings") return handleSaveAiSettings(request, response, sql, shopId, body);
+    if (action === "save-shop-settings") return handleSaveShopSettings(request, response, sql, shopId, body);
+    if (action === "mark-notification-read") return handleMarkNotificationRead(request, response, sql, shopId, body);
+    if (action === "send-test-whatsapp") return handleSendTestWhatsApp(request, response, sql, shopId);
     return response.status(400).json({ error: "Invalid POST action" });
   }
 
@@ -77,7 +102,7 @@ module.exports = withErrorHandler(async (request, response) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════════════════════════════════════
-async function handleDashboard(request, response, sql, shopId) {
+async function handleDashboard(request, response, sql, shopId, auth) {
   if (!allowMethods(request, response, "GET")) return;
 
   const q = querySchema.safeParse(request.query || {});
@@ -139,6 +164,44 @@ async function handleDashboard(request, response, sql, shopId) {
     GROUP BY customer_number, customer_name ORDER BY customer_number, last_booking DESC LIMIT 10
   `;
 
+  // Monthly bookings count
+  const monthResult = await sql`SELECT COUNT(*) as count FROM bookings WHERE repair_shop_id = ${shopId} AND created_at >= date_trunc('month', now())`;
+  const monthBookings = parseInt(monthResult[0]?.count || '0', 10);
+
+  // Revenue chart data — daily for last 30 days
+  const revenueChart = await sql`
+    SELECT d.date::date as date,
+           COALESCE(SUM(b.final_cost), 0) as revenue,
+           COUNT(b.id) as bookings
+    FROM generate_series(now() - INTERVAL '29 days', now(), '1 day') d(date)
+    LEFT JOIN bookings b ON b.repair_shop_id = ${shopId}
+      AND b.created_at::date = d.date::date AND b.status = 'completed'
+    GROUP BY d.date ORDER BY d.date ASC
+  `;
+
+  // Activity feed — recent booking_timeline entries for this shop
+  let activityFeed = [];
+  try {
+    activityFeed = await sql`
+      SELECT bt.*, b.customer_name, b.customer_number, b.service_type
+      FROM booking_timeline bt
+      JOIN bookings b ON b.id = bt.booking_id
+      WHERE b.repair_shop_id = ${shopId}
+      ORDER BY bt.created_at DESC LIMIT 20
+    `;
+  } catch (e) { /* table may not exist */ }
+
+  // Customer history — repeat customers with visit count
+  const customerHistory = await sql`
+    SELECT customer_number, customer_name, COUNT(*) as visit_count,
+           MAX(created_at) as last_visit, MIN(created_at) as first_visit,
+           COALESCE(SUM(final_cost), 0) as total_spent
+    FROM bookings WHERE repair_shop_id = ${shopId} AND status = 'completed'
+    GROUP BY customer_number, customer_name
+    HAVING COUNT(*) >= 1
+    ORDER BY visit_count DESC, last_visit DESC LIMIT 20
+  `;
+
   const shopRows = await sql`
     SELECT id, shop_name, owner_name, email, mobile, city, services_offered, service_areas, role
     FROM repair_shops WHERE id = ${shopId} LIMIT 1
@@ -154,14 +217,29 @@ async function handleDashboard(request, response, sql, shopId) {
     subscription = subRows[0] || null;
   } catch (e) { /* table may not exist yet */ }
 
+  // Check subscription status for gating UI
+  let subscriptionRequired = false;
+  let subscriptionStatus = "active";
+  try {
+    const shopCheck = await sql`SELECT subscription_status FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    subscriptionStatus = shopCheck[0]?.subscription_status || "inactive";
+    subscriptionRequired = subscriptionStatus !== "active";
+  } catch (e) { /* ok */ }
+
   return response.status(200).json({
     shop: shopRows[0] || null, counts: statusCounts, bookings,
     pagination: { page: params.page, limit: params.limit, total, totalPages: Math.ceil(total / params.limit) },
     stats: { todayBookings, pendingJobs, completedToday: statusCounts.completed,
-      totalRevenue: parseFloat(revenue.total_revenue), monthlyRevenue: parseFloat(revenue.monthly_revenue), weeklyRevenue: parseFloat(revenue.weekly_revenue) },
+      totalRevenue: parseFloat(revenue.total_revenue), monthlyRevenue: parseFloat(revenue.monthly_revenue), weeklyRevenue: parseFloat(revenue.weekly_revenue),
+      monthBookings },
     weeklyBookings: weeklyResult,
+    revenueChart: revenueChart.map((r) => ({ date: r.date, revenue: parseFloat(r.revenue), bookings: parseInt(r.bookings, 10) })),
+    activityFeed: activityFeed.map((a) => ({ id: a.id, bookingId: a.booking_id, action: a.action, oldValue: a.old_value, newValue: a.new_value, customerName: a.customer_name, customerNumber: a.customer_number, serviceType: a.service_type, createdAt: a.created_at })),
+    customerHistory: customerHistory.map((c) => ({ name: c.customer_name, phone: c.customer_number, visits: parseInt(c.visit_count, 10), lastVisit: c.last_visit, firstVisit: c.first_visit, totalSpent: parseFloat(c.total_spent) })),
     recentCustomers: recentCustomers.map((c) => ({ name: c.customer_name, phone: c.customer_number, lastBooking: c.last_booking })),
     subscription,
+    subscriptionRequired,
+    subscriptionStatus,
   });
 }
 
@@ -395,6 +473,28 @@ async function adminDashboard(request, response, sql, auth) {
     analytics.active_plans = parseInt(planCount[0]?.cnt || "0", 10);
   } catch (e) { analytics.active_plans = 0; }
 
+  try {
+    const expired = await sql`SELECT COUNT(*) as cnt FROM repair_shops WHERE subscription_status = 'expired'`;
+    analytics.expired_shops = parseInt(expired[0]?.cnt || '0', 10);
+  } catch (e) { analytics.expired_shops = 0; }
+
+  try {
+    const renewals = await sql`SELECT COUNT(*) as cnt FROM subscriptions WHERE status = 'active' AND current_period_end <= now() + INTERVAL '7 days' AND current_period_end > now()`;
+    analytics.pending_renewals = parseInt(renewals[0]?.cnt || '0', 10);
+  } catch (e) { analytics.pending_renewals = 0; }
+
+  // Recent signups
+  let recentSignups = [];
+  try {
+    recentSignups = await sql`SELECT id, shop_name, owner_name, email, city, subscription_status, created_at FROM repair_shops ORDER BY created_at DESC LIMIT 10`;
+  } catch (e) { /* ok */ }
+
+  // Recent payments
+  let recentPayments = [];
+  try {
+    recentPayments = await sql`SELECT p.id, p.invoice_number, p.amount, p.currency, p.status, p.gateway, p.created_at, rs.shop_name FROM payments p LEFT JOIN repair_shops rs ON rs.id = p.repair_shop_id ORDER BY p.created_at DESC LIMIT 10`;
+  } catch (e) { /* ok */ }
+
   let total = shops.length;
   try {
     const countResult = await sql.unsafe(`SELECT COUNT(*) as total FROM repair_shops rs ${whereClause}`, qp);
@@ -404,6 +504,8 @@ async function adminDashboard(request, response, sql, auth) {
   return response.status(200).json({
     shops, analytics,
     pagination: { page, limit, total },
+    recentSignups,
+    recentPayments,
   });
 }
 
@@ -568,6 +670,10 @@ async function handleAdminPost(request, response, sql, auth, body) {
 
     // ── Settings ────────────────────────────────────────────────
     case "save-settings": return adminSaveSettings(request, response, sql, body, actorType, actorId, ip);
+
+    // ── Subscription management ──────────────────────────────
+    case "extend-subscription": return adminExtendSubscription(sql, response, body, actorType, actorId, ip);
+    case "change-plan": return adminChangePlan(sql, response, body, actorType, actorId, ip);
 
     default: return response.status(400).json({ error: "Unknown admin action" });
   }
@@ -815,5 +921,292 @@ async function adminSaveSettings(request, response, sql, body, actorType, actorI
     `;
   }
   await logAdminAction(sql, { actorType, actorId, action: "save_settings", details: { keys: Object.keys(data.settings) }, ip });
+  return response.status(200).json({ message: "Settings saved" });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN SUBSCRIPTION MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════════════════
+async function adminExtendSubscription(sql, response, body, actorType, actorId, ip) {
+  const { shopId, days } = body;
+  if (!shopId || !days) return response.status(400).json({ error: "shopId and days required" });
+  const daysNum = parseInt(days, 10);
+  if (isNaN(daysNum) || daysNum < 1 || daysNum > 365) return response.status(400).json({ error: "days must be between 1 and 365" });
+
+  // Extend current_period_end on active subscription
+  try {
+    await sql.unsafe(
+      `UPDATE subscriptions SET current_period_end = current_period_end + ($1 || ' days')::interval, updated_at = now()
+       WHERE repair_shop_id = $2 AND status = 'active'
+       ORDER BY created_at DESC LIMIT 1`,
+      [String(daysNum), shopId]
+    );
+  } catch (e) {
+    console.error("[admin/extend] Failed:", e.message);
+    return response.status(500).json({ error: "Failed to extend subscription" });
+  }
+
+  // Reactivate shop if expired
+  await sql`UPDATE repair_shops SET subscription_status = 'active', suspended_at = NULL, updated_at = now() WHERE id = ${shopId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "extend_subscription", targetType: "shop", targetId: shopId, details: { days: daysNum }, ip });
+  return response.status(200).json({ message: `Subscription extended by ${daysNum} days` });
+}
+
+async function adminChangePlan(sql, response, body, actorType, actorId, ip) {
+  const { shopId, planName } = body;
+  if (!shopId || !planName) return response.status(400).json({ error: "shopId and planName required" });
+
+  const plan = await sql`SELECT id, name, display_name FROM subscription_plans WHERE name = ${planName} AND is_active = true LIMIT 1`;
+  if (plan.length === 0) return response.status(404).json({ error: "Plan not found" });
+
+  await sql`
+    UPDATE subscriptions SET plan_id = ${plan[0].id}, updated_at = now()
+    WHERE repair_shop_id = ${shopId} AND status = 'active'
+    ORDER BY created_at DESC LIMIT 1
+  `;
+  await logAdminAction(sql, { actorType, actorId, action: "change_plan", targetType: "shop", targetId: shopId, details: { plan: planName }, ip });
+  return response.status(200).json({ message: `Plan changed to ${plan[0].display_name}`, plan: plan[0] });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHOP GET ROUTER (non-gated actions)
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleShopGet(request, response, sql, shopId, auth, action) {
+  switch (action) {
+    case "referrals": return handleReferrals(request, response, sql, shopId);
+    case "ai-settings": return handleGetAiSettings(request, response, sql, shopId);
+    case "whatsapp-status": return handleWhatsAppStatus(request, response, sql, shopId);
+    case "whatsapp-logs": return handleWhatsAppLogs(request, response, sql, shopId);
+    case "notifications": return handleGetNotifications(request, response, sql, shopId);
+    case "shop-settings": return handleGetShopSettings(request, response, sql, shopId);
+    default: return response.status(400).json({ error: "Unknown GET action" });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// REFERRALS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleReferrals(request, response, sql, shopId) {
+  const shop = await sql`SELECT referral_code, wallet_balance, discount_balance FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+  const referralCode = shop[0]?.referral_code || null;
+
+  let stats = { total: 0, successful: 0, pending: 0, earnings: 0 };
+  let history = [];
+  try {
+    const rows = await sql`
+      SELECT r.*, rs.shop_name as referred_shop_name, rs.email as referred_email
+      FROM referrals r LEFT JOIN repair_shops rs ON rs.id = r.referred_shop_id
+      WHERE r.referrer_shop_id = ${shopId}
+      ORDER BY r.created_at DESC LIMIT 50
+    `;
+    history = rows;
+    stats.total = rows.length;
+    stats.successful = rows.filter(r => r.status === 'completed').length;
+    stats.pending = rows.filter(r => r.status === 'pending').length;
+    stats.earnings = rows.filter(r => r.status === 'completed').reduce((sum, r) => sum + parseFloat(r.reward_value || 0), 0);
+  } catch (e) { /* table may not exist */ }
+
+  return response.status(200).json({
+    referralCode,
+    shareLink: `${process.env.APP_URL || 'https://coolcare.ai'}/shop-signup.html?ref=${referralCode || ''}`,
+    walletBalance: parseFloat(shop[0]?.wallet_balance || 0),
+    discountBalance: parseFloat(shop[0]?.discount_balance || 0),
+    stats,
+    history,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AI SETTINGS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleGetAiSettings(request, response, sql, shopId) {
+  let settings = null;
+  try {
+    const rows = await sql`SELECT * FROM ai_settings WHERE repair_shop_id = ${shopId} LIMIT 1`;
+    settings = rows[0] || null;
+  } catch (e) { /* table may not exist */ }
+
+  if (!settings) {
+    settings = {
+      greeting_message: '', business_hours: {}, working_days: ['mon','tue','wed','thu','fri','sat'],
+      supported_services: [], knowledge_base: '',
+      fallback_response: 'I apologize, but I am unable to help with that right now. A team member will get back to you shortly.',
+      transfer_to_human: true,
+    };
+  }
+  return response.status(200).json({ settings });
+}
+
+async function handleSaveAiSettings(request, response, sql, shopId, body) {
+  const { greetingMessage, businessHours, workingDays, supportedServices, knowledgeBase, fallbackResponse, transferToHuman } = body;
+  try {
+    await sql`
+      INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days, supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
+      VALUES (${shopId}, ${greetingMessage || ''}, ${sql.json(businessHours || {})}, ${workingDays || ['mon','tue','wed','thu','fri','sat']},
+              ${supportedServices || []}, ${knowledgeBase || ''}, ${fallbackResponse || ''}, ${transferToHuman !== false}, now())
+      ON CONFLICT (repair_shop_id) DO UPDATE SET
+        greeting_message = ${greetingMessage || ''}, business_hours = ${sql.json(businessHours || {})},
+        working_days = ${workingDays || ['mon','tue','wed','thu','fri','sat']},
+        supported_services = ${supportedServices || []}, knowledge_base = ${knowledgeBase || ''},
+        fallback_response = ${fallbackResponse || ''}, transfer_to_human = ${transferToHuman !== false}, updated_at = now()
+    `;
+  } catch (e) {
+    console.error("[shop/ai-settings] Save failed:", e.message);
+    return response.status(500).json({ error: "Failed to save AI settings" });
+  }
+  return response.status(200).json({ message: "AI settings saved" });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WHATSAPP MONITORING
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleWhatsAppStatus(request, response, sql, shopId) {
+  const hasToken = !!process.env.WHATSAPP_ACCESS_TOKEN;
+  const hasVerifyToken = !!process.env.META_WEBHOOK_VERIFY_TOKEN;
+  const hasPhoneId = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  let lastSync = null;
+  let messageCount = 0;
+  try {
+    const last = await sql`SELECT created_at FROM whatsapp_conversations WHERE repair_shop_id = ${shopId} ORDER BY created_at DESC LIMIT 1`;
+    lastSync = last[0]?.created_at || null;
+    const cnt = await sql`SELECT COUNT(*) as cnt FROM whatsapp_conversations WHERE repair_shop_id = ${shopId}`;
+    messageCount = parseInt(cnt[0]?.cnt || '0', 10);
+  } catch (e) { /* table may not exist */ }
+
+  return response.status(200).json({
+    connected: hasToken && hasPhoneId,
+    webhookConfigured: hasVerifyToken,
+    accessTokenStatus: hasToken ? 'configured' : 'missing',
+    lastSync,
+    totalMessages: messageCount,
+  });
+}
+
+async function handleWhatsAppLogs(request, response, sql, shopId) {
+  const page = parseInt(request.query?.page || '1', 10);
+  const limit = parseInt(request.query?.limit || '20', 10);
+  const offset = (page - 1) * limit;
+
+  let logs = [];
+  let total = 0;
+  try {
+    logs = await sql.unsafe(
+      `SELECT * FROM whatsapp_conversations WHERE repair_shop_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [shopId, limit, offset]
+    );
+    const cnt = await sql`SELECT COUNT(*) as cnt FROM whatsapp_conversations WHERE repair_shop_id = ${shopId}`;
+    total = parseInt(cnt[0]?.cnt || '0', 10);
+  } catch (e) { /* table may not exist */ }
+
+  return response.status(200).json({ logs, pagination: { page, limit, total } });
+}
+
+async function handleSendTestWhatsApp(request, response, sql, shopId) {
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const apiVersion = process.env.WHATSAPP_API_VERSION || 'v19.0';
+
+  if (!accessToken || !phoneId) {
+    return response.status(400).json({ error: "WhatsApp is not configured. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID." });
+  }
+
+  // Get shop's phone number to send test to
+  const shop = await sql`SELECT mobile FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+  const toNumber = shop[0]?.mobile;
+  if (!toNumber) return response.status(400).json({ error: "No mobile number on file for this shop." });
+
+  try {
+    const res = await fetch(`https://graph.facebook.com/${apiVersion}/${phoneId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp', to: toNumber, type: 'text',
+        text: { body: '✅ CoolCare test message — your WhatsApp integration is working!' },
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (res.ok) return response.status(200).json({ sent: true, to: toNumber });
+    const err = await res.json().catch(() => ({}));
+    return response.status(502).json({ error: 'WhatsApp send failed', details: err });
+  } catch (e) {
+    return response.status(500).json({ error: 'WhatsApp send error: ' + e.message });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleGetNotifications(request, response, sql, shopId) {
+  const page = parseInt(request.query?.page || '1', 10);
+  const limit = parseInt(request.query?.limit || '20', 10);
+  const offset = (page - 1) * limit;
+
+  let notifications = [];
+  let unreadCount = 0;
+  let total = 0;
+  try {
+    notifications = await sql.unsafe(
+      `SELECT * FROM shop_notifications WHERE repair_shop_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      [shopId, limit, offset]
+    );
+    const unread = await sql`SELECT COUNT(*) as cnt FROM shop_notifications WHERE repair_shop_id = ${shopId} AND is_read = false`;
+    unreadCount = parseInt(unread[0]?.cnt || '0', 10);
+    const cnt = await sql`SELECT COUNT(*) as cnt FROM shop_notifications WHERE repair_shop_id = ${shopId}`;
+    total = parseInt(cnt[0]?.cnt || '0', 10);
+  } catch (e) { /* table may not exist */ }
+
+  return response.status(200).json({ notifications, unreadCount, pagination: { page, limit, total } });
+}
+
+async function handleMarkNotificationRead(request, response, sql, shopId, body) {
+  const { notificationId, markAll } = body;
+  try {
+    if (markAll) {
+      await sql`UPDATE shop_notifications SET is_read = true WHERE repair_shop_id = ${shopId} AND is_read = false`;
+    } else if (notificationId) {
+      await sql`UPDATE shop_notifications SET is_read = true WHERE id = ${notificationId} AND repair_shop_id = ${shopId}`;
+    }
+  } catch (e) { /* table may not exist */ }
+  return response.status(200).json({ message: "Notifications updated" });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHOP SETTINGS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleGetShopSettings(request, response, sql, shopId) {
+  const shop = await sql`
+    SELECT id, shop_name, owner_name, email, mobile, city, address, services_offered,
+           service_areas, gst_number, logo_url, language, timezone, currency, business_hours
+    FROM repair_shops WHERE id = ${shopId} LIMIT 1
+  `;
+  return response.status(200).json({ settings: shop[0] || null });
+}
+
+async function handleSaveShopSettings(request, response, sql, shopId, body) {
+  const updates = {};
+  const fields = { shop_name: 'shop_name', owner_name: 'owner_name', mobile: 'mobile',
+    address: 'address', city: 'city', gst_number: 'gst_number', logo_url: 'logo_url',
+    language: 'language', timezone: 'timezone', currency: 'currency' };
+
+  for (const [bodyKey, col] of Object.entries(fields)) {
+    if (body[bodyKey] !== undefined) updates[col] = body[bodyKey];
+  }
+  if (body.businessHours !== undefined) updates.business_hours = body.businessHours;
+
+  if (Object.keys(updates).length === 0) return response.status(400).json({ error: "No fields to update" });
+
+  const setParts = []; const setValues = [];
+  for (const [col, val] of Object.entries(updates)) {
+    if (col === 'business_hours') {
+      setValues.push(JSON.stringify(val));
+      setParts.push(`${col} = $${setValues.length}::jsonb`);
+    } else {
+      setValues.push(val);
+      setParts.push(`${col} = $${setValues.length}`);
+    }
+  }
+  setValues.push(shopId);
+  await sql.unsafe(`UPDATE repair_shops SET ${setParts.join(', ')}, updated_at = now() WHERE id = $${setValues.length}`, setValues);
   return response.status(200).json({ message: "Settings saved" });
 }

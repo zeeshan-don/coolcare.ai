@@ -10,6 +10,89 @@ const { webhookLimiter, applyLimit } = require("../_lib/rate-limit");
 const { verifyWebhookSignature } = require("../_lib/security");
 const { notifyAdmin } = require("../_lib/notify");
 
+// Calculate expiry interval based on billing cycle
+function getExpiryInterval(billingCycle) {
+  switch (billingCycle) {
+    case "quarterly": return "90 days";
+    case "halfyearly": return "180 days";
+    case "yearly": return "365 days";
+    default: return "30 days";
+  }
+}
+
+// Activate subscription + process referral + send notifications
+async function activateSubscription(sql, shopId, planName, billingCycle, gateway, gatewaySubId) {
+  const plans = await sql`SELECT id FROM subscription_plans WHERE name = ${planName} LIMIT 1`;
+  if (plans.length === 0) return;
+
+  const expiryDays = getExpiryInterval(billingCycle || "monthly");
+
+  // Check for existing active subscription (renewal) vs new subscription
+  const existing = await sql`
+    SELECT id, current_period_end FROM subscriptions
+    WHERE repair_shop_id = ${shopId} AND status = 'active'
+    ORDER BY created_at DESC LIMIT 1
+  `;
+
+  if (existing.length > 0) {
+    // Renewal: extend current_period_end from now (or from current end if not yet expired)
+    await sql.unsafe(
+      `UPDATE subscriptions SET current_period_end = GREATEST(current_period_end, now()) + ($1 || ' days')::interval, updated_at = now() WHERE id = $2`,
+      [expiryDays.replace(' days', ''), existing[0].id]
+    );
+  } else {
+    // New subscription
+    await sql.unsafe(
+      `INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway, gateway_sub_id, current_period_end)
+       VALUES ($1, $2, 'active', $3, $4, $5, now() + ($6 || ' days')::interval)`,
+      [shopId, plans[0].id, billingCycle || "monthly", gateway, gatewaySubId || null, expiryDays.replace(' days', '')]
+    );
+  }
+
+  // Activate shop
+  await sql`UPDATE repair_shops SET subscription_status = 'active', suspended_at = NULL, suspension_reason = NULL, updated_at = now() WHERE id = ${shopId}`;
+
+  // Create in-app notification
+  try {
+    await sql`
+      INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+      VALUES (${shopId}, 'subscription_activated', 'Subscription Activated',
+              'Your ${planName} subscription is now active. All features have been unlocked.',
+              '/shop-dashboard.html')
+    `;
+  } catch (e) { /* table may not exist */ }
+
+  // Process referral reward
+  try {
+    const shop = await sql`SELECT referred_by FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    if (shop[0]?.referred_by) {
+      const referrer = await sql`SELECT id FROM repair_shops WHERE referral_code = ${shop[0].referred_by} LIMIT 1`;
+      if (referrer.length > 0) {
+        const rewardAmount = 10; // $10 credit
+        await sql`
+          UPDATE referrals SET status = 'completed', reward_value = ${rewardAmount}, completed_at = now()
+          WHERE referrer_shop_id = ${referrer[0].id} AND referred_shop_id = ${shopId} AND status = 'pending'
+        `;
+        await sql`
+          UPDATE repair_shops SET discount_balance = COALESCE(discount_balance, 0) + ${rewardAmount}, updated_at = now()
+          WHERE id = ${referrer[0].id}
+        `;
+        // Notify referrer
+        try {
+          await sql`
+            INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+            VALUES (${referrer[0].id}, 'referral_reward', 'Referral Reward!',
+                    'A shop you referred has purchased a subscription. $${rewardAmount} credit has been added to your account.',
+                    '/shop-referrals.html')
+          `;
+        } catch (e) { /* ok */ }
+      }
+    }
+  } catch (e) {
+    console.warn("[webhook] Referral processing failed:", e.message);
+  }
+}
+
 module.exports = withErrorHandler(async (request, response) => {
   if (!allowMethods(request, response, "POST")) return;
   if (!applyLimit(request, response, webhookLimiter)) return;
@@ -23,7 +106,6 @@ module.exports = withErrorHandler(async (request, response) => {
     const stripeSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!stripeSecret) return response.status(500).json({ error: "Stripe webhook not configured" });
 
-    // Verify signature
     const isValid = await verifyWebhookSignature(
       JSON.stringify(rawBody), stripeSig, stripeSecret
     );
@@ -38,6 +120,7 @@ module.exports = withErrorHandler(async (request, response) => {
       const planName = session.metadata?.plan;
       const paymentDbId = parseInt(session.metadata?.payment_id, 10);
       const invoiceNumber = session.metadata?.invoice;
+      const billingCycle = session.metadata?.billing_cycle || "monthly";
 
       // Mark payment as completed
       await sql`
@@ -49,27 +132,8 @@ module.exports = withErrorHandler(async (request, response) => {
         WHERE id = ${paymentDbId}
       `;
 
-      // Create or update subscription
-      const plans = await sql`SELECT id FROM subscription_plans WHERE name = ${planName} LIMIT 1`;
-      if (plans.length > 0) {
-        const billingCycle = session.mode === "subscription" &&
-          session.subscription ? "monthly" : "monthly";
-        await sql`
-          INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway, gateway_sub_id, current_period_end)
-          VALUES (${shopId}, ${plans[0].id}, 'active', ${billingCycle}, 'stripe',
-                  ${session.subscription || null}, now() + INTERVAL '30 days')
-          ON CONFLICT (repair_shop_id) DO UPDATE SET
-            plan_id = ${plans[0].id},
-            status = 'active',
-            gateway = 'stripe',
-            gateway_sub_id = ${session.subscription || null},
-            current_period_end = now() + INTERVAL '30 days',
-            updated_at = now()
-        `;
-      }
-
-      // Update shop subscription status
-      await sql`UPDATE repair_shops SET subscription_status = 'active' WHERE id = ${shopId}`;
+      // Activate subscription + referral
+      await activateSubscription(sql, shopId, planName, billingCycle, "stripe", session.subscription || null);
 
       console.log("[webhook] Stripe checkout completed for shop:", shopId);
       await notifyAdmin(shopId, "New Subscription", `Shop #${shopId} subscribed to ${planName} via Stripe.`);
@@ -93,12 +157,12 @@ module.exports = withErrorHandler(async (request, response) => {
 
     if (event?.event === "payment.captured") {
       const payment = event.payload?.payment?.entity;
-      const orderId = payment?.order_id;
       const notes = payment?.notes || {};
 
       const shopId = parseInt(notes.shop_id, 10);
       const planName = notes.plan;
       const paymentDbId = parseInt(notes.payment_id, 10);
+      const billingCycle = notes.billing_cycle || "monthly";
 
       // Mark payment as completed
       await sql`
@@ -112,23 +176,9 @@ module.exports = withErrorHandler(async (request, response) => {
         WHERE id = ${paymentDbId}
       `;
 
-      // Activate subscription
-      const plans = await sql`SELECT id FROM subscription_plans WHERE name = ${planName} LIMIT 1`;
-      if (plans.length > 0) {
-        await sql`
-          INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway, gateway_sub_id, current_period_end)
-          VALUES (${shopId}, ${plans[0].id}, 'active', 'monthly', 'razorpay',
-                  ${payment?.id || null}, now() + INTERVAL '30 days')
-          ON CONFLICT (repair_shop_id) DO UPDATE SET
-            plan_id = ${plans[0].id},
-            status = 'active',
-            gateway = 'razorpay',
-            current_period_end = now() + INTERVAL '30 days',
-            updated_at = now()
-        `;
-      }
+      // Activate subscription + referral
+      await activateSubscription(sql, shopId, planName, billingCycle, "razorpay", payment?.id || null);
 
-      await sql`UPDATE repair_shops SET subscription_status = 'active' WHERE id = ${shopId}`;
       console.log("[webhook] Razorpay payment captured for shop:", shopId);
     }
 

@@ -7,47 +7,65 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{
-      --bg:#0a0a0a;
-      --bg2:#111111;
-      --bg3:#1a1a1a;
-      --border:#1e1e1e;
-      --border2:#333;
-      --ink:#ededed;
-      --ink2:#a3a3a3;
-      --muted:#737373;
-      --muted2:#525252;
-      --green:#22c55e;
-      --green-bg:#0a1a0a;
-      --red:#ef4444;
-      --red-bg:#1a0a0a;
-    }
+    :root{--bg:#0a0a0a;--bg2:#111111;--bg3:#1a1a1a;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--muted2:#525252;--green:#22c55e;--green-bg:#0a1a0a;--red:#ef4444;--red-bg:#1a0a0a;--yellow:#eab308;--yellow-bg:rgba(234,179,8,0.08)}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,sans-serif}
-    body::before{display:none}
     h1,h2,h3,.brand,.stat-card .value{font-family:'Inter',system-ui,sans-serif;font-weight:700}
     a{color:inherit;text-decoration:none}
     .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
     .brand{font-weight:700;letter-spacing:0.5px;font-size:24px;text-transform:lowercase;color:#fff}.brand b{color:#fff;font-weight:900}
-    .nav-right{display:flex;align-items:center;gap:18px}
+    .nav-right{display:flex;align-items:center;gap:14px}
     .shop-name{font-weight:600;font-size:13px;color:var(--muted)}
+    .nav-link{font-size:12px;font-weight:600;color:var(--muted);padding:7px 12px;border:1px solid var(--border2);border-radius:8px;transition:all 0.2s;cursor:pointer;background:transparent}
+    .nav-link:hover{color:#fff;border-color:#555}
     .logout-btn{font-size:12px;font-weight:600;color:var(--muted);padding:9px 15px;border:1px solid var(--border2);border-radius:10px;cursor:pointer;background:transparent;transition:all 0.2s}
     .logout-btn:hover{background:transparent;color:#fff;border-color:#555}
+    .bell{position:relative;cursor:pointer;font-size:18px;padding:6px}
+    .bell-count{position:absolute;top:0;right:0;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
     .wrap{max-width:1280px;margin:auto;padding:26px}
-    .header{margin-bottom:28px}.header h1{font-size:36px;letter-spacing:-1px;margin:0 0 8px;color:#fff}.header p{color:var(--muted);margin:0;font-size:15px}
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:26px}
-    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px 22px;position:relative;overflow:hidden}
-    .stat-card::before{display:none}
-    .stat-card .label{font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--muted);margin-bottom:6px}
-    .stat-card .value{font-size:36px;font-weight:700;letter-spacing:-0.5px}
-    .stat-card.open .value{color:#fff}
-    .stat-card.accepted .value,.stat-card.assigned .value{color:var(--ink2)}
-    .stat-card.completed .value{color:var(--green)}
-    .stat-card.cancelled .value,.stat-card.rejected .value{color:var(--muted)}
+    .header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}.header h1{font-size:36px;letter-spacing:-1px;margin:0 0 4px;color:#fff}.header p{color:var(--muted);margin:0;font-size:15px}
+    /* Subscription banner */
+    .sub-banner{background:var(--yellow-bg);border:1px solid rgba(234,179,8,0.2);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .sub-banner.inactive{background:var(--red-bg);border-color:rgba(239,68,68,0.2)}
+    .sub-banner-text{font-size:14px;font-weight:600;color:var(--yellow)}.sub-banner.inactive .sub-banner-text{color:var(--red)}
+    .sub-banner-sub{font-size:12px;color:var(--muted)}
+    .sub-banner a{display:inline-block;background:#fff;color:#000;font:600 12px 'Inter',sans-serif;border:0;border-radius:8px;padding:8px 16px;cursor:pointer;text-decoration:none}
+    .sub-banner a:hover{background:#e5e5e5}
+    /* Stats */
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden}
+    .stat-card .label{font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--muted);margin-bottom:4px;text-transform:uppercase}
+    .stat-card .value{font-size:32px;font-weight:700;letter-spacing:-0.5px}
+    .stat-card.open .value{color:#fff}.stat-card.completed .value{color:var(--green)}.stat-card.cancelled .value{color:var(--muted)}
+    .stat-card.revenue .value{color:var(--green);font-size:24px}
+    /* Two-col layout */
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:24px}
+    /* Sections */
+    .section-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:18px}
+    .section-card h2{font-size:16px;margin:0 0 16px;color:#fff;display:flex;align-items:center;justify-content:space-between}
+    .section-card h2 .badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
+    /* Chart */
+    .chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding:0 4px}
+    .chart-bar{flex:1;background:var(--bg3);border-radius:3px 3px 0 0;min-width:4px;transition:background 0.2s;position:relative}
+    .chart-bar:hover{background:var(--green)}.chart-bar.has-value{background:rgba(34,197,94,0.3)}
+    .chart-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;padding:0 4px}
+    /* Activity */
+    .activity-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
+    .activity-item:last-child{border-bottom:0}
+    .activity-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);margin-top:6px;flex-shrink:0}
+    .activity-dot.status_change{background:var(--green)}.activity-dot.technician_assigned{background:#3b82f6}.activity-dot.priority_change{background:var(--yellow)}
+    .activity-text{color:var(--ink2);line-height:1.5}.activity-text strong{color:#fff;font-weight:600}
+    .activity-time{color:var(--muted);font-size:11px}
+    /* Customer history table */
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid var(--border)}
+    td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--ink2)}tr:last-child td{border-bottom:0}
+    /* Tabs */
+    .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto}
+    .tab{padding:10px 16px;font-weight:600;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.2s;white-space:nowrap}
+    .tab:hover{color:var(--ink)}.tab.active{color:#fff;border-color:#fff}
     .section-header{font-weight:600;font-size:12px;letter-spacing:0.5px;margin-bottom:10px;display:flex;align-items:center;gap:9px;color:var(--muted)}
     .section-header .badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:4px 9px;font-size:11px;font-weight:600}
-    .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px}
-    .tab{padding:10px 16px;font-weight:600;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.2s}
-    .tab:hover{color:var(--ink)}.tab.active{color:#fff;border-color:#fff}
+    /* Booking cards */
     .bookings-grid{display:grid;gap:10px}
     .booking-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 20px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;cursor:pointer;transition:all 0.2s}
     .booking-card:hover{border-color:var(--border2);transform:translateY(-2px)}
@@ -62,7 +80,8 @@
     .booking-badge.on_the_way{background:rgba(255,255,255,0.05);color:var(--ink2);border:1px solid var(--border2)}
     .booking-badge.arrived{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,0.2)}
     .empty{text-align:center;color:var(--muted);padding:40px 20px}
-    @media(max-width:660px){.stats{grid-template-columns:repeat(2,1fr)}.nav-right{gap:10px}.shop-name{display:none}}
+    @media(max-width:900px){.grid-2{grid-template-columns:1fr}}
+    @media(max-width:660px){.stats{grid-template-columns:repeat(2,1fr)}.nav-right{gap:8px}.shop-name{display:none}.header h1{font-size:28px}}
   </style>
 </head>
 <body>
@@ -70,30 +89,55 @@
   <a class="brand" href="/shop-dashboard.html">cool<b>care</b></a>
   <div class="nav-right">
     <span class="shop-name" id="shopName">Loading…</span>
+    <a href="/shop-ai-settings.html" class="nav-link">AI Settings</a>
+    <a href="/shop-settings.html" class="nav-link">Settings</a>
+    <div class="bell" onclick="window.location.href='/shop-notifications.html'" title="Notifications">🔔<span class="bell-count" id="bellCount" style="display:none">0</span></div>
     <button class="logout-btn" onclick="logout()">Log Out</button>
   </div>
 </nav>
 
 <div class="wrap">
+  <!-- Subscription banner -->
+  <div id="subBanner" style="display:none"></div>
+
   <div class="header">
-    <h1>Dashboard</h1>
-    <p>Manage your CoolCare service bookings</p>
+    <div><h1>Dashboard</h1><p>Manage your CoolCare service bookings</p></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <a href="/shop-referrals.html" class="nav-link">Referrals</a>
+      <button onclick="exportCSV()" class="nav-link">Export CSV</button>
+    </div>
   </div>
 
+  <!-- Analytics cards -->
   <div class="stats" id="stats">
     <div class="stat-card open"><div class="label">Open</div><div class="value" id="count-open">—</div></div>
     <div class="stat-card accepted"><div class="label">Accepted</div><div class="value" id="count-accepted">—</div></div>
     <div class="stat-card assigned"><div class="label">Assigned</div><div class="value" id="count-assigned">—</div></div>
     <div class="stat-card completed"><div class="label">Completed</div><div class="value" id="count-completed">—</div></div>
-    <div class="stat-card" style="border-color:var(--border2)"><div class="label">Today's</div><div class="value" id="count-today" style="color:#fff">—</div></div>
-    <div class="stat-card" style="border-color:var(--border2)"><div class="label">Revenue</div><div class="value" id="count-revenue" style="color:var(--green);font-size:24px">—</div></div>
+    <div class="stat-card"><div class="label">Today</div><div class="value" id="count-today" style="color:#fff">—</div></div>
+    <div class="stat-card"><div class="label">This Month</div><div class="value" id="count-month" style="color:#fff">—</div></div>
+    <div class="stat-card"><div class="label">Pending</div><div class="value" id="count-pending" style="color:var(--yellow)">—</div></div>
+    <div class="stat-card revenue"><div class="label">Revenue</div><div class="value" id="count-revenue">—</div></div>
   </div>
 
+  <!-- Revenue chart + Activity feed -->
+  <div class="grid-2">
+    <div class="section-card">
+      <h2>Revenue (30 days)</h2>
+      <div class="chart" id="revenueChart"><div class="empty" style="width:100%">Loading…</div></div>
+      <div class="chart-labels" id="chartLabels"></div>
+    </div>
+    <div class="section-card">
+      <h2>Recent Activity</h2>
+      <div id="activityFeed"><div class="empty">No recent activity</div></div>
+    </div>
+  </div>
+
+  <!-- Bookings -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
     <div class="section-header" style="margin:0">Bookings <span class="badge" id="totalBadge">0</span></div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="searchInput" type="text" placeholder="Search name or phone…" onkeyup="if(event.key==='Enter')searchBookings()" style="border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;width:200px;background:var(--bg);color:var(--ink)">
-      <button onclick="exportCSV()" style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 12px inherit;cursor:pointer;color:var(--muted)">Export CSV</button>
     </div>
   </div>
 
@@ -114,6 +158,12 @@
     <span id="pageInfo" style="color:var(--muted);padding:8px;font-size:13px">Page 1</span>
     <button id="nextBtn" onclick="changePage(1)" style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 12px inherit;cursor:pointer;color:var(--muted)">Next →</button>
   </div>
+
+  <!-- Customer history -->
+  <div class="section-card" style="margin-top:24px">
+    <h2>Customer History <span class="badge" id="custBadge">0</span></h2>
+    <div id="customerTable"><div class="empty">No customer data yet</div></div>
+  </div>
 </div>
 
 <script>
@@ -129,28 +179,13 @@
   if (shopData.shopName) document.getElementById('shopName').textContent = shopData.shopName;
 
   function logout() {
-    fetch('/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action: 'logout' }),
-    }).catch(() => {});
-    localStorage.removeItem('cc_token');
-    localStorage.removeItem('cc_shop');
-    localStorage.removeItem('cc_user');
+    fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
+    localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user');
     window.location.href = '/login.html';
   }
 
-  function searchBookings() {
-    searchQuery = document.getElementById('searchInput').value.trim();
-    currentPage = 1;
-    loadDashboard();
-  }
-
-  function changePage(delta) {
-    currentPage += delta;
-    loadDashboard();
-  }
-
+  function searchBookings() { searchQuery = document.getElementById('searchInput').value.trim(); currentPage = 1; loadDashboard(); }
+  function changePage(delta) { currentPage += delta; loadDashboard(); }
   function exportCSV() {
     const params = new URLSearchParams();
     if (currentFilter !== 'all') params.set('status', currentFilter);
@@ -163,24 +198,47 @@
       if (currentFilter !== 'all') params.set('status', currentFilter);
       if (searchQuery) params.set('search', searchQuery);
 
-      const res = await fetch(`/api/shop?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`/api/shop?${params}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.status === 401) { logout(); return; }
       const data = await res.json();
 
+      // Subscription banner
+      const banner = document.getElementById('subBanner');
+      if (data.subscriptionRequired) {
+        const st = data.subscriptionStatus;
+        const isExpired = st === 'expired';
+        banner.className = 'sub-banner' + (isExpired || st === 'inactive' ? ' inactive' : '');
+        banner.style.display = 'flex';
+        const msg = isExpired ? 'Your subscription has expired. Renew now to continue using all features.'
+          : st === 'inactive' ? 'Your subscription is not active. Subscribe to unlock all features.'
+          : 'Your subscription needs attention.';
+        banner.innerHTML = `<div><div class="sub-banner-text">${msg}</div><div class="sub-banner-sub">Status: ${st.charAt(0).toUpperCase() + st.slice(1)}</div></div><a href="/index.html#pricing">Subscribe Now →</a>`;
+      } else { banner.style.display = 'none'; }
+
       // Update stats
       if (data.counts) {
-        document.getElementById('count-open').textContent      = data.counts.open || 0;
-        document.getElementById('count-accepted').textContent  = data.counts.accepted || 0;
-        document.getElementById('count-assigned').textContent  = data.counts.assigned || 0;
+        document.getElementById('count-open').textContent = data.counts.open || 0;
+        document.getElementById('count-accepted').textContent = data.counts.accepted || 0;
+        document.getElementById('count-assigned').textContent = data.counts.assigned || 0;
         document.getElementById('count-completed').textContent = data.counts.completed || 0;
       }
       if (data.stats) {
         document.getElementById('count-today').textContent = data.stats.todayBookings || 0;
+        document.getElementById('count-month').textContent = data.stats.monthBookings || 0;
+        document.getElementById('count-pending').textContent = data.stats.pendingJobs || 0;
         document.getElementById('count-revenue').textContent = (data.stats.totalRevenue || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
       }
 
+      // Revenue chart
+      renderRevenueChart(data.revenueChart || []);
+
+      // Activity feed
+      renderActivityFeed(data.activityFeed || []);
+
+      // Customer history
+      renderCustomerHistory(data.customerHistory || []);
+
+      // Bookings
       allBookings = data.bookings || [];
       const total = data.pagination?.total || allBookings.length;
       document.getElementById('totalBadge').textContent = total;
@@ -188,15 +246,75 @@
       document.getElementById('prevBtn').disabled = (data.pagination?.page || 1) <= 1;
       document.getElementById('nextBtn').disabled = (data.pagination?.page || 1) >= (data.pagination?.totalPages || 1);
       renderBookings();
+
+      // Notification count
+      loadNotificationCount();
+
+      // Update shop info
+      if (data.shop) {
+        document.getElementById('shopName').textContent = data.shop.shop_name || '';
+        localStorage.setItem('cc_shop', JSON.stringify({ shopName: data.shop.shop_name }));
+      }
     } catch (err) {
       console.error('[dashboard] Load error:', err);
       document.getElementById('bookingsList').innerHTML = '<div class="empty">Failed to load dashboard. Please refresh.</div>';
     }
   }
 
+  function renderRevenueChart(chart) {
+    const el = document.getElementById('revenueChart');
+    const labels = document.getElementById('chartLabels');
+    if (!chart.length) { el.innerHTML = '<div class="empty" style="width:100%">No revenue data yet</div>'; labels.innerHTML = ''; return; }
+    const maxRev = Math.max(...chart.map(d => d.revenue), 1);
+    el.innerHTML = chart.map(d => {
+      const h = Math.max(4, (d.revenue / maxRev) * 110);
+      return `<div class="chart-bar${d.revenue > 0 ? ' has-value' : ''}" style="height:${h}px" title="${new Date(d.date).toLocaleDateString()}: $${d.revenue.toFixed(2)}"></div>`;
+    }).join('');
+    const first = chart[0]?.date ? new Date(chart[0].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
+    const last = chart[chart.length - 1]?.date ? new Date(chart[chart.length - 1].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
+    labels.innerHTML = `<span>${first}</span><span>${last}</span>`;
+  }
+
+  function renderActivityFeed(feed) {
+    const el = document.getElementById('activityFeed');
+    if (!feed.length) { el.innerHTML = '<div class="empty">No recent activity</div>'; return; }
+    el.innerHTML = feed.slice(0, 10).map(a => {
+      const actionLabel = a.action.replace(/_/g, ' ');
+      const timeAgo = getTimeAgo(new Date(a.createdAt));
+      return `<div class="activity-item">
+        <div class="activity-dot ${a.action}"></div>
+        <div><div class="activity-text"><strong>#${a.bookingId}</strong> ${actionLabel}: ${esc(a.oldValue || '')} → ${esc(a.newValue || '')}</div>
+        <div class="activity-time">${esc(a.customerName || a.customerNumber)} · ${timeAgo}</div></div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderCustomerHistory(customers) {
+    const el = document.getElementById('customerTable');
+    document.getElementById('custBadge').textContent = customers.length;
+    if (!customers.length) { el.innerHTML = '<div class="empty">No customer data yet</div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Customer</th><th>Phone</th><th>Visits</th><th>Total Spent</th><th>Last Visit</th></tr></thead><tbody>${
+      customers.map(c => `<tr><td>${esc(c.name || 'Unknown')}</td><td>${esc(c.phone)}</td><td>${c.visits}</td><td>$${c.totalSpent.toFixed(2)}</td><td>${new Date(c.lastVisit).toLocaleDateString()}</td></tr>`).join('')
+    }</tbody></table>`;
+  }
+
+  function getTimeAgo(date) {
+    const s = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + 'm ago';
+    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+    return Math.floor(s / 86400) + 'd ago';
+  }
+
+  async function loadNotificationCount() {
+    try {
+      const res = await fetch('/api/shop?action=notifications&limit=1', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { const d = await res.json(); const el = document.getElementById('bellCount'); if (d.unreadCount > 0) { el.textContent = d.unreadCount > 9 ? '9+' : d.unreadCount; el.style.display = 'flex'; } else { el.style.display = 'none'; } }
+    } catch (e) {}
+  }
+
   function filterBookings(status) {
-    currentFilter = status;
-    currentPage = 1;
+    currentFilter = status; currentPage = 1;
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelector(`.tab[data-filter="${status}"]`).classList.add('active');
     loadDashboard();
@@ -204,40 +322,26 @@
 
   function renderBookings() {
     const list = document.getElementById('bookingsList');
-    const filtered = currentFilter === 'all'
-      ? allBookings
-      : allBookings.filter(b => b.status === currentFilter);
-
-    if (!filtered.length) {
-      list.innerHTML = `<div class="empty">No ${currentFilter === 'all' ? '' : currentFilter} bookings yet.</div>`;
-      return;
-    }
-
+    const filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => b.status === currentFilter);
+    if (!filtered.length) { list.innerHTML = `<div class="empty">No ${currentFilter === 'all' ? '' : currentFilter} bookings yet.</div>`; return; }
     list.innerHTML = filtered.map(b => {
       const statusLabel = b.status.replace(/_/g, ' ');
-      return `
-        <div class="booking-card" onclick="openBooking(${b.id})">
-          <div class="booking-info">
-            <div class="id">#${b.id} • ${new Date(b.created_at).toLocaleDateString()}</div>
-            <div class="name">${escapeHtml(b.customer_name || b.customer_number)}</div>
-            <div class="detail">${escapeHtml(b.service_type)} • ${escapeHtml(b.area || 'Area pending')}</div>
-          </div>
-          <div class="booking-badge ${b.status}">${statusLabel}</div>
+      return `<div class="booking-card" onclick="openBooking(${b.id})">
+        <div class="booking-info">
+          <div class="id">#${b.id} • ${new Date(b.created_at).toLocaleDateString()}</div>
+          <div class="name">${esc(b.customer_name || b.customer_number)}</div>
+          <div class="detail">${esc(b.service_type)} • ${esc(b.area || 'Area pending')}</div>
         </div>
-      `;
+        <div class="booking-badge ${b.status}">${statusLabel}</div>
+      </div>`;
     }).join('');
   }
 
-  function openBooking(id) {
-    window.location.href = `/shop-booking.html?id=${id}`;
-  }
-
-  function escapeHtml(s) {
-    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
+  function openBooking(id) { window.location.href = `/shop-booking.html?id=${id}`; }
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   loadDashboard();
-  setInterval(loadDashboard, 30000); // refresh every 30s
+  setInterval(loadDashboard, 30000);
 </script>
 </body>
 </html>

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI Settings — CoolCare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0a0a0a;--bg2:#111111;--bg3:#1a1a1a;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--green:#22c55e}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,sans-serif}
+    h1,h2,.brand{font-family:'Inter',system-ui,sans-serif;font-weight:700}
+    a{color:var(--ink2);text-decoration:none}a:hover{color:#fff}
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
+    .brand{font-weight:700;letter-spacing:0.5px;font-size:24px;color:#fff;text-transform:lowercase}.brand b{color:#fff;font-weight:900}
+    .wrap{max-width:700px;margin:auto;padding:28px 24px 60px}
+    h1{font-size:28px;letter-spacing:-0.5px;margin:0 0 6px;color:#fff}
+    .sub{color:var(--ink2);margin-bottom:24px;font-size:14px}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px 26px;margin-bottom:18px}
+    .card h2{font-size:16px;margin:0 0 16px;color:#fff}
+    .field{margin-bottom:16px}
+    .field label{display:block;font-weight:600;font-size:12px;color:var(--ink2);margin-bottom:6px;letter-spacing:0.3px;text-transform:uppercase}
+    .field input,.field textarea,.field select{width:100%;border:1px solid var(--border2);border-radius:10px;padding:10px 14px;font:400 14px/1.5 'Inter',sans-serif;background:var(--bg);color:var(--ink);transition:all 0.2s}
+    .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--muted)}
+    .field textarea{resize:vertical;min-height:80px}
+    .days{display:flex;gap:8px;flex-wrap:wrap}
+    .day-check{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:13px;font-weight:500;color:var(--ink2);transition:all 0.2s}
+    .day-check:hover{border-color:var(--border2)}.day-check input{accent-color:var(--green)}
+    .day-check.checked{border-color:var(--green);color:var(--green);background:rgba(34,197,94,0.05)}
+    .toggle{display:flex;align-items:center;gap:12px;padding:12px 0}
+    .toggle-switch{width:44px;height:24px;background:var(--border2);border-radius:12px;position:relative;cursor:pointer;transition:background 0.2s}
+    .toggle-switch.on{background:var(--green)}
+    .toggle-switch::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:transform 0.2s}
+    .toggle-switch.on::after{transform:translateX(20px)}
+    .btn{display:inline-block;background:#fff;color:#000;font:600 14px 'Inter',sans-serif;border:0;border-radius:10px;padding:14px 28px;cursor:pointer;transition:all 0.2s;letter-spacing:0.3px}
+    .btn:hover{background:#e5e5e5;transform:translateY(-1px)}
+    .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#fff;color:#000;padding:14px 26px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;transition:opacity 0.2s;z-index:100}
+    .toast.show{opacity:1}
+    @media(max-width:680px){.wrap{padding:20px 16px}h1{font-size:24px}}
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/shop-dashboard.html">cool<b>care</b></a>
+  <div style="display:flex;gap:12px;align-items:center">
+    <a href="/shop-dashboard.html" style="font-size:12px;font-weight:600;color:var(--muted)">← Dashboard</a>
+  </div>
+</nav>
+<div class="wrap">
+  <h1>AI Assistant Settings</h1>
+  <p class="sub">Configure how the CoolCare AI assistant interacts with your customers on WhatsApp.</p>
+
+  <div class="card">
+    <h2>Greeting & Responses</h2>
+    <div class="field"><label>Greeting Message</label><textarea id="greeting" placeholder="Hello! Welcome to [Shop Name]. How can I help you today?"></textarea></div>
+    <div class="field"><label>Fallback Response</label><textarea id="fallback" placeholder="I apologize, but I am unable to help with that right now. A team member will get back to you shortly."></textarea></div>
+    <div class="field"><label>Knowledge Base</label><textarea id="knowledge" rows="4" placeholder="Add information about your services, pricing, warranty policies, etc. The AI will use this to answer customer questions."></textarea></div>
+  </div>
+
+  <div class="card">
+    <h2>Business Hours</h2>
+    <div id="hoursContainer"></div>
+  </div>
+
+  <div class="card">
+    <h2>Working Days</h2>
+    <div class="days" id="daysContainer">
+      <label class="day-check"><input type="checkbox" value="mon"> Mon</label>
+      <label class="day-check"><input type="checkbox" value="tue"> Tue</label>
+      <label class="day-check"><input type="checkbox" value="wed"> Wed</label>
+      <label class="day-check"><input type="checkbox" value="thu"> Thu</label>
+      <label class="day-check"><input type="checkbox" value="fri"> Fri</label>
+      <label class="day-check"><input type="checkbox" value="sat"> Sat</label>
+      <label class="day-check"><input type="checkbox" value="sun"> Sun</label>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Transfer to Human</h2>
+    <div class="toggle">
+      <div class="toggle-switch on" id="transferToggle" onclick="toggleTransfer()"></div>
+      <div><div style="font-weight:600;font-size:14px;color:#fff">Allow transfer to human agent</div><div style="font-size:12px;color:var(--muted)">When the AI can't help, transfer the conversation to a real person.</div></div>
+    </div>
+  </div>
+
+  <button class="btn" id="saveBtn" onclick="saveSettings()">Save Settings</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const token = localStorage.getItem('cc_token');
+if (!token) window.location.href = '/login.html';
+
+let settings = {};
+let transferToHuman = true;
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function toggleTransfer() {
+  transferToHuman = !transferToHuman;
+  document.getElementById('transferToggle').classList.toggle('on', transferToHuman);
+}
+
+function renderHours(hours) {
+  const days = ['mon','tue','wed','thu','fri','sat','sun'];
+  const labels = {mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday',fri:'Friday',sat:'Saturday',sun:'Sunday'};
+  const container = document.getElementById('hoursContainer');
+  container.innerHTML = days.map(d => {
+    const h = hours?.[d] || {};
+    return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <span style="width:90px;font-size:13px;font-weight:600;color:var(--ink2)">${labels[d]}</span>
+      <input type="time" id="open_${d}" value="${h.open || '09:00'}" style="border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font:400 13px 'Inter',sans-serif;background:var(--bg);color:var(--ink)">
+      <span style="color:var(--muted);font-size:12px">to</span>
+      <input type="time" id="close_${d}" value="${h.close || '18:00'}" style="border:1px solid var(--border2);border-radius:8px;padding:6px 10px;font:400 13px 'Inter',sans-serif;background:var(--bg);color:var(--ink)">
+    </div>`;
+  }).join('');
+}
+
+async function loadSettings() {
+  try {
+    const res = await fetch('/api/shop?action=ai-settings', { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 401) { window.location.href = '/login.html'; return; }
+    const data = await res.json();
+    settings = data.settings || {};
+    document.getElementById('greeting').value = settings.greeting_message || '';
+    document.getElementById('fallback').value = settings.fallback_response || '';
+    document.getElementById('knowledge').value = settings.knowledge_base || '';
+    transferToHuman = settings.transfer_to_human !== false;
+    document.getElementById('transferToggle').classList.toggle('on', transferToHuman);
+    const workingDays = settings.working_days || ['mon','tue','wed','thu','fri','sat'];
+    document.querySelectorAll('.day-check input').forEach(cb => {
+      cb.checked = workingDays.includes(cb.value);
+      cb.closest('.day-check').classList.toggle('checked', cb.checked);
+    });
+    renderHours(settings.business_hours || {});
+  } catch (err) {
+    renderHours({});
+  }
+}
+
+async function saveSettings() {
+  const btn = document.getElementById('saveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const days = ['mon','tue','wed','thu','fri','sat','sun'];
+  const businessHours = {};
+  days.forEach(d => { businessHours[d] = { open: document.getElementById(`open_${d}`)?.value || '09:00', close: document.getElementById(`close_${d}`)?.value || '18:00' }; });
+  const workingDays = [...document.querySelectorAll('.day-check input:checked')].map(cb => cb.value);
+
+  try {
+    const res = await fetch('/api/shop', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save-ai-settings',
+        greetingMessage: document.getElementById('greeting').value,
+        fallbackResponse: document.getElementById('fallback').value,
+        knowledgeBase: document.getElementById('knowledge').value,
+        businessHours,
+        workingDays,
+        transferToHuman,
+      }),
+    });
+    if (res.ok) showToast('Settings saved successfully!');
+    else showToast('Failed to save settings');
+  } catch (err) { showToast('Network error'); }
+  btn.disabled = false; btn.textContent = 'Save Settings';
+}
+
+document.querySelectorAll('.day-check input').forEach(cb => {
+  cb.addEventListener('change', () => cb.closest('.day-check').classList.toggle('checked', cb.checked));
+});
+
+loadSettings();
+</script>
+</body>
+</html>

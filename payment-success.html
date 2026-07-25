@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Payment Successful — CoolCare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0a0a0a;--bg2:#111111;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--green:#22c55e}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:48px 40px;max-width:480px;width:100%;text-align:center}
+    .icon{width:72px;height:72px;border-radius:50%;background:rgba(34,197,94,0.1);border:2px solid rgba(34,197,94,0.3);display:grid;place-items:center;margin:0 auto 24px}
+    .icon svg{width:36px;height:36px;stroke:var(--green);stroke-width:2.5;fill:none}
+    h1{font-size:28px;font-weight:700;letter-spacing:-0.5px;margin-bottom:8px;color:#fff}
+    .sub{color:var(--ink2);font-size:15px;margin-bottom:28px;line-height:1.7}
+    .details{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:left;margin-bottom:28px}
+    .detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+    .detail-row:last-child{border-bottom:0}
+    .detail-label{color:var(--muted);font-size:12px;font-weight:600;letter-spacing:0.3px}
+    .detail-value{color:var(--ink);font-size:13px;font-weight:600}
+    .btn{display:inline-block;background:#fff;color:#000;font:600 14px 'Inter',sans-serif;border:0;border-radius:10px;padding:14px 28px;cursor:pointer;text-decoration:none;transition:all 0.2s;letter-spacing:0.3px}
+    .btn:hover{background:#e5e5e5;transform:translateY(-1px)}
+    .redirect{color:var(--muted);font-size:12px;margin-top:16px}
+    .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;margin-right:6px;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    #loading{color:var(--muted);font-size:14px}
+    @media(max-width:480px){.card{padding:36px 24px}h1{font-size:24px}}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div id="content" style="display:none">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </div>
+    <h1>Payment Successful!</h1>
+    <p class="sub">Your subscription is now active. All features have been unlocked.</p>
+    <div class="details" id="details"></div>
+    <a href="/shop-dashboard.html" class="btn">Go to Dashboard →</a>
+    <p class="redirect" id="redirectMsg">Redirecting to dashboard in <span id="countdown">5</span>s…</p>
+  </div>
+  <div id="loading"><span class="spinner"></span> Verifying payment…</div>
+</div>
+
+<script>
+const token = localStorage.getItem('cc_token');
+if (!token) window.location.href = '/login.html';
+
+async function verifyPayment() {
+  try {
+    const res = await fetch('/api/payments', { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 401) { window.location.href = '/login.html'; return; }
+    const data = await res.json();
+    const sub = data.subscription;
+    const payments = data.payments || [];
+    const latest = payments.find(p => p.status === 'completed') || payments[0];
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+
+    const rows = [];
+    if (sub?.plan_name || sub?.display_name) rows.push(['Plan', sub.display_name || sub.plan_name]);
+    if (sub?.billing_cycle) rows.push(['Billing', sub.billing_cycle.charAt(0).toUpperCase() + sub.billing_cycle.slice(1)]);
+    if (sub?.current_period_end) rows.push(['Expires', new Date(sub.current_period_end).toLocaleDateString()]);
+    if (latest?.invoice_number) rows.push(['Invoice', latest.invoice_number]);
+    if (latest?.amount) rows.push(['Amount', `${latest.currency || 'USD'} ${parseFloat(latest.amount).toFixed(2)}`]);
+    if (latest?.transaction_id) rows.push(['Transaction', latest.transaction_id]);
+
+    document.getElementById('details').innerHTML = rows.map(([l, v]) =>
+      `<div class="detail-row"><span class="detail-label">${l}</span><span class="detail-value">${v}</span></div>`
+    ).join('') || '<p style="color:var(--muted);text-align:center">Subscription activated successfully.</p>';
+
+    // Countdown redirect
+    let sec = 5;
+    const el = document.getElementById('countdown');
+    const timer = setInterval(() => {
+      sec--;
+      if (el) el.textContent = sec;
+      if (sec <= 0) { clearInterval(timer); window.location.href = '/shop-dashboard.html'; }
+    }, 1000);
+  } catch (err) {
+    document.getElementById('loading').innerHTML = '<p style="color:var(--muted)">Could not verify payment. Please check your dashboard.</p>';
+    document.getElementById('content').style.display = 'block';
+    document.getElementById('content').querySelector('h1').textContent = 'Welcome to CoolCare!';
+    document.getElementById('content').querySelector('.sub').textContent = 'Your account is being set up. Check your dashboard for status.';
+  }
+}
+verifyPayment();
+</script>
+</body>
+</html>

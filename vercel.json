@@ -1,5 +1,7 @@
 {
   "regions": ["bom1"],
+  "cleanUrls": true,
+  "trailingSlash": false,
   "headers": [
     {
       "source": "/api/(.*)",

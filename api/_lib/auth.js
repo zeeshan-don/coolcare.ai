@@ -147,6 +147,67 @@ async function logAdminAction(sql, { actorType, actorId, action, targetType, tar
   }
 }
 
+// ─── requireActiveSubscription: check shop has active, non-expired subscription ─
+// Returns { shopId, status } or null (403 already sent).
+// Platform admins are always exempt.
+async function requireActiveSubscription(auth, sql, response) {
+  const userType = auth.user_type || "shop";
+  const shopId = parseInt(auth.sub, 10);
+
+  // Platform staff are exempt
+  if (userType === "user") {
+    const rows = await sql`SELECT role FROM users WHERE id = ${shopId} LIMIT 1`;
+    if (rows.length > 0 && ["super_admin", "admin", "support"].includes(rows[0].role)) {
+      return { shopId, status: "exempt" };
+    }
+  }
+
+  // Check repair_shops subscription_status
+  const shop = await sql`
+    SELECT subscription_status, suspended_at FROM repair_shops WHERE id = ${shopId} LIMIT 1
+  `;
+  if (shop.length === 0) {
+    response.status(403).json({ error: "Account not found." });
+    return null;
+  }
+  if (shop[0].suspended_at) {
+    response.status(403).json({ error: "This account has been suspended.", errorType: "suspended" });
+    return null;
+  }
+
+  const subStatus = shop[0].subscription_status || "inactive";
+  if (subStatus === "active") {
+    // Double-check expiry hasn't passed
+    try {
+      const sub = await sql`
+        SELECT current_period_end FROM subscriptions
+        WHERE repair_shop_id = ${shopId} AND status = 'active'
+        ORDER BY created_at DESC LIMIT 1
+      `;
+      if (sub.length > 0 && new Date(sub[0].current_period_end) < new Date()) {
+        // Expired — update status
+        await sql`UPDATE repair_shops SET subscription_status = 'expired', updated_at = now() WHERE id = ${shopId}`;
+        await sql`UPDATE subscriptions SET status = 'expired', updated_at = now() WHERE repair_shop_id = ${shopId} AND status = 'active' AND current_period_end < now()`;
+        response.status(403).json({
+          error: "Your subscription has expired. Please renew to continue.",
+          errorType: "subscription_required",
+          subscriptionStatus: "expired",
+        });
+        return null;
+      }
+    } catch (e) { /* table may not exist — allow */ }
+    return { shopId, status: "active" };
+  }
+
+  // inactive / expired / past_due
+  response.status(403).json({
+    error: "An active subscription is required. Please choose a plan to continue.",
+    errorType: "subscription_required",
+    subscriptionStatus: subStatus,
+  });
+  return null;
+}
+
 module.exports = {
   signToken,
   makeJti,
@@ -156,5 +217,6 @@ module.exports = {
   requirePlatformAdmin,
   requireSuperAdmin,
   requireShopOwner,
+  requireActiveSubscription,
   logAdminAction,
 };

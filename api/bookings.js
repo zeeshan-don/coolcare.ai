@@ -7,7 +7,7 @@
 // Security: auth required, multi-tenant, rate-limited.
 
 const { neon } = require("@neondatabase/serverless");
-const { requireAuth } = require("./_lib/auth");
+const { requireAuth, requireActiveSubscription } = require("./_lib/auth");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
@@ -41,6 +41,10 @@ module.exports = withErrorHandler(async (request, response) => {
   if (body.action === "update" || (body.id && !body.customerNumber)) {
     return handleLegacyUpdate(request, response, sql, shopId, body);
   }
+
+  // Subscription required for new bookings
+  const sub = await requireActiveSubscription(auth, sql, response);
+  if (!sub) return;
 
   // Default: book a service
   return handleBookService(request, response, sql, shopId, body);

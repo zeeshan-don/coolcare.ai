@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>500 — Server Error | CoolCare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0a0a0a;--bg2:#111111;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--red:#ef4444}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:48px 40px;max-width:480px;width:100%;text-align:center}
+    .icon{width:72px;height:72px;border-radius:50%;background:rgba(239,68,68,0.1);border:2px solid rgba(239,68,68,0.3);display:grid;place-items:center;margin:0 auto 24px}
+    .icon svg{width:36px;height:36px;stroke:var(--red);stroke-width:2.5;fill:none}
+    h1{font-size:28px;font-weight:700;letter-spacing:-0.5px;margin-bottom:8px;color:#fff}
+    .sub{color:var(--ink2);font-size:15px;margin-bottom:28px;line-height:1.7}
+    .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+    .btn{display:inline-block;font:600 14px 'Inter',sans-serif;border-radius:10px;padding:14px 28px;cursor:pointer;text-decoration:none;transition:all 0.2s;letter-spacing:0.3px}
+    .btn-primary{background:#fff;color:#000;border:0}.btn-primary:hover{background:#e5e5e5;transform:translateY(-1px)}
+    .btn-ghost{background:transparent;color:var(--ink2);border:1px solid var(--border2)}.btn-ghost:hover{border-color:#555;color:#fff}
+    .help{margin-top:28px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:12px;line-height:1.7}
+    @media(max-width:480px){.card{padding:36px 24px}h1{font-size:24px}.btns{flex-direction:column}.btn{width:100%;text-align:center}}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="icon">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+  </div>
+  <h1>Something went wrong</h1>
+  <p class="sub">We're experiencing a server error. Please try again in a moment.</p>
+  <div class="btns">
+    <a href="javascript:location.reload()" class="btn btn-primary">Try Again</a>
+    <a href="/index.html" class="btn btn-ghost">Go Home</a>
+  </div>
+  <div class="help">
+    <p>If the problem persists, contact us at <strong style="color:var(--ink2)">support@coolcare.ai</strong></p>
+  </div>
+</div>
+</body>
+</html>

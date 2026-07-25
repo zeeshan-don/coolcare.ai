@@ -333,6 +333,20 @@ function getStepQuestion(status, state, lang) {
 async function createBooking(customerNumber, state) {
   try {
     const sql = getSql();
+
+    // Check if the conversation's shop has an active subscription
+    if (state.repair_shop_id) {
+      try {
+        const shopCheck = await sql`
+          SELECT subscription_status FROM repair_shops WHERE id = ${state.repair_shop_id} LIMIT 1
+        `;
+        if (shopCheck.length > 0 && shopCheck[0].subscription_status !== 'active') {
+          console.warn("[whatsapp] Booking blocked — shop subscription inactive:", state.repair_shop_id);
+          return null;
+        }
+      } catch (e) { /* table may not have column yet */ }
+    }
+
     const inserted = await sql`
       INSERT INTO bookings (customer_number, customer_name, address, service_type, area, urgency, status)
       VALUES (${customerNumber}, ${state.customer_name},

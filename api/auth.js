@@ -14,6 +14,14 @@ const { loginLimiter, signupLimiter, apiLimiter, applyLimit } = require("./_lib/
 const { setSecurityHeaders } = require("./_lib/security");
 const { sendEmail } = require("./_lib/notify");
 
+// Generate unique referral code: COOLCARE-XXXX
+function generateReferralCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return 'COOLCARE-' + code;
+}
+
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
   if (!allowMethods(request, response, "POST")) return;
@@ -167,27 +175,47 @@ async function handleSignup(request, response, body) {
   const safeServiceAreas = Array.isArray(data.serviceAreas) ? data.serviceAreas : [];
   const safeServicesOffered = Array.isArray(data.servicesOffered) ? data.servicesOffered : [];
 
+  // Generate unique referral code
+  let referralCode = generateReferralCode();
+  try {
+    const existing = await sql`SELECT id FROM repair_shops WHERE referral_code = ${referralCode} LIMIT 1`;
+    if (existing.length > 0) referralCode = generateReferralCode(); // retry once
+  } catch (e) { /* column may not exist yet */ }
+
+  // Check for referral code in signup data
+  let referredBy = null;
+  if (body.referralCode) {
+    try {
+      const referrer = await sql`SELECT id FROM repair_shops WHERE referral_code = ${body.referralCode.toUpperCase()} LIMIT 1`;
+      if (referrer.length > 0) referredBy = body.referralCode.toUpperCase();
+    } catch (e) { /* ok */ }
+  }
+
   const rows = await sql`
     INSERT INTO repair_shops
       (shop_name, owner_name, email, mobile, password_hash,
-       address, city, service_areas, services_offered, role)
+       address, city, service_areas, services_offered, role,
+       subscription_status, referral_code, referred_by)
     VALUES
       (${data.shopName}, ${data.ownerName}, ${data.email}, ${data.mobile}, ${passwordHash},
-       ${data.address || null}, ${data.city}, ${safeServiceAreas}, ${safeServicesOffered}, 'owner')
+       ${data.address || null}, ${data.city}, ${safeServiceAreas}, ${safeServicesOffered}, 'owner',
+       'inactive', ${referralCode}, ${referredBy})
     RETURNING id, shop_name, owner_name, email, mobile, city, created_at
   `;
   const shop = rows[0];
 
-  // Create trial subscription
-  try {
-    const starterPlan = await sql`SELECT id FROM subscription_plans WHERE name = 'starter' LIMIT 1`;
-    if (starterPlan.length > 0) {
-      await sql`
-        INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, current_period_end)
-        VALUES (${shop.id}, ${starterPlan[0].id}, 'trial', 'monthly', now() + INTERVAL '14 days')
-      `;
-    }
-  } catch (e) { console.warn("[auth/signup] Trial creation failed:", e.message); }
+  // Create referral record if referred
+  if (referredBy) {
+    try {
+      const referrer = await sql`SELECT id FROM repair_shops WHERE referral_code = ${referredBy} LIMIT 1`;
+      if (referrer.length > 0) {
+        await sql`
+          INSERT INTO referrals (referrer_shop_id, referred_shop_id, referral_code, status)
+          VALUES (${referrer[0].id}, ${shop.id}, ${referredBy}, 'pending')
+        `;
+      }
+    } catch (e) { console.warn("[auth/signup] Referral record creation failed:", e.message); }
+  }
 
   const jti = makeJti();
   const token = signToken({
@@ -210,6 +238,8 @@ async function handleSignup(request, response, body) {
       role: "owner",
       userType: "shop",
       repairShopId: shop.id,
+      subscriptionStatus: "inactive",
+      subscriptionRequired: true,
     },
   });
 }

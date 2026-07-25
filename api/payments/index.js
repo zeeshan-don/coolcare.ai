@@ -15,7 +15,7 @@ const { convertPrice, detectCurrency, CURRENCIES } = require("../_lib/currency")
 
 const checkoutSchema = z.object({
   planName: z.enum(["starter", "professional", "enterprise"]),
-  billingCycle: z.enum(["monthly", "yearly"]).default("monthly"),
+  billingCycle: z.enum(["monthly", "quarterly", "halfyearly", "yearly"]).default("monthly"),
   currency: z.string().optional(),
   couponCode: z.string().optional(),
 });
@@ -83,7 +83,14 @@ async function handleCheckout(request, response, sql, shopId, body) {
   if (plans.length === 0) return response.status(404).json({ error: "Plan not found" });
   const plan = plans[0];
 
-  const priceUsd = data.billingCycle === "yearly" ? plan.price_yearly_usd : plan.price_monthly_usd;
+  const priceUsd = (() => {
+    switch (data.billingCycle) {
+      case "quarterly": return plan.price_quarterly_usd || plan.price_monthly_usd * 3 * 0.9;
+      case "halfyearly": return plan.price_halfyearly_usd || plan.price_monthly_usd * 6 * 0.85;
+      case "yearly": return plan.price_yearly_usd;
+      default: return plan.price_monthly_usd;
+    }
+  })();
   const converted = await convertPrice(parseFloat(priceUsd), currency);
 
   // Apply coupon
@@ -130,8 +137,9 @@ async function handleCheckout(request, response, sql, shopId, body) {
           "line_items[0][quantity]": "1",
           "metadata[shop_id]": String(shopId), "metadata[plan]": data.planName,
           "metadata[payment_id]": String(payment[0].id), "metadata[invoice]": invoiceNumber,
-          success_url: `${request.headers["origin"] || "https://coolcare.ai"}/shop-dashboard.html?payment=success`,
-          cancel_url: `${request.headers["origin"] || "https://coolcare.ai"}/shop-dashboard.html?payment=cancelled`,
+          "metadata[billing_cycle]": data.billingCycle,
+          success_url: `${request.headers["origin"] || "https://coolcare.ai"}/payment-success.html`,
+          cancel_url: `${request.headers["origin"] || "https://coolcare.ai"}/payment-failed.html`,
         }),
       });
       if (stripeRes.ok) {
@@ -150,7 +158,7 @@ async function handleCheckout(request, response, sql, shopId, body) {
       const rpRes = await fetch("https://api.razorpay.com/v1/orders", {
         method: "POST",
         headers: { Authorization: "Basic " + Buffer.from(`${razorpayKey}:${razorpaySecret}`).toString("base64"), "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: Math.round(finalAmount * 100), currency, receipt: invoiceNumber, notes: { shop_id: shopId, plan: data.planName, payment_id: payment[0].id } }),
+        body: JSON.stringify({ amount: Math.round(finalAmount * 100), currency, receipt: invoiceNumber, notes: { shop_id: shopId, plan: data.planName, payment_id: payment[0].id, billing_cycle: data.billingCycle } }),
       });
       if (rpRes.ok) {
         const order = await rpRes.json();

@@ -154,6 +154,26 @@
 
     /* ── Footer ── */
     footer{max-width:1200px;margin:auto;padding:36px 28px;color:var(--muted2);display:flex;justify-content:space-between;align-items:center;font-size:12px;border-top:1px solid var(--border);letter-spacing:0.3px}
+    /* Billing toggle */
+    .billing-toggle{font:600 12px 'Inter',sans-serif;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;transition:all 0.2s}
+    .billing-toggle:hover{border-color:var(--border2);color:var(--ink)}
+    .billing-toggle.active{background:#fff;color:#000;border-color:#fff}
+    /* FAQ */
+    .faq{max-width:700px;margin:0 auto}
+    .faq-item{border-bottom:1px solid var(--border);padding:20px 0}
+    .faq-q{font-size:16px;font-weight:600;color:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+    .faq-q::after{content:'+';color:var(--muted);font-size:20px;font-weight:300;transition:transform 0.2s}
+    .faq-item.open .faq-q::after{transform:rotate(45deg)}
+    .faq-a{color:var(--ink2);font-size:14px;line-height:1.8;max-height:0;overflow:hidden;transition:max-height 0.3s,padding 0.3s}
+    .faq-item.open .faq-a{max-height:300px;padding-top:12px}
+    /* Testimonials */
+    .testimonials{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .testimonial{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:28px 24px}
+    .testimonial p{color:var(--ink2);font-size:14px;line-height:1.8;margin-bottom:16px;font-style:italic}
+    .testimonial-author{display:flex;align-items:center;gap:10px}
+    .testimonial-avatar{width:36px;height:36px;border-radius:50%;background:var(--bg3);border:1px solid var(--border2);display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--ink2)}
+    .testimonial-name{font-size:13px;font-weight:600;color:#fff}
+    .testimonial-role{font-size:11px;color:var(--muted)}
     /* ── Responsive ── */
     @media(max-width:880px){
       .navlinks{display:none}
@@ -165,6 +185,7 @@
       .how-inner{gap:40px}
       .queue{border-right:0;border-bottom:1px solid var(--border)}
       .section,.how{padding:65px 20px}
+      .testimonials{grid-template-columns:1fr !important}
       #pricingCards{grid-template-columns:1fr !important}
     }
     @media(max-width:480px){
@@ -201,10 +222,11 @@
     <div class="hero-bg"></div>
     <div style="position:relative;z-index:1">
       <span class="eyebrow"><i class="pulse"></i> Built for home appliance service teams</span>
-      <h1>Every enquiry deserves a <em>fast reply.</em></h1>
+      <h1>Turn Every WhatsApp Enquiry Into a <em>Confirmed Booking.</em></h1>
       <p>CoolCare turns WhatsApp conversations and missed calls into booked home appliance service jobs — without adding work for your team.</p>
       <div class="hero-actions">
-        <a href="/shop-signup.html"><button class="btn-hero">Start for free →</button></a>
+        <a href="/shop-signup.html"><button class="btn-hero">Get started →</button></a>
+        <a href="/login.html"><button class="btn-hero-ghost">Renew subscription</button></a>
       </div>
       <div class="proof">
         <div class="faces">
@@ -319,6 +341,12 @@
   <!-- ── Pricing ── -->
   <section class="section" id="pricing">
     <div style="text-align:center;margin-bottom:24px;">
+      <div style="display:flex;gap:6px;justify-content:center;margin-bottom:16px;flex-wrap:wrap">
+        <button class="billing-toggle active" data-cycle="monthly" onclick="switchBilling('monthly')">Monthly</button>
+        <button class="billing-toggle" data-cycle="quarterly" onclick="switchBilling('quarterly')">Quarterly <span style="color:var(--green);font-size:10px">-10%</span></button>
+        <button class="billing-toggle" data-cycle="halfyearly" onclick="switchBilling('halfyearly')">Half-Yearly <span style="color:var(--green);font-size:10px">-15%</span></button>
+        <button class="billing-toggle" data-cycle="yearly" onclick="switchBilling('yearly')">Yearly <span style="color:var(--green);font-size:10px">-20%</span></button>
+      </div>
       <select id="currencySelect" onchange="loadPricing(this.value)" style="background:var(--bg2);color:var(--ink2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 13px 'Inter',sans-serif;cursor:pointer;appearance:auto;">
         <option value="USD">🇺🇸 USD ($)</option>
         <option value="INR">🇮🇳 INR (₹)</option>
@@ -333,7 +361,45 @@
       <div id="pricingCards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:28px;">
         <!-- Filled dynamically -->
       </div>
-      <p style="color:var(--muted);font-size:12px;margin-top:18px">All plans include a 14-day free trial. No credit card required.</p>
+      <p style="color:var(--muted);font-size:12px;margin-top:18px">No hidden fees. Cancel anytime. All plans include WhatsApp bot, dashboard, and notifications.</p>
+    </div>
+  </section>
+
+  <!-- ── Testimonials ── -->
+  <section class="section">
+    <div class="intro">
+      <div class="tag">Trusted</div>
+      <h2>What shop owners say.</h2>
+    </div>
+    <div class="testimonials">
+      <div class="testimonial">
+        <p>"We used to miss 30% of WhatsApp enquiries. CoolCare books them automatically — our bookings went up 40% in the first month."</p>
+        <div class="testimonial-author"><div class="testimonial-avatar">RK</div><div><div class="testimonial-name">Rajesh Kumar</div><div class="testimonial-role">Kumar Electronics, Bangalore</div></div></div>
+      </div>
+      <div class="testimonial">
+        <p>"My receptionist used to spend all day on phone calls. Now CoolCare handles the first conversation and she just confirms the booking."</p>
+        <div class="testimonial-author"><div class="testimonial-avatar">AS</div><div><div class="testimonial-name">Anita Sharma</div><div class="testimonial-role">Sharma Home Services, Delhi</div></div></div>
+      </div>
+      <div class="testimonial">
+        <p>"The dashboard gives me a clear view of every job. No more lost messages, no more forgotten callbacks. Worth every rupee."</p>
+        <div class="testimonial-author"><div class="testimonial-avatar">VM</div><div><div class="testimonial-name">Vikram Meo</div><div class="testimonial-role">CoolTech Repairs, Mumbai</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── FAQ ── -->
+  <section class="section" style="padding-top:60px">
+    <div class="intro">
+      <div class="tag">FAQ</div>
+      <h2>Common questions.</h2>
+    </div>
+    <div class="faq">
+      <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">How does the WhatsApp bot work?</div><div class="faq-a">When a customer messages your business WhatsApp number, CoolCare's AI assistant automatically replies, gathers the problem details, location, and preferred time slot, then creates a booking in your dashboard.</div></div>
+      <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Do I need a separate WhatsApp number?</div><div class="faq-a">No. CoolCare connects to your existing WhatsApp Business account through the Meta API. Your customers keep messaging the same number they already know.</div></div>
+      <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Can I customize the AI responses?</div><div class="faq-a">Yes. You can configure the greeting message, business hours, supported services, knowledge base, fallback responses, and when to transfer to a human agent — all from the AI Settings page.</div></div>
+      <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">What happens if my subscription expires?</div><div class="faq-a">Your dashboard remains accessible in view-only mode. The WhatsApp bot stops creating new bookings. You can renew anytime and pick up right where you left off.</div></div>
+      <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Can I switch plans later?</div><div class="faq-a">Absolutely. You can upgrade or downgrade at any time. Changes take effect at the start of your next billing cycle.</div></div>
+      <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">Is there a referral program?</div><div class="faq-a">Yes! Every shop gets a unique referral code. When another shop signs up using your code and subscribes, you earn a $10 credit. Check the Referrals page in your dashboard.</div></div>
     </div>
   </section>
 </main>
@@ -395,7 +461,18 @@
   ];
 
   let currentCurrency = localStorage.getItem('cc_currency') || 'USD';
+  let currentCycle = 'monthly';
   document.getElementById('currencySelect').value = currentCurrency;
+
+  function switchBilling(cycle) {
+    currentCycle = cycle;
+    document.querySelectorAll('.billing-toggle').forEach(b => b.classList.toggle('active', b.dataset.cycle === cycle));
+    loadPricing(currentCurrency);
+  }
+
+  const cycleMultipliers = { monthly: 1, quarterly: 2.7, halfyearly: 5.1, yearly: 9.6 };
+  const cycleSavings = { monthly: 0, quarterly: 10, halfyearly: 15, yearly: 20 };
+  const cycleLabels = { monthly: '/mo', quarterly: '/qtr', halfyearly: '/6mo', yearly: '/yr' };
 
   async function loadPricing(currency) {
     currentCurrency = currency || currentCurrency;
@@ -409,27 +486,34 @@
       document.getElementById('pricingCards').innerHTML = PLANS.map(plan => {
         const monthly = pricing[plan.key + '_monthly'];
         const yearly = pricing[plan.key + '_yearly'];
-        const price = monthly ? monthly.formatted : '$29/mo';
-        const priceYearly = yearly ? yearly.formatted : '$290/yr';
+        const baseMonthly = monthly ? parseFloat(monthly.raw || monthly.price || 29) : 29;
+        const cyclePrice = Math.round(baseMonthly * cycleMultipliers[currentCycle] * 100) / 100;
+        const sym2 = data.symbol || '$';
+        const priceDisplay = monthly ? `${sym2}${cyclePrice.toFixed(currentCycle === 'monthly' ? 0 : 2)}${cycleLabels[currentCycle]}` : `$${cyclePrice.toFixed(0)}${cycleLabels[currentCycle]}`;
+        const savingsPct = cycleSavings[currentCycle];
         return `<div style="background:var(--bg2);border:1px solid ${plan.popular ? '#fff' : 'var(--border)'};border-radius:14px;padding:32px 24px;text-align:center;position:relative;${plan.popular ? 'transform:scale(1.03);' : ''}">
           ${plan.popular ? '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#fff;color:#000;font:700 10px sans-serif;padding:3px 12px;border-radius:20px;letter-spacing:0.5px">Most Popular</div>' : ''}
           <h3 style="font-size:20px;margin-bottom:8px;color:#fff">${plan.name}</h3>
-          <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">${price}</div>
-          <div style="color:var(--muted);font-size:12px;margin-bottom:4px">${priceYearly} billed yearly</div>
+          <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">${priceDisplay}</div>
+          ${savingsPct > 0 ? `<div style="color:var(--green);font-size:11px;font-weight:600;margin-bottom:4px">Save ${savingsPct}% vs monthly</div>` : '<div style="height:15px;margin-bottom:4px"></div>'}
           <div style="text-align:left;margin:20px 0">${plan.features.map(f => `<div class="pf">${f}</div>`).join('')}</div>
-          <a href="/shop-signup.html"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
+          <a href="/shop-signup.html?plan=${plan.key}&billing=${currentCycle}"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
         </div>`;
       }).join('');
     } catch (err) {
       // Fallback static pricing
-      document.getElementById('pricingCards').innerHTML = PLANS.map(plan =>
-        `<div style="background:var(--bg2);border:1px solid ${plan.popular ? '#fff' : 'var(--border)'};border-radius:14px;padding:32px 24px;text-align:center">
+      document.getElementById('pricingCards').innerHTML = PLANS.map(plan => {
+        const baseMonthly = 29;
+        const cyclePrice = Math.round(baseMonthly * cycleMultipliers[currentCycle]);
+        const savingsPct = cycleSavings[currentCycle];
+        return `<div style="background:var(--bg2);border:1px solid ${plan.popular ? '#fff' : 'var(--border)'};border-radius:14px;padding:32px 24px;text-align:center">
           <h3 style="font-size:20px;margin-bottom:8px;color:#fff">${plan.name}</h3>
-          <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">$29/mo</div>
+          <div style="font-size:36px;font-weight:700;color:#fff;margin:8px 0">$${cyclePrice}${cycleLabels[currentCycle]}</div>
+          ${savingsPct > 0 ? `<div style="color:var(--green);font-size:11px;font-weight:600;margin-bottom:4px">Save ${savingsPct}% vs monthly</div>` : '<div style="height:15px;margin-bottom:4px"></div>'}
           <div style="text-align:left;margin:20px 0">${plan.features.map(f => `<div class="pf">${f}</div>`).join('')}</div>
-          <a href="/shop-signup.html"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
-        </div>`
-      ).join('');
+          <a href="/shop-signup.html?plan=${plan.key}&billing=${currentCycle}"><button class="btn-hero" style="width:100%;font-size:13px;padding:12px">Get started →</button></a>
+        </div>`;
+      }).join('');
     }
   }
   loadPricing(currentCurrency);
