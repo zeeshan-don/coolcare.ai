@@ -184,6 +184,22 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
     Analytics
   </div>
+  <div class="sidebar-item" data-tab="gateways" onclick="switchTab('gateways',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22M5 14h2M11 14h2M17 14h2"/></svg>
+    Gateways
+  </div>
+  <div class="sidebar-item" data-tab="subscriptions" onclick="switchTab('subscriptions',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10"/><path d="M12 12V6"/><path d="M12 12l4 2"/></svg>
+    Subscriptions
+  </div>
+  <div class="sidebar-item" data-tab="invoices" onclick="switchTab('invoices',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    Invoices
+  </div>
+  <div class="sidebar-item" data-tab="payment-logs" onclick="switchTab('payment-logs',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    Payment Logs
+  </div>
   <div class="sidebar-item" data-tab="settings" onclick="switchTab('settings',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
     Settings
@@ -299,6 +315,42 @@
   <div class="table-wrap"><table><thead><tr><th>Month</th><th>Bookings</th><th>Revenue</th></tr></thead><tbody id="monthlyBody"><tr><td colspan="3" class="empty-state">Loading…</td></tr></tbody></table></div>
 </div>
 
+<!-- ═══ GATEWAYS ═══ -->
+<div class="tab-panel" id="panel-gateways">
+  <div class="section-head"><h1>Payment Gateways</h1><button class="btn btn-primary" onclick="openGatewayModal()">+ Configure Gateway</button></div>
+  <div class="plan-grid" id="gatewaysGrid"><div class="empty-state">Loading gateways…</div></div>
+</div>
+
+<!-- ═══ SUBSCRIPTIONS (admin) ═══ -->
+<div class="tab-panel" id="panel-subscriptions">
+  <div class="section-head"><h1>Subscriptions</h1></div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Shop</th><th>Plan</th><th>Cycle</th><th>Status</th><th>Amount</th><th>Expires</th><th>Gateway</th><th>Actions</th></tr></thead>
+      <tbody id="subBody"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody></table>
+  </div>
+  <div class="pager"><button id="subPrev" onclick="loadSubscriptions(P.sub-1)" disabled>← Prev</button><span id="subPageInfo">Page 1</span><button id="subNext" onclick="loadSubscriptions(P.sub+1)">Next →</button></div>
+</div>
+
+<!-- ═══ INVOICES (admin) ═══ -->
+<div class="tab-panel" id="panel-invoices">
+  <div class="section-head"><h1>Invoices</h1></div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Invoice #</th><th>Shop</th><th>Plan</th><th>Amount</th><th>Status</th><th>Issued</th><th>Paid</th></tr></thead>
+      <tbody id="invBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody></table>
+  </div>
+  <div class="pager"><button id="invPrev" onclick="loadInvoices(P.inv-1)" disabled>← Prev</button><span id="invPageInfo">Page 1</span><button id="invNext" onclick="loadInvoices(P.inv+1)">Next →</button></div>
+</div>
+
+<!-- ═══ PAYMENT LOGS ═══ -->
+<div class="tab-panel" id="panel-payment-logs">
+  <div class="section-head"><h1>Payment Logs</h1></div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Event</th><th>Shop</th><th>Gateway</th><th>Severity</th><th>Message</th><th>Error</th><th>Date</th></tr></thead>
+      <tbody id="logBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody></table>
+  </div>
+  <div class="pager"><button id="logPrev" onclick="loadPaymentLogs(P.log-1)" disabled>← Prev</button><span id="logPageInfo">Page 1</span><button id="logNext" onclick="loadPaymentLogs(P.log+1)">Next →</button></div>
+</div>
+
 <!-- ═══ SETTINGS ═══ -->
 <div class="tab-panel" id="panel-settings">
   <div class="section-head"><h1>Platform Settings</h1></div>
@@ -403,6 +455,37 @@
   </div>
 </div>
 
+<!-- Gateway Configuration Modal -->
+<div class="modal-backdrop" id="gatewayModal" onclick="if(event.target===this)closeModal('gatewayModal')">
+  <div class="modal">
+    <h2 id="gatewayModalTitle">Configure Gateway</h2>
+    <input type="hidden" id="gwId">
+    <div class="field"><label>Provider</label>
+      <select id="gwProvider" onchange="var d=document.getElementById('gwDisplay'); if(!d.dataset.userEdited) d.value=this.options[this.selectedIndex].text; d.dataset.userEdited=''" onfocus="document.getElementById('gwDisplay').dataset.userEdited='1'">
+        <option value="razorpay">Razorpay</option>
+        <option value="stripe">Stripe</option>
+        <option value="paypal">PayPal</option>
+        <option value="phonepe">PhonePe</option>
+        <option value="cashfree">Cashfree</option>
+      </select></div>
+    <div class="field"><label>Display Name</label><input id="gwDisplay" type="text" placeholder="Razorpay"></div>
+    <div class="field"><label>Key ID / API Key</label><input id="gwKeyId" type="text" placeholder="rzp_live_..."></div>
+    <div class="field"><label>Key Secret</label><input id="gwKeySecret" type="password" placeholder="Enter secret key"></div>
+    <div class="field"><label>Webhook Secret</label><input id="gwWebhookSecret" type="password" placeholder="Enter webhook secret"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="field"><label>Mode</label>
+        <select id="gwMode"><option value="true">Test Mode</option><option value="false">Live Mode</option></select></div>
+      <div class="field"><label>Priority</label>
+        <input id="gwPriority" type="number" value="1" min="0" max="100"></div>
+    </div>
+    <div class="field"><label>Enabled</label>
+      <select id="gwEnabled"><option value="true">Yes</option><option value="false">No</option></select></div>
+    <div class="field"><label>Extra Config (JSON)</label>
+      <textarea id="gwExtraConfig" placeholder='{"icon":"razorpay","description":"Pay via Razorpay"}'></textarea></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('gatewayModal')">Cancel</button><button class="btn btn-primary" onclick="saveGateway()">Save Gateway</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -415,10 +498,11 @@ document.getElementById('navUser').textContent = userData.name || userData.email
 document.getElementById('navRole').textContent = (userData.role || '').replace(/_/g, ' ');
 
 /* ── STATE ── */
-const P = { dash: 1, all: 1, user: 1, pay: 1 };
+const P = { dash: 1, all: 1, user: 1, pay: 1, sub: 1, inv: 1, log: 1 };
 let loadedTabs = new Set(['dashboard']);
 let plansCache = [];
 let pricingCache = [];
+let gatewaysCache = [];
 
 /* ── HELPERS ── */
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -461,6 +545,10 @@ function switchTab(name, el) {
     pricing: loadPricingAdmin,
     payments: () => loadPayments(1),
     analytics: loadAnalytics,
+    gateways: loadGateways,
+    subscriptions: () => loadSubscriptions(1),
+    invoices: () => loadInvoices(1),
+    'payment-logs': () => loadPaymentLogs(1),
     settings: loadSettings
   };
   if (loaders[name] && !loadedTabs.has(name)) {
@@ -653,6 +741,214 @@ async function resetPW(targetId, targetType) {
   if (!confirm('Generate a temporary password?')) return;
   const res = await api('/api/shop', { method:'POST', body:JSON.stringify({ action:'reset-password', targetId, targetType }) });
   if (res) { const d = await res.json(); alert('Temporary password: ' + d.tempPassword); }
+}
+
+/* ── GATEWAYS ── */
+async function loadGateways() {
+  const res = await api('/api/shop?action=admin-gateways');
+  if (!res) return;
+  const data = await res.json();
+  gatewaysCache = data.gateways || [];
+  const grid = document.getElementById('gatewaysGrid');
+  if (!gatewaysCache.length) {
+    grid.innerHTML = '<div class="empty-state">No payment gateways configured. Click "+ Configure Gateway" to add one.</div>';
+    return;
+  }
+  grid.innerHTML = gatewaysCache.map(g => {
+    const enabled = g.isEnabled ? 'badge-active' : 'badge-inactive';
+    const testMode = g.isTestMode ? 'Test' : 'Live';
+    return `<div class="plan-card">
+      <h3>${esc(g.displayName || g.provider)} <span class="badge ${enabled}">${g.isEnabled ? 'Enabled' : 'Disabled'}</span></h3>
+      <div class="plan-price" style="font-size:18px;font-weight:600">${esc(g.provider).toUpperCase()}</div>
+      <div class="plan-meta">
+        Mode: <strong>${testMode}</strong><br>
+        Key ID: ${g.hasKeyId ? '✓ Configured' : '✗ Not set'}<br>
+        Secret: ${g.hasKeySecret ? '✓ Configured' : '✗ Not set'}<br>
+        Webhook: ${g.hasWebhookSecret ? '✓ Configured' : '✗ Not set'}<br>
+        Priority: ${g.priority || 0}${g.lastTestedAt ? '<br>Last tested: ' + new Date(g.lastTestedAt).toLocaleDateString() : ''}
+      </div>
+      <div class="plan-actions">
+        <button class="act" onclick="editGateway(${g.id})">Edit</button>
+        <button class="act ${g.isEnabled ? 'danger' : ''}" onclick="toggleGateway(${g.id}, ${!g.isEnabled})">${g.isEnabled ? 'Disable' : 'Enable'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openGatewayModal() {
+  document.getElementById('gatewayModalTitle').textContent = 'Configure Gateway';
+  document.getElementById('gwId').value = '';
+  document.getElementById('gwProvider').value = 'razorpay';
+  document.getElementById('gwDisplay').value = 'Razorpay';
+  document.getElementById('gwKeyId').value = '';
+  document.getElementById('gwKeySecret').value = '';
+  document.getElementById('gwWebhookSecret').value = '';
+  document.getElementById('gwMode').value = 'true';
+  document.getElementById('gwPriority').value = '1';
+  document.getElementById('gwEnabled').value = 'true';
+  document.getElementById('gwExtraConfig').value = '{}';
+  document.getElementById('gatewayModal').classList.add('open');
+}
+
+function editGateway(id) {
+  const gw = gatewaysCache.find(g => g.id === id);
+  if (!gw) { toast('Gateway not found'); return; }
+  document.getElementById('gatewayModalTitle').textContent = 'Edit Gateway: ' + gw.provider;
+  document.getElementById('gwId').value = gw.id;
+  document.getElementById('gwProvider').value = gw.provider;
+  document.getElementById('gwDisplay').value = gw.displayName || '';
+  document.getElementById('gwKeyId').value = ''; // Don't pre-fill secrets
+  document.getElementById('gwKeySecret').value = '';
+  document.getElementById('gwWebhookSecret').value = '';
+  document.getElementById('gwMode').value = gw.isTestMode ? 'true' : 'false';
+  document.getElementById('gwPriority').value = gw.priority || 1;
+  document.getElementById('gwEnabled').value = gw.isEnabled ? 'true' : 'false';
+  // Try to preserve existing extra config — parse from available data
+  try {
+    const ec = typeof gw.extraConfig === 'string' ? JSON.parse(gw.extraConfig) : (gw.extraConfig || {});
+    document.getElementById('gwExtraConfig').value = JSON.stringify(ec, null, 2);
+  } catch(e) {
+    document.getElementById('gwExtraConfig').value = '{}';
+  }
+  document.getElementById('gatewayModal').classList.add('open');
+}
+
+async function saveGateway() {
+  const id = document.getElementById('gwId').value;
+  const provider = document.getElementById('gwProvider').value.trim().toLowerCase();
+  const displayName = document.getElementById('gwDisplay').value.trim();
+  if (!provider || !displayName) { toast('Provider and display name required'); return; }
+
+  const body = {
+    action: 'save-gateway',
+    id: id ? parseInt(id, 10) : undefined,
+    provider,
+    displayName,
+    extraConfig: '{}',
+    priority: parseInt(document.getElementById('gwPriority').value || '1', 10),
+    isTestMode: document.getElementById('gwMode').value === 'true',
+    isEnabled: document.getElementById('gwEnabled').value === 'true',
+  };
+  // Only send values that were entered (don't overwrite secrets with empty)
+  const keyId = document.getElementById('gwKeyId').value.trim();
+  const keySecret = document.getElementById('gwKeySecret').value;
+  const webhookSecret = document.getElementById('gwWebhookSecret').value;
+  if (keyId) body.keyId = keyId;
+  if (keySecret) body.keySecret = keySecret;
+  if (webhookSecret) body.webhookSecret = webhookSecret;
+
+  try {
+    body.extraConfig = JSON.parse(document.getElementById('gwExtraConfig').value || '{}');
+  } catch(e) { toast('Invalid JSON in extra config'); return; }
+
+  const res = await api('/api/shop', { method: 'POST', body: JSON.stringify(body) });
+  if (res) {
+    toast('Gateway saved');
+    closeModal('gatewayModal');
+    loadedTabs.delete('gateways');
+    loadGateways();
+  }
+}
+
+async function toggleGateway(id, enable) {
+  const res = await api('/api/shop', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'toggle-gateway', id, isEnabled: enable })
+  });
+  if (res) {
+    toast(`Gateway ${enable ? 'enabled' : 'disabled'}`);
+    loadedTabs.delete('gateways');
+    loadGateways();
+  }
+}
+
+/* ── ADMIN SUBSCRIPTIONS ── */
+async function loadSubscriptions(page) {
+  P.sub = Math.max(1, page || 1);
+  const params = new URLSearchParams({ action: 'admin-subscriptions', page: P.sub, limit: 20 });
+  const res = await api(`/api/shop?${params}`);
+  if (!res) return;
+  const data = await res.json();
+  const tbody = document.getElementById('subBody');
+  if (!data.subscriptions?.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No subscriptions found</td></tr>';
+    updatePager('subPageInfo','subPrev','subNext', data.pagination, P, 'sub');
+    return;
+  }
+  const bcMap = { active: 'badge-active', expired: 'badge-suspended', cancelled: 'badge-inactive', trial: 'badge-trial', past_due: 'badge-suspended' };
+  tbody.innerHTML = data.subscriptions.map(s => {
+    const bc = bcMap[s.status] || 'badge-inactive';
+    const daysLeft = s.current_period_end ? Math.ceil((new Date(s.current_period_end) - new Date()) / 86400000) : 0;
+    return `<tr>
+      <td><strong>${esc(s.shop_name || '—')}</strong></td>
+      <td>${esc(s.plan_name || s.plan_display || 'Pro')}</td>
+      <td>${esc(s.billing_cycle || 'monthly')}</td>
+      <td><span class="badge ${bc}">${esc(s.status)}${daysLeft > 0 && daysLeft <= 7 ? ` (${daysLeft}d)` : ''}</span></td>
+      <td>${s.amount_paid ? '$' + fmt(s.amount_paid) : '—'}</td>
+      <td>${s.current_period_end ? new Date(s.current_period_end).toLocaleDateString() : '—'}</td>
+      <td>${esc(s.gateway || '—')}</td>
+      <td><button class="act" onclick="openExtendModal(${s.repair_shop_id},'${esc(s.shop_name || 'Shop')}')">Extend</button></td>
+    </tr>`;
+  }).join('');
+  updatePager('subPageInfo','subPrev','subNext', data.pagination, P, 'sub');
+}
+
+/* ── ADMIN INVOICES ── */
+async function loadInvoices(page) {
+  P.inv = Math.max(1, page || 1);
+  const params = new URLSearchParams({ action: 'admin-invoices', page: P.inv, limit: 20 });
+  const res = await api(`/api/shop?${params}`);
+  if (!res) return;
+  const data = await res.json();
+  const tbody = document.getElementById('invBody');
+  if (!data.invoices?.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No invoices found</td></tr>';
+    updatePager('invPageInfo','invPrev','invNext', data.pagination, P, 'inv');
+    return;
+  }
+  const bcMap = { paid: 'badge-active', issued: 'badge-blue', draft: 'badge-trial', void: 'badge-inactive', refunded: 'badge-suspended' };
+  tbody.innerHTML = data.invoices.map(inv => {
+    const bc = bcMap[inv.status] || 'badge-inactive';
+    return `<tr>
+      <td><strong>${esc(inv.invoice_number || inv.id)}</strong></td>
+      <td>${esc(inv.shop_name || '—')}</td>
+      <td>${esc(inv.plan_name || 'Pro')}</td>
+      <td>${esc(inv.currency || '$')} ${fmt(inv.total || inv.subtotal || 0)}</td>
+      <td><span class="badge ${bc}">${esc(inv.status)}</span></td>
+      <td>${inv.issued_at ? new Date(inv.issued_at).toLocaleDateString() : (inv.created_at ? new Date(inv.created_at).toLocaleDateString() : '—')}</td>
+      <td>${inv.paid_at ? new Date(inv.paid_at).toLocaleDateString() : '—'}</td>
+    </tr>`;
+  }).join('');
+  updatePager('invPageInfo','invPrev','invNext', data.pagination, P, 'inv');
+}
+
+/* ── ADMIN PAYMENT LOGS ── */
+async function loadPaymentLogs(page) {
+  P.log = Math.max(1, page || 1);
+  const params = new URLSearchParams({ action: 'admin-payment-logs', page: P.log, limit: 20 });
+  const res = await api(`/api/shop?${params}`);
+  if (!res) return;
+  const data = await res.json();
+  const tbody = document.getElementById('logBody');
+  if (!data.logs?.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No payment logs found</td></tr>';
+    updatePager('logPageInfo','logPrev','logNext', data.pagination, P, 'log');
+    return;
+  }
+  const sevMap = { info: 'badge-blue', warning: 'badge-suspended', error: 'badge-suspended', critical: 'badge-suspended', debug: 'badge-trial' };
+  tbody.innerHTML = data.logs.map(l => {
+    const sev = sevMap[l.severity] || 'badge-trial';
+    return `<tr>
+      <td><span class="badge ${sev}">${esc(l.event_type)}</span></td>
+      <td>${esc(l.shop_name || '—')}</td>
+      <td>${esc(l.gateway || '—')}</td>
+      <td><span class="badge ${sev}">${esc(l.severity)}</span></td>
+      <td><small>${esc(l.message || '—')}</small></td>
+      <td>${l.error_message ? `<small style="color:var(--red)">${esc(l.error_message)}</small>` : '—'}</td>
+      <td>${l.created_at ? new Date(l.created_at).toLocaleString() : '—'}</td>
+    </tr>`;
+  }).join('');
+  updatePager('logPageInfo','logPrev','logNext', data.pagination, P, 'log');
 }
 
 /* ── PLANS ── */

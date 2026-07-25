@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoolCare | Subscription</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="/js/checkout.js"></script>
+  <style>
+    :root{--bg:#000;--bg2:#0a0a0a;--bg3:#111;--bg4:#1a1a1a;--bg5:#222;--border:#1a1a1a;--border2:#2a2a2a;--border3:#333;--ink:#ededed;--ink2:#a3a3a3;--ink3:#888;--muted:#737373;--muted2:#525252;--muted3:#404040;--red:#ef4444;--green:#22c55e;--blue:#3b82f6;--yellow:#eab308;--radius:10px;--radius-lg:14px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--ink);font:14px/1.6 'Inter',system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+    h1{font-size:28px;font-weight:700;letter-spacing:-.5px;color:#fff}
+    h2{font-size:20px;font-weight:600;letter-spacing:-.3px;color:#fff}
+    h3{font-size:16px;font-weight:600;color:#fff}
+    a{color:inherit;text-decoration:none}
+
+    .nav{height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:0 32px;position:sticky;top:0;z-index:50;background:rgba(0,0,0,.85);backdrop-filter:blur(12px)}
+    .brand{font-weight:700;font-size:17px;letter-spacing:-.3px;color:#fff;display:flex;align-items:center;gap:10px}
+    .nav-right{display:flex;gap:12px;align-items:center}
+    .nav-user{font-size:13px;color:var(--muted)}
+    .btn{display:inline-flex;align-items:center;gap:6px;font:500 13px/1 'Inter',sans-serif;padding:8px 16px;border-radius:var(--radius);cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--ink2);transition:all .15s ease;white-space:nowrap}
+    .btn:hover{background:var(--bg4);color:var(--ink);border-color:var(--border3)}
+    .btn-primary{background:#fff;color:#000;border-color:#fff;font-weight:600}
+    .btn-primary:hover{background:#e5e5e5;border-color:#e5e5e5}
+    .btn-danger{color:var(--red);border-color:rgba(239,68,68,.2)}
+    .btn-danger:hover{background:rgba(239,68,68,.08);border-color:var(--red)}
+    .btn-lg{font-size:15px;padding:12px 28px;border-radius:12px}
+    .btn-success{color:var(--green);border-color:rgba(34,197,94,.2)}
+    .btn-success:hover{background:rgba(34,197,94,.08);border-color:var(--green)}
+    .btn-back{font-size:13px;font-weight:500;color:var(--muted);padding:6px 14px;border:1px solid var(--border2);border-radius:var(--radius);cursor:pointer;background:transparent;transition:all .15s ease}
+    .btn-back:hover{background:var(--bg4);color:var(--ink);border-color:var(--border3)}
+
+    .layout{max-width:900px;margin:0 auto;padding:40px 28px}
+    .section{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;margin-bottom:20px}
+
+    .sub-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px}
+    .sub-plan{display:flex;align-items:center;gap:12px}
+    .plan-icon{width:48px;height:48px;border-radius:12px;background:var(--bg4);border:1px solid var(--border2);display:grid;place-items:center;font-size:20px}
+    .plan-name{font-size:20px;font-weight:700;letter-spacing:-.3px;color:#fff}
+    .plan-period{color:var(--muted);font-size:13px}
+
+    .status-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}
+    .badge-active{background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.2)}
+    .badge-expired{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+    .badge-pending{background:rgba(234,179,8,.1);color:var(--yellow);border:1px solid rgba(234,179,8,.2)}
+    .badge-inactive{background:var(--bg4);color:var(--muted2);border:1px solid var(--border)}
+
+    .sub-details{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px;margin-top:20px;padding-top:20px;border-top:1px solid var(--border)}
+    .detail-item{}
+    .detail-label{font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+    .detail-value{font-size:18px;font-weight:700;color:#fff;letter-spacing:-.3px}
+    .detail-value small{font-size:13px;font-weight:400;color:var(--muted);letter-spacing:0}
+
+    .price-section{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-top:20px}
+    .price-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:18px;text-align:center;cursor:pointer;transition:all .15s ease}
+    .price-card:hover{border-color:var(--border3);background:var(--bg4)}
+    .price-card.active{border-color:var(--green);background:rgba(34,197,94,.05);box-shadow:0 0 0 1px var(--green)}
+    .price-cycle{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+    .price-amount{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px}
+    .price-save{font-size:10px;font-weight:600;color:var(--green);margin-top:4px}
+
+    .currency-select{background:var(--bg3);color:var(--ink2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 13px 'Inter',sans-serif;cursor:pointer}
+
+    .table-wrap{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+    table{width:100%;border-collapse:collapse}
+    thead{background:var(--bg2)}
+    th{font-size:11px;font-weight:600;color:var(--muted);padding:10px 16px;text-align:left;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border)}
+    td{padding:12px 16px;font-size:13px;border-bottom:1px solid var(--border);color:var(--ink2)}
+    tr:last-child td{border-bottom:0}
+    tbody tr:hover{background:var(--bg3)}
+    td strong{color:#fff;font-weight:600}
+
+    .empty-state{text-align:center;color:var(--muted2);padding:48px 20px;font-size:13px}
+    .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:#fff;color:#000;padding:10px 24px;border-radius:var(--radius);font-size:13px;font-weight:600;opacity:0;transition:all .25s ease;z-index:999;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+    .skel{background:linear-gradient(90deg,var(--bg3) 25%,var(--bg4) 50%,var(--bg3) 75%);background-size:200% 100%;border-radius:6px;height:16px;animation:shimmer 1.5s infinite}
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    .renew-section{display:flex;flex-direction:column;align-items:center;gap:16px;padding:32px;text-align:center}
+    .renew-section h2{font-size:22px}
+    .renew-section p{color:var(--ink2);font-size:14px}
+
+    .pulse{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+
+    .invoice-link{color:var(--blue);cursor:pointer;font-weight:500}
+    .invoice-link:hover{text-decoration:underline}
+
+    @media(max-width:600px){.layout{padding:20px 16px}.sub-details{grid-template-columns:1fr 1fr}.price-section{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <a class="brand" href="/shop-dashboard.html">← cool<b>care</b></a>
+  <div class="nav-right">
+    <span class="nav-user" id="navUser"></span>
+    <button class="btn-back" onclick="goBack()">Back to Dashboard</button>
+  </div>
+</nav>
+
+<div class="layout">
+  <!-- SUBSCRIPTION STATUS -->
+  <div class="section" id="subStatus">
+    <div class="skel" style="width:60%;margin:0 auto 16px"></div>
+    <div class="skel" style="width:40%;margin:0 auto"></div>
+  </div>
+
+  <!-- SUBSCRIPTION DETAILS -->
+  <div class="section" id="subDetails" style="display:none">
+    <div class="sub-header">
+      <div class="sub-plan">
+        <div class="plan-icon">★</div>
+        <div>
+          <div><span class="plan-name" id="planName">CoolCare Pro</span> <span class="status-badge badge-active" id="planStatus">Active</span></div>
+          <span class="plan-period" id="planPeriod">Monthly billing</span>
+        </div>
+      </div>
+    </div>
+    <div class="sub-details">
+      <div class="detail-item"><div class="detail-label">Billing Cycle</div><div class="detail-value" id="detailCycle">Monthly</div></div>
+      <div class="detail-item"><div class="detail-label">Amount Paid</div><div class="detail-value" id="detailAmount">$20.00</div></div>
+      <div class="detail-item"><div class="detail-label">Status</div><div class="detail-value" id="detailStatus">Active</div></div>
+      <div class="detail-item"><div class="detail-label">Expires</div><div class="detail-value" id="detailExpiry">—</div></div>
+      <div class="detail-item"><div class="detail-label">Currency</div><div class="detail-value" id="detailCurrency">USD</div></div>
+      <div class="detail-item"><div class="detail-label">Invoices</div><div class="detail-value" id="detailInvoices">0</div></div>
+    </div>
+  </div>
+
+  <!-- RENEW / UPGRADE -->
+  <div class="section" id="renewSection" style="display:none">
+    <div class="renew-section">
+      <h2>🚀 Choose your renewal plan</h2>
+      <p>Select billing cycle and currency to renew your CoolCare Pro subscription.</p>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+        <button class="btn btn-primary" data-cycle="monthly" onclick="selectCycle('monthly')">Monthly</button>
+        <button class="btn" data-cycle="quarterly" onclick="selectCycle('quarterly')">Quarterly <span style="color:var(--green);font-size:10px">-10%</span></button>
+        <button class="btn" data-cycle="halfyearly" onclick="selectCycle('halfyearly')">Half-Yearly <span style="color:var(--green);font-size:10px">-15%</span></button>
+        <button class="btn" data-cycle="yearly" onclick="selectCycle('yearly')">Yearly <span style="color:var(--green);font-size:10px">-20%</span></button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:20px">
+        <select id="renewCurrency" class="currency-select" onchange="updatePrices()">
+          <option value="INR">🇮🇳 INR (₹)</option>
+          <option value="USD" selected>🇺🇸 USD ($)</option>
+          <option value="KWD">🇰🇼 KWD (KD)</option>
+          <option value="AED">🇦🇪 AED (د.إ)</option>
+        </select>
+        <span style="color:var(--muted);font-size:13px" id="priceDisplay">$20.00 / month</span>
+      </div>
+      <button class="btn btn-primary btn-lg" id="renewBtn" onclick="renewSubscription()">Renew Now</button>
+    </div>
+  </div>
+
+  <!-- PAYMENT HISTORY -->
+  <div class="section">
+    <h3 style="margin-bottom:16px">Payment History</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Invoice</th><th>Amount</th><th>Gateway</th><th>Status</th><th>Date</th><th>Invoice</th></tr></thead>
+        <tbody id="payHistoryBody"><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SUBSCRIPTION HISTORY -->
+  <div class="section">
+    <h3 style="margin-bottom:16px">Subscription Activity</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Action</th><th>From</th><th>To</th><th>Amount</th><th>Date</th></tr></thead>
+        <tbody id="subHistoryBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = localStorage.getItem('cc_token');
+if (!TOKEN) { window.location.replace('/login.html'); }
+
+let selectedCycle = 'monthly';
+let selectedCurrency = 'USD';
+let currentSub = null;
+
+const PLAN_PRICING = {
+  USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
+  INR: { monthly: 1299, quarterly: 3156, halfyearly: 6625, yearly: 12470 },
+  AED: { monthly: 75, quarterly: 202.5, halfyearly: 382.5, yearly: 720 },
+  KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
+};
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(n) { return (parseFloat(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtCurrency(currency, amount) {
+  const symbols = { USD: '$', INR: '₹', AED: 'د.إ ', KWD: 'KD ' };
+  return (symbols[currency] || currency + ' ') + fmt(amount);
+}
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); }
+function goBack() { window.location.href = '/shop-dashboard.html'; }
+
+async function api(url, opts) {
+  try {
+    const res = await fetch(url, { ...opts, headers: { ...(opts?.headers||{}), Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' } });
+    if (res.status === 401) { window.location.replace('/login.html'); return null; }
+    return res;
+  } catch(e) { toast('Network error'); return null; }
+}
+
+async function loadSubscription() {
+  const res = await api('/api/payments');
+  if (!res) return;
+  const data = await res.json();
+  currentSub = data.subscription;
+
+  const shop = JSON.parse(localStorage.getItem('cc_shop') || '{}');
+  document.getElementById('navUser').textContent = shop.shopName || shop.name || shop.email || '';
+
+  // Status section
+  const sub = data.subscription;
+  const statusEl = document.getElementById('subStatus');
+
+  if (!sub) {
+    statusEl.innerHTML = `
+      <div style="text-align:center;padding:20px">
+        <h2 style="margin-bottom:8px">No Active Subscription</h2>
+        <p style="color:var(--ink2);margin-bottom:20px">You haven't subscribed to CoolCare Pro yet.</p>
+        <a href="/index.html#pricing"><button class="btn btn-primary btn-lg">View Plans →</button></a>
+      </div>`;
+    document.getElementById('subDetails').style.display = 'none';
+    document.getElementById('renewSection').style.display = 'none';
+    return;
+  }
+
+  const status = sub.status || 'inactive';
+  const bc = status === 'active' ? 'badge-active' : (status === 'expired' ? 'badge-expired' : 'badge-inactive');
+  const statusDot = status === 'active' ? '<span class="pulse"></span>' : '';
+
+  const daysLeft = sub.current_period_end ? Math.ceil((new Date(sub.current_period_end) - new Date()) / 86400000) : 0;
+  const statusText = status === 'active' ? `Active${daysLeft <= 7 ? ` (${daysLeft} day${daysLeft === 1 ? '' : 's'} left)` : ''}` :
+                    status === 'expired' ? 'Expired' : status;
+
+  statusEl.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;align-items:center;gap:12px">
+        ${statusDot}
+        <div>
+          <div style="font-size:13px;color:var(--muted)">Subscription Status</div>
+          <div style="font-size:24px;font-weight:700;color:#fff;letter-spacing:-.5px">${statusText}</div>
+        </div>
+      </div>
+      <span class="status-badge ${bc}">${status}</span>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:12px;color:var(--muted2);font-size:12px">
+      ${sub.current_period_end ? `<span>Expires: ${new Date(sub.current_period_end).toLocaleDateString('en', { year:'numeric', month:'long', day:'numeric' })}</span>` : ''}
+      ${sub.billing_cycle ? `<span>Cycle: ${sub.billing_cycle}</span>` : ''}
+      ${sub.amount_paid ? `<span>Paid: ${fmtCurrency(sub.currency || 'USD', sub.amount_paid)}</span>` : ''}
+    </div>`;
+
+  // Details section
+  document.getElementById('subDetails').style.display = 'block';
+  document.getElementById('planName').textContent = sub.plan_display || sub.plan_name || 'Pro';
+  document.getElementById('planStatus').textContent = status.charAt(0).toUpperCase() + status.slice(1);
+  document.getElementById('planStatus').className = 'status-badge ' + bc;
+  document.getElementById('planPeriod').textContent = sub.billing_cycle ? `${sub.billing_cycle} billing` : 'Monthly billing';
+  document.getElementById('detailCycle').textContent = sub.billing_cycle ? sub.billing_cycle.charAt(0).toUpperCase() + sub.billing_cycle.slice(1) : 'Monthly';
+  document.getElementById('detailAmount').textContent = fmtCurrency(sub.currency || 'USD', sub.amount_paid || 0);
+  document.getElementById('detailStatus').innerHTML = `<span class="status-badge ${bc}">${status}</span>`;
+  document.getElementById('detailExpiry').textContent = sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString('en', { year:'numeric', month:'short', day:'numeric' }) : '—';
+  document.getElementById('detailCurrency').textContent = sub.currency || 'USD';
+  document.getElementById('detailInvoices').textContent = data.invoiceCount || 0;
+
+  // Show renew section if expired or about to expire
+  const renewSection = document.getElementById('renewSection');
+  if (status === 'expired' || status === 'inactive' || (daysLeft <= 30 && status === 'active')) {
+    renewSection.style.display = 'block';
+  } else {
+    renewSection.style.display = 'none';
+  }
+
+  // Payment history
+  loadPayments(data.payments || []);
+
+  // Subscription history
+  loadSubHistory();
+}
+
+function selectCycle(cycle) {
+  selectedCycle = cycle;
+  document.querySelectorAll('#renewSection .btn[data-cycle]').forEach(b => {
+    if (b.dataset.cycle === cycle) {
+      b.className = 'btn btn-primary';
+    } else {
+      b.className = 'btn';
+    }
+  });
+  updatePrices();
+}
+
+function updatePrices() {
+  selectedCurrency = document.getElementById('renewCurrency').value;
+  const prices = PLAN_PRICING[selectedCurrency] || PLAN_PRICING.USD;
+  const amount = prices[selectedCycle] || prices.monthly;
+  const symbols = { USD: '$', INR: '₹', AED: 'د.إ ', KWD: 'KD ' };
+  document.getElementById('priceDisplay').textContent = `${symbols[selectedCurrency] || ''}${fmt(amount)} / ${selectedCycle}`;
+}
+
+async function renewSubscription() {
+  const btn = document.getElementById('renewBtn');
+  btn.disabled = true;
+  btn.textContent = 'Processing…';
+
+  try {
+    await CoolCareCheckout.start({
+      billingCycle: selectedCycle,
+      currency: selectedCurrency,
+      onError: function(msg) {
+        toast(msg);
+        btn.disabled = false;
+        btn.textContent = 'Renew Now';
+      },
+      onStart: function() {
+        btn.textContent = 'Opening checkout…';
+      }
+    });
+  } catch(e) {
+    toast('Failed to start checkout');
+    btn.disabled = false;
+    btn.textContent = 'Renew Now';
+  }
+}
+
+function loadPayments(payments) {
+  const tbody = document.getElementById('payHistoryBody');
+  if (!payments || !payments.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No payment history yet</td></tr>';
+    return;
+  }
+  const bcMap = { completed: 'badge-active', failed: 'badge-expired', pending: 'badge-pending', refunded: 'badge-inactive' };
+  tbody.innerHTML = payments.map(p => `
+    <tr>
+      <td><strong>${esc(p.invoice_number || p.id)}</strong></td>
+      <td>${fmtCurrency(p.currency || 'USD', p.amount)}</td>
+      <td>${esc(p.gateway || '—')}</td>
+      <td><span class="status-badge ${bcMap[p.status] || 'badge-inactive'}">${p.status}</span></td>
+      <td>${p.created_at ? new Date(p.created_at).toLocaleDateString() : '—'}</td>
+      <td><span class="invoice-link" onclick="downloadInvoice(${p.id})">Download</span></td>
+    </tr>
+  `).join('');
+}
+
+async function downloadInvoice(paymentId) {
+  try {
+    const res = await api(`/api/payments?action=invoice&id=${paymentId}`);
+    if (!res) return;
+    const data = await res.json();
+    if (data.invoice) {
+      // Create a printable invoice
+      const inv = data.invoice;
+      const win = window.open('', '_blank');
+      win.document.write(generateInvoiceHTML(inv));
+      win.document.close();
+    } else {
+      toast('Invoice not available');
+    }
+  } catch(e) {
+    toast('Failed to load invoice');
+  }
+}
+
+function generateInvoiceHTML(inv) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+    <title>Invoice ${esc(inv.invoice_number)}</title>
+    <style>
+      body{font-family:'Inter',system-ui,sans-serif;padding:40px;color:#111;background:#fff;max-width:700px;margin:auto}
+      .header{display:flex;justify-content:space-between;align-items:start;margin-bottom:40px}
+      .brand{font-size:24px;font-weight:800}
+      .invoice-title{font-size:28px;font-weight:800;color:#000;margin-bottom:4px}
+      .meta{color:#666;font-size:13px;line-height:1.8}
+      table{width:100%;border-collapse:collapse;margin:24px 0}
+      th{background:#f5f5f5;padding:10px 14px;font-size:12px;font-weight:600;text-align:left;text-transform:uppercase;letter-spacing:.5px;color:#666}
+      td{padding:12px 14px;border-bottom:1px solid #eee;font-size:14px}
+      .total-row td{font-weight:700;font-size:16px;border-top:2px solid #000;border-bottom:0;padding-top:16px}
+      .footer{margin-top:40px;padding-top:20px;border-top:1px solid #eee;font-size:12px;color:#999;text-align:center}
+      .print-btn{position:fixed;top:20px;right:20px;padding:10px 20px;background:#000;color:#fff;border:0;border-radius:8px;cursor:pointer;font-weight:600}
+      @media print{.print-btn{display:none}}
+    </style>
+  </head><body>
+    <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+    <div class="header">
+      <div><div class="brand">${esc(inv.business_name || 'CoolCare')}</div>
+        <div class="meta">${esc(inv.business_address || '')}<br>${inv.business_gst ? 'GST: ' + esc(inv.business_gst) : ''}</div></div>
+      <div style="text-align:right"><div class="invoice-title">INVOICE</div>
+        <div class="meta"><strong>${esc(inv.invoice_number)}</strong><br>Date: ${new Date(inv.issued_at || inv.created_at).toLocaleDateString()}</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Description</th><th>Cycle</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>
+        <tr><td>${esc(inv.plan_name || 'CoolCare Pro')} Subscription</td>
+          <td>${esc(inv.billing_cycle || 'Monthly')}</td>
+          <td style="text-align:right">${fmtCurrency(inv.currency || 'USD', inv.subtotal || inv.total || 0)}</td></tr>
+        ${inv.tax_rate && inv.tax_rate > 0 ? `<tr><td colspan="2">Tax (${inv.tax_rate}%)</td><td style="text-align:right">${fmtCurrency(inv.currency || 'USD', inv.tax_amount || 0)}</td></tr>` : ''}
+      </tbody>
+      <tfoot>
+        <tr class="total-row"><td colspan="2" style="text-align:right">Total</td><td style="text-align:right">${fmtCurrency(inv.currency || 'USD', inv.total || inv.subtotal || 0)}</td></tr>
+      </tfoot>
+    </table>
+    <div class="meta" style="margin-top:24px">Payment Status: <strong>${inv.status || 'Paid'}</strong></div>
+    <div class="footer">Thank you for choosing CoolCare!</div>
+  </body></html>`;
+}
+
+async function loadSubHistory() {
+  const tbody = document.getElementById('subHistoryBody');
+  try {
+    // Try shop-level endpoint first (avoids 403 if we add it later)
+    // Fallback: derive history from current subscription status
+    const res = await fetch('/api/payments', {
+      headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const sub = data.subscription;
+      if (sub) {
+        const entries = [];
+        if (sub.status === 'active') {
+          entries.push({ action: sub.current_period_start ? 'activated' : 'renewed', old_status: null, new_status: 'active', amount: sub.amount_paid, currency: sub.currency, created_at: sub.created_at });
+          if (sub.trial_end && new Date(sub.trial_end) > new Date()) {
+            entries.unshift({ action: 'trial_started', old_status: null, new_status: 'trial', amount: 0, currency: sub.currency, created_at: sub.trial_end });
+          }
+        } else if (sub.status === 'expired') {
+          entries.push({ action: 'expired', old_status: 'active', new_status: 'expired', amount: sub.amount_paid, currency: sub.currency, created_at: sub.current_period_end || sub.updated_at });
+          if (sub.created_at !== sub.updated_at) {
+            entries.unshift({ action: 'activated', old_status: 'inactive', new_status: 'active', amount: sub.amount_paid, currency: sub.currency, created_at: sub.created_at });
+          }
+        }
+        if (entries.length) {
+          tbody.innerHTML = entries.map(s => `
+            <tr>
+              <td><span class="status-badge badge-active">${esc(s.action)}</span></td>
+              <td>${esc(s.old_status || '—')}</td>
+              <td>${esc(s.new_status)}</td>
+              <td>${s.amount && s.amount > 0 ? fmtCurrency(s.currency || 'USD', s.amount) : '—'}</td>
+              <td>${s.created_at ? new Date(s.created_at).toLocaleDateString() : '—'}</td>
+            </tr>
+          `).join('');
+          return;
+        }
+      }
+    }
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No subscription activity yet</td></tr>';
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Activity log not available</td></tr>';
+  }
+}
+
+// Init
+document.addEventListener('DOMContentLoaded', loadSubscription);
+</script>
+</body>
+</html>
