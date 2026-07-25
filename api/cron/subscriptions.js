@@ -78,7 +78,7 @@ module.exports = withErrorHandler(async (request, response) => {
     const eventType = `renewal_reminder_${d}d`;
 
     try {
-      const subs = await sql.unsafe(
+      const subs = await sql(
         `SELECT s.id, s.repair_shop_id, s.current_period_end, s.billing_cycle,
                 rs.email, rs.owner_name, rs.shop_name
          FROM subscriptions s
@@ -93,7 +93,7 @@ module.exports = withErrorHandler(async (request, response) => {
                AND pl.event_type = $2
                AND pl.created_at > now() - interval '23 hours'
            )`,
-        [d, eventType]
+        d, eventType
       );
 
       for (const sub of subs) {

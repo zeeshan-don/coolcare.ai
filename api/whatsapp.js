@@ -391,7 +391,7 @@ async function modifyBooking(bookingId, field, value) {
       const colMap = { customer_name: "customer_name", address: "address", area: "area", urgency: "urgency" };
       const col = colMap[field];
       if (!col) return false;
-      await sql.unsafe(`UPDATE bookings SET ${col} = $1 WHERE id = $2`, [value, bookingId]);
+      await sql(`UPDATE bookings SET ${col} = $1 WHERE id = $2`, value, bookingId);
     }
     return true;
   } catch (err) { console.error("[modifyBooking] error:", err.message); return false; }

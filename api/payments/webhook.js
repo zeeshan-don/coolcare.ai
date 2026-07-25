@@ -148,26 +148,26 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
   if (existing.length > 0 && existing[0].status === "active") {
     // Renewal: extend current_period_end from now or current end (whichever is greater)
     const oldExpiry = existing[0].current_period_end;
-    await sql.unsafe(
+    await sql(
       `UPDATE subscriptions SET
         current_period_end = GREATEST(current_period_end, now()) + ($1 || ' days')::interval,
         amount_paid = COALESCE(amount_paid, 0) + $2,
         currency = $3, billing_cycle = $4,
         updated_at = now()
        WHERE id = $5`,
-      [expiryDays, amount || 0, currency || "USD", billingCycle || "monthly", existing[0].id]
+      expiryDays, amount || 0, currency || "USD", billingCycle || "monthly", existing[0].id
     );
     subId = existing[0].id;
     oldStatus = "active";
     action = "renewed";
   } else {
     // New subscription
-    const inserted = await sql.unsafe(
+    const inserted = await sql(
       `INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway, gateway_sub_id,
         current_period_end, amount_paid, currency)
        VALUES ($1, $2, 'active', $3, $4, $5, now() + ($6 || ' days')::interval, $7, $8)
        RETURNING id`,
-      [shopId, planId, billingCycle || "monthly", gateway, gatewaySubId || null, expiryDays, amount || 0, currency || "USD"]
+      shopId, planId, billingCycle || "monthly", gateway, gatewaySubId || null, expiryDays, amount || 0, currency || "USD"
     );
     subId = inserted[0]?.id;
     oldStatus = existing[0]?.status || "inactive";
