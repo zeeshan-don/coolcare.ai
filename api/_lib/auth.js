@@ -178,7 +178,18 @@ async function requireActiveSubscription(auth, sql, response) {
   const subStatus = shop[0].subscription_status || "inactive";
   const approvalStatus = shop[0].approval_status || "none";
 
-  // Check approval status — only approve shops can use features
+  // ── pending_approval: Payment received, awaiting admin approval ───────────
+  if (subStatus === "pending_approval") {
+    response.status(403).json({
+      error: "Your payment has been received and your account is pending approval. A super admin will review and activate your account shortly.",
+      errorType: 'approval_required',
+      subscriptionStatus: 'pending_approval',
+      approvalStatus: approvalStatus || 'pending',
+    });
+    return null;
+  }
+
+  // Check approval status — only approved shops can use features
   if (subStatus === "active" && approvalStatus !== "approved") {
     const msg = approvalStatus === 'pending'
       ? 'Your account is pending approval. A super admin will review and activate your account shortly.'
@@ -198,13 +209,13 @@ async function requireActiveSubscription(auth, sql, response) {
     try {
       const sub = await sql`
         SELECT current_period_end FROM subscriptions
-        WHERE repair_shop_id = ${shopId} AND status = 'active'
+        WHERE repair_shop_id = ${shopId} AND status IN ('active', 'pending_approval')
         ORDER BY created_at DESC LIMIT 1
       `;
       if (sub.length > 0 && new Date(sub[0].current_period_end) < new Date()) {
         // Expired — update status
         await sql`UPDATE repair_shops SET subscription_status = 'expired', updated_at = now() WHERE id = ${shopId}`;
-        await sql`UPDATE subscriptions SET status = 'expired', updated_at = now() WHERE repair_shop_id = ${shopId} AND status = 'active' AND current_period_end < now()`;
+        await sql`UPDATE subscriptions SET status = 'expired', updated_at = now() WHERE repair_shop_id = ${shopId} AND status IN ('active', 'pending_approval') AND current_period_end < now()`;
         response.status(403).json({
           error: "Your subscription has expired. Please renew to continue.",
           errorType: "subscription_required",

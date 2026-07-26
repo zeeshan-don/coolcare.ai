@@ -161,11 +161,11 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
     oldStatus = "active";
     action = "renewed";
   } else {
-    // New subscription
+    // New subscription — created as 'pending_approval', NOT 'active'
     const inserted = await sql(
       `INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway, gateway_sub_id,
         current_period_end, amount_paid, currency)
-       VALUES ($1, $2, 'active', $3, $4, $5, now() + ($6 || ' days')::interval, $7, $8)
+       VALUES ($1, $2, 'pending_approval', $3, $4, $5, now() + ($6 || ' days')::interval, $7, $8)
        RETURNING id`,
       shopId, planId, billingCycle || "monthly", gateway, gatewaySubId || null, expiryDays, amount || 0, currency || "USD"
     );
@@ -174,16 +174,17 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
     action = existing.length > 0 ? "reactivated" : "activated";
   }
 
-  // Set payment as verified but require admin approval before activation
-  await sql`UPDATE repair_shops SET subscription_status = 'active', approval_status = 'pending', suspended_at = NULL, suspension_reason = NULL, updated_at = now() WHERE id = ${shopId}`;
+  // Set payment as verified, subscription_status = 'pending_approval'
+  // Dashboard access is blocked until super admin sets approval_status = 'approved'.
+  await sql`UPDATE repair_shops SET subscription_status = 'pending_approval', approval_status = 'pending', suspended_at = NULL, suspension_reason = NULL, updated_at = now() WHERE id = ${shopId}`;
 
   // Notify super admins about pending approval
   try {
     await sql`
       INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
       VALUES (${shopId}, 'payment_received', 'Payment Received — Pending Approval',
-              'Payment received successfully. Your account is pending admin approval. You will be notified once activated.',
-              '/shop-subscription.html')
+              'Your payment has been received. Your account is pending admin approval. You will be notified once activated.',
+              '/payment-success.html')
     `;
     // Also notify admin
     const shop = await sql`SELECT shop_name, owner_name FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
@@ -195,15 +196,15 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
   } catch (e) { /* ok */ }
 
   // Log subscription history
-  await logSubHistory(sql, subId, shopId, action, oldStatus, "active", amount, currency, billingCycle, gateway, "webhook");
+  await logSubHistory(sql, subId, shopId, action, oldStatus, "pending_approval", amount, currency, billingCycle, gateway, "webhook");
 
   // In-app notification
   try {
     await sql`
       INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
-      VALUES (${shopId}, 'subscription_activated', 'Subscription Activated',
-              'Your CoolCare Pro subscription is now active. All features have been unlocked.',
-              '/shop-subscription.html')
+      VALUES (${shopId}, 'payment_received', 'Payment Received — Awaiting Approval',
+              'Your payment has been received. A super admin will review and activate your account shortly.',
+              '/payment-success.html')
     `;
   } catch (e) { /* table may not exist */ }
 

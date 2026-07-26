@@ -454,7 +454,7 @@ async function adminDashboard(request, response, sql, auth) {
   try {
     shops = await sql(`
       SELECT rs.id, rs.shop_name, rs.owner_name, rs.email, rs.mobile, rs.city, rs.role,
-             COALESCE(rs.subscription_status, 'trial') as subscription_status,
+             COALESCE(rs.subscription_status, 'inactive') as subscription_status,
              rs.suspended_at, rs.created_at,
              (SELECT COUNT(*) FROM bookings WHERE repair_shop_id = rs.id) as total_bookings,
              (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE repair_shop_id = rs.id AND status = 'completed') as total_revenue,
@@ -469,7 +469,7 @@ async function adminDashboard(request, response, sql, auth) {
       shops = await sql(`
         SELECT rs.id, rs.shop_name, rs.owner_name, rs.email, rs.mobile, rs.city,
                COALESCE(rs.role, 'owner') as role,
-               COALESCE(rs.subscription_status, 'trial') as subscription_status,
+               COALESCE(rs.subscription_status, 'inactive') as subscription_status,
                rs.suspended_at, rs.created_at,
                (SELECT COUNT(*) FROM bookings WHERE repair_shop_id = rs.id) as total_bookings,
                (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE repair_shop_id = rs.id AND status = 'completed') as total_revenue,
@@ -480,7 +480,7 @@ async function adminDashboard(request, response, sql, auth) {
     } catch (e2) {
       // Minimal fallback
       console.error("[admin/dashboard] Fallback query also failed:", e2.message);
-      shops = await sql`SELECT id, shop_name, owner_name, email, mobile, city, created_at, 'owner' as role, 'trial' as subscription_status, NULL as suspended_at, 0 as total_bookings, 0 as total_revenue, NULL as plan_name FROM repair_shops ORDER BY created_at DESC LIMIT 20`;
+      shops = await sql`SELECT id, shop_name, owner_name, email, mobile, city, created_at, 'owner' as role, 'inactive' as subscription_status, NULL as suspended_at, 0 as total_bookings, 0 as total_revenue, NULL as plan_name FROM repair_shops ORDER BY created_at DESC LIMIT 20`;
     }
   }
 
@@ -492,7 +492,7 @@ async function adminDashboard(request, response, sql, auth) {
         (SELECT COUNT(*) FROM repair_shops) as total_shops,
         (SELECT COUNT(*) FROM repair_shops WHERE suspended_at IS NULL AND COALESCE(is_active, true) = true) as active_shops,
         (SELECT COUNT(*) FROM repair_shops WHERE suspended_at IS NOT NULL) as suspended_shops,
-        (SELECT COUNT(*) FROM repair_shops WHERE COALESCE(subscription_status, 'trial') = 'trial') as pending_shops,
+        (SELECT COUNT(*) FROM repair_shops WHERE COALESCE(subscription_status, 'inactive') IN ('inactive', 'none', 'pending_approval') OR COALESCE(approval_status, 'none') = 'pending') as pending_shops,
         (SELECT COUNT(*) FROM bookings) as total_bookings,
         (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE status = 'completed') as total_revenue,
         (SELECT COALESCE(SUM(final_cost), 0) FROM bookings WHERE status = 'completed' AND created_at >= date_trunc('month', now())) as monthly_revenue,

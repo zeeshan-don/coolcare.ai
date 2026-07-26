@@ -323,17 +323,24 @@
       localStorage.setItem('cc_token', data.token);
       localStorage.setItem('cc_shop', JSON.stringify(data.shop));
 
-      // Check if this is a paid plan requiring checkout
+      // Always require checkout for paid plans (no free trial)
       if (data.checkoutRequired && data.orderId && data.keyId) {
-        console.log('[signup] Paid plan — opening Razorpay checkout');
+        console.log('[signup] Opening Razorpay checkout');
         showAlert('Account created! Opening payment...', 'success');
         await loadRazorpayScript();
         openRazorpayCheckout(data, data.shop);
+      } else if (data.checkoutError) {
+        // Gateway failed — show error, don't redirect to dashboard
+        console.error('[signup] Checkout error:', data.checkoutError);
+        showAlert('Account created but payment setup failed: ' + data.checkoutError + '. Please contact support.', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Account →';
       } else {
-        // Free plan or no payment needed — redirect to dashboard
-        console.log('[signup] Free plan — redirecting to dashboard');
-        showAlert('Account created! Redirecting to your dashboard…', 'success');
-        setTimeout(() => window.location.href = '/shop-dashboard.html', 1200);
+        // No checkout payload — something went wrong
+        console.error('[signup] No checkout payload returned');
+        showAlert('Account created but payment could not be initiated. Please contact support.', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Account →';
       }
     } catch (err) {
       console.error('[signup] Network error:', err);

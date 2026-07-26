@@ -91,8 +91,8 @@ const signupSchema = z.object({
   city: z.string().min(1, "City is required").max(100).trim(),
   serviceAreas: z.array(z.string().trim()).max(20).default([]),
   servicesOffered: z.array(z.string().trim()).min(1, "Select at least one service").max(20),
-  // Plan info from pricing page (optional, defaults to 'pro' paid plan)
-  planName: z.enum(["pro", "free", "starter", "professional", "enterprise"]).optional().default("pro"),
+  // Plan info from pricing page (always paid — no free trial)
+  planName: z.enum(["pro"]).optional().default("pro"),
   billingCycle: z.enum(["monthly", "quarterly", "halfyearly", "yearly"]).optional().default("monthly"),
   currency: z.string().min(1).max(10).optional(),
 }).refine((data) => data.password === data.confirmPassword, {
