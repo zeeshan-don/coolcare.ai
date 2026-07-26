@@ -13,8 +13,9 @@
     a{color:var(--ink2);text-decoration:none;transition:color .2s}
     a:hover{color:#fff}
     .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1100px;margin:auto;padding:0 24px;border-bottom:1px solid var(--border);background:rgba(10,10,10,.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
-    .brand{font-weight:700;letter-spacing:.5px;font-size:24px;text-transform:lowercase;color:#fff}.brand b{color:#fff;font-weight:900}
-    .brand-signature{height:24px;width:auto;vertical-align:middle}
+    .brand{font-weight:700;letter-spacing:.5px;font-size:24px;text-transform:lowercase;color:#fff;display:flex;align-items:center}.brand b{color:#fff;font-weight:900}
+    .brand-by{font-weight:400;color:#9CA3AF;font-size:14px;opacity:.75;margin-left:8px;margin-right:12px}
+    .brand-signature{height:36px;width:auto;vertical-align:middle}
     .wrap{max-width:700px;margin:60px auto;padding:0 20px 80px}
     .card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:44px 38px}
     h1{font-size:30px;font-weight:700;letter-spacing:-.5px;margin:0 0 8px;color:#fff}
@@ -43,12 +44,12 @@
     .faq-item.open .faq-q::after{transform:rotate(45deg)}
     .faq-a{color:var(--ink2);font-size:14px;line-height:1.8;max-height:0;overflow:hidden;transition:max-height .3s,padding .3s}
     .faq-item.open .faq-a{max-height:300px;padding-top:10px}
-    @media(max-width:600px){.contact-grid{grid-template-columns:1fr}.card{padding:28px 20px}h1{font-size:24px}}
+    @media(max-width:600px){.contact-grid{grid-template-columns:1fr}.card{padding:28px 20px}h1{font-size:24px}.brand-signature{height:26px}}
   </style>
 </head>
 <body>
 <nav class="nav">
-  <a class="brand" href="/">cool<b>care</b> by <img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
+  <a class="brand" href="/">cool<b>care</b><span class="brand-by">by</span><img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
   <div style="display:flex;gap:12px;align-items:center">
     <a href="/shop-dashboard.html" style="font-size:13px;font-weight:500;color:var(--ink2)">← Dashboard</a>
     <a href="/login.html" style="font-size:13px;font-weight:500;color:var(--ink2)">Log in</a>

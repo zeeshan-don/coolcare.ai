@@ -19,9 +19,10 @@
 
     /* NAV */
     .nav{height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:0 32px;position:sticky;top:0;z-index:50;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-    .brand{font-weight:700;font-size:17px;letter-spacing:-.3px;color:#fff;display:flex;align-items:center;gap:10px}
-    .brand-signature{height:24px;width:auto;vertical-align:middle}
-    .brand-tag{background:#fff;color:#000;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase}
+    .brand{font-weight:700;font-size:17px;letter-spacing:-.3px;color:#fff;display:flex;align-items:center}
+    .brand-signature{height:36px;width:auto;vertical-align:middle}
+    .brand-tag{background:#fff;color:#000;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase;margin:0 6px}
+    .brand-by{font-weight:400;color:#9CA3AF;font-size:14px;opacity:.75;margin-left:8px;margin-right:12px}
     .nav-right{display:flex;gap:12px;align-items:center}
     .nav-user{font-size:13px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .nav-role{font-size:11px;color:var(--muted2);background:var(--bg4);padding:2px 8px;border-radius:4px;font-weight:500}
@@ -140,13 +141,13 @@
 
     /* RESPONSIVE */
     @media(max-width:900px){.sidebar{display:none}.main{padding:20px}}
-    @media(max-width:600px){.stats-grid{grid-template-columns:repeat(2,1fr)}.nav{padding:0 16px}.plan-grid{grid-template-columns:1fr}}
+    @media(max-width:600px){.stats-grid{grid-template-columns:repeat(2,1fr)}.nav{padding:0 16px}.plan-grid{grid-template-columns:1fr}.brand-signature{height:26px}}
   </style>
 </head>
 <body>
 <!-- NAV -->
 <nav class="nav">
-  <a class="brand" href="/admin.html">coolcare <span class="brand-tag">Admin</span> by <img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
+  <a class="brand" href="/admin.html">coolcare<span class="brand-tag">Admin</span><span class="brand-by">by</span><img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
   <div class="nav-right">
     <span class="nav-role" id="navRole"></span>
     <span class="nav-user" id="navUser"></span>
