@@ -13,6 +13,7 @@ const { validate, loginSchema, signupSchema, bootstrapSchema, forgotPasswordSche
 const { loginLimiter, signupLimiter, apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { sendEmail } = require("./_lib/notify");
+const { createOrder, calculateAmount } = require("./_lib/gateway");
 
 // Generate unique referral code: COOLCARE-XXXX
 function generateReferralCode() {
@@ -147,11 +148,20 @@ async function handleLogin(request, response, body) {
 }
 
 // ─── SIGNUP (shop registration — creates repair_shop with role='owner') ──────
+// CRITICAL: This function MUST differentiate between free and paid plans.
+// Paid plans create a Razorpay order and return checkout payload.
+// Free plans activate a trial directly.
 async function handleSignup(request, response, body) {
   if (!applyLimit(request, response, signupLimiter)) return;
 
   const data = validate({ ...request, body }, response, signupSchema);
   if (!data) return;
+
+  console.log("[auth/signup] Received plan data:", {
+    planName: data.planName,
+    billingCycle: data.billingCycle,
+    currency: data.currency,
+  });
 
   const sql = neon(process.env.DATABASE_URL);
   const existing = await sql`
@@ -191,6 +201,35 @@ async function handleSignup(request, response, body) {
     } catch (e) { /* ok */ }
   }
 
+  // ── DECISION: Determine plan type ────────────────────────────────────────
+  // 'free' plan → activate free trial immediately
+  // 'pro' plan (or any other) → create Razorpay order for payment
+
+  const planName = data.planName || 'pro';
+  const billingCycle = data.billingCycle || 'monthly';
+  const currency = (data.currency || 'USD').toUpperCase();
+  const isFreePlan = planName === 'free';
+
+  console.log("[auth/signup] Decision path:", {
+    planName,
+    billingCycle,
+    currency,
+    isFreePlan,
+    reason: isFreePlan ? 'FREE_PLAN_SELECTED — activating trial' : 'PAID_PLAN — creating payment order',
+  });
+
+  let subscriptionStatus = 'inactive';
+
+  if (isFreePlan) {
+    // ── FREE PLAN: Activate trial immediately ──────────────────────────────
+    console.log("[auth/signup] FREE TRIAL ACTIVATION for:", data.email);
+    subscriptionStatus = 'trial';
+  } else {
+    // ── PAID PLAN: Keep inactive until payment is confirmed ────────────────
+    console.log("[auth/signup] PAID PLAN — will create Razorpay order for:", data.email);
+    subscriptionStatus = 'inactive';
+  }
+
   const rows = await sql`
     INSERT INTO repair_shops
       (shop_name, owner_name, email, mobile, password_hash,
@@ -199,10 +238,11 @@ async function handleSignup(request, response, body) {
     VALUES
       (${data.shopName}, ${data.ownerName}, ${data.email}, ${data.mobile}, ${passwordHash},
        ${data.address || null}, ${data.city}, ${safeServiceAreas}, ${safeServicesOffered}, 'owner',
-       'inactive', ${referralCode}, ${referredBy})
+       ${subscriptionStatus}, ${referralCode}, ${referredBy})
     RETURNING id, shop_name, owner_name, email, mobile, city, created_at
   `;
   const shop = rows[0];
+  console.log("[auth/signup] Shop created:", { id: shop.id, email: shop.email, subscriptionStatus });
 
   // Create referral record if referred
   if (referredBy) {
@@ -225,10 +265,139 @@ async function handleSignup(request, response, body) {
     repair_shop_id: shop.id,
   }, jti);
 
-  console.log("[auth/signup]", shop.email, "id:", shop.id);
+  // ── PAID PLAN: Create Razorpay order ─────────────────────────────────────
+  if (!isFreePlan) {
+    console.log("[auth/signup] Creating payment order for shop #" + shop.id);
+
+    try {
+      // Calculate the amount
+      const { amount } = calculateAmount(currency, billingCycle);
+      console.log("[auth/signup] Amount calculated:", { amount, currency, billingCycle });
+
+      const invoiceNumber = `INV-${Date.now()}-${shop.id}`;
+
+      // Create payment record
+      const payment = await sql`
+        INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description, metadata)
+        VALUES (${shop.id}, 'pending', ${currency}, ${amount}, 'pending', ${invoiceNumber},
+                ${`CoolCare Pro — ${billingCycle}`},
+                ${JSON.stringify({ billingCycle, planName, source: 'signup' })}::jsonb)
+        RETURNING id
+      `;
+
+      const paymentDbId = payment[0].id;
+      console.log("[auth/signup] Payment record created:", { paymentDbId, amount, invoiceNumber });
+
+      // Create order via gateway
+      const originUrl = request.headers["origin"] || "https://coolcare.ai";
+      const orderResult = await createOrder({
+        shopId: shop.id,
+        billingCycle,
+        currency,
+        amount,
+        invoiceNumber,
+        paymentDbId,
+        originUrl,
+      });
+
+      console.log("[auth/signup] Gateway order result:", orderResult);
+
+      if (orderResult.error) {
+        console.error("[auth/signup] Gateway order failed:", orderResult.error);
+
+        // Log failure
+        try {
+          await sql`
+            INSERT INTO payment_logs (payment_id, repair_shop_id, gateway, event_type, severity, message, error_message)
+            VALUES (${paymentDbId}, ${shop.id}, ${orderResult.gateway || 'razorpay'}, 'order_failed', 'error',
+                    'Signup order creation failed', ${orderResult.error})
+          `;
+        } catch (e) { /* ok */ }
+
+        // Still return success with token, but also indicate checkout failed
+        return response.status(201).json({
+          token,
+          shop: {
+            id: shop.id,
+            name: shop.owner_name,
+            shopName: shop.shop_name,
+            email: shop.email,
+            mobile: shop.mobile,
+            city: shop.city,
+            role: "owner",
+            userType: "shop",
+            repairShopId: shop.id,
+            subscriptionStatus: "inactive",
+            subscriptionRequired: true,
+          },
+          checkoutRequired: false,
+          checkoutError: orderResult.error,
+        });
+      }
+
+      // Update payment record with gateway info
+      if (orderResult.gateway && orderResult.gateway !== "none") {
+        const gatewayId = orderResult.orderId || orderResult.sessionId || null;
+        await sql`UPDATE payments SET gateway = ${orderResult.gateway}, payment_id = ${gatewayId} WHERE id = ${paymentDbId}`;
+      }
+
+      console.log("[auth/signup] Returning checkout payload for shop #" + shop.id);
+
+      return response.status(201).json({
+        token,
+        shop: {
+          id: shop.id,
+          name: shop.owner_name,
+          shopName: shop.shop_name,
+          email: shop.email,
+          mobile: shop.mobile,
+          city: shop.city,
+          role: "owner",
+          userType: "shop",
+          repairShopId: shop.id,
+          subscriptionStatus: "inactive",
+          subscriptionRequired: true,
+        },
+        checkoutRequired: true,
+        gateway: orderResult.gateway || 'razorpay',
+        orderId: orderResult.orderId || null,
+        keyId: orderResult.keyId || null,
+        amount: orderResult.amount || amount,
+        currency: orderResult.currency || currency,
+        invoiceNumber: orderResult.invoiceNumber || invoiceNumber,
+        billingCycle,
+        isTestMode: orderResult.isTestMode || false,
+      });
+    } catch (err) {
+      console.error("[auth/signup] Payment order creation error:", err.message);
+
+      // If payment setup fails, still create the account but indicate no checkout
+      return response.status(201).json({
+        token,
+        shop: {
+          id: shop.id,
+          name: shop.owner_name,
+          shopName: shop.shop_name,
+          email: shop.email,
+          mobile: shop.mobile,
+          city: shop.city,
+          role: "owner",
+          userType: "shop",
+          repairShopId: shop.id,
+          subscriptionStatus: "inactive",
+          subscriptionRequired: true,
+        },
+        checkoutRequired: false,
+        checkoutError: err.message,
+      });
+    }
+  }
+
+  // ── FREE PLAN: Return success (trial already activated) ──────────────────
+  console.log("[auth/signup] FREE PLAN — redirecting to dashboard (trial active):", shop.email);
   return response.status(201).json({
     token,
-    user: {
+    shop: {
       id: shop.id,
       name: shop.owner_name,
       shopName: shop.shop_name,
@@ -238,9 +407,10 @@ async function handleSignup(request, response, body) {
       role: "owner",
       userType: "shop",
       repairShopId: shop.id,
-      subscriptionStatus: "inactive",
-      subscriptionRequired: true,
+      subscriptionStatus: "trial",
+      subscriptionRequired: false,
     },
+    checkoutRequired: false,
   });
 }
 

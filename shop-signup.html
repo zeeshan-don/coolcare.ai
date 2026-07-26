@@ -154,6 +154,12 @@
 </div>
 
 <script>
+  // ── Read plan/price from URL query params ──
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlBilling = urlParams.get('billing') || 'monthly';
+  const urlCurrency = urlParams.get('currency') || localStorage.getItem('cc_currency') || 'USD';
+  console.log('[signup] URL plan info:', { billing: urlBilling, currency: urlCurrency });
+
   // Redirect if already logged in
   if (localStorage.getItem('cc_token')) window.location.href = '/shop-dashboard.html';
 
@@ -180,6 +186,52 @@
     hideAlert();
   }
 
+  // ── Load Razorpay script dynamically ──
+  function loadRazorpayScript() {
+    return new Promise(function (resolve, reject) {
+      if (window.Razorpay) return resolve();
+      var s = document.createElement('script');
+      s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      s.onload = resolve;
+      s.onerror = function () { reject(new Error('Failed to load Razorpay checkout')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  // ── Open Razorpay checkout ──
+  function openRazorpayCheckout(data, shop) {
+    var options = {
+      key: data.keyId,
+      order_id: data.orderId,
+      currency: data.currency,
+      name: 'CoolCare',
+      description: 'CoolCare Pro — ' + (data.billingCycle || urlBilling || 'monthly'),
+      handler: function () {
+        window.location.href = '/payment-success.html';
+      },
+      modal: {
+        ondismiss: function () {
+          window.location.href = '/payment-failed.html';
+        },
+      },
+      theme: { color: '#ffffff' },
+      prefill: {
+        email: shop && shop.email ? shop.email : '',
+        contact: shop && shop.mobile ? shop.mobile : '',
+        name: shop && shop.owner_name ? shop.owner_name : 'Owner',
+      },
+      notes: {
+        plan: 'pro',
+        billing_cycle: data.billingCycle || urlBilling || 'monthly',
+      },
+    };
+    var rzp = new window.Razorpay(options);
+    rzp.on('payment.failed', function () {
+      window.location.href = '/payment-failed.html';
+    });
+    rzp.open();
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearErrors();
@@ -193,8 +245,17 @@
     const address        = document.getElementById('address').value.trim();
     const city           = document.getElementById('city').value.trim();
     const serviceAreasRaw = document.getElementById('serviceAreas').value;
-    const serviceAreas   = serviceAreasRaw.split(',').map(s => s.trim()).filter(Boolean);      const referralCode = document.getElementById('referralCode').value.trim().toUpperCase();
-      const servicesOffered = [...document.querySelectorAll('#servicesGrid input:checked')].map(c => c.value);
+    const serviceAreas   = serviceAreasRaw.split(',').map(s => s.trim()).filter(Boolean);
+    const referralCode   = document.getElementById('referralCode').value.trim().toUpperCase();
+    const servicesOffered = [...document.querySelectorAll('#servicesGrid input:checked')].map(c => c.value);
+
+    // Determine plan from URL or default to 'pro' (paid)
+    // If user came from pricing page, they selected a paid plan (always 'pro' in this version)
+    const planName     = 'pro';
+    const billingCycle = urlBilling;
+    const currency     = urlCurrency;
+
+    console.log('[signup] Selected plan:', { planName, billingCycle, currency, fromURL: { billing: urlBilling, currency: urlCurrency } });
 
     // Client-side validation
     let valid = true;
@@ -218,12 +279,33 @@
     submitBtn.textContent = 'Creating account…';
 
     try {
+      const signupPayload = {
+        action: 'signup',
+        shopName,
+        ownerName,
+        email,
+        mobile,
+        password,
+        confirmPassword,
+        address,
+        city,
+        serviceAreas,
+        servicesOffered,
+        referralCode: referralCode || undefined,
+        // Plan info from pricing page
+        planName,
+        billingCycle,
+        currency,
+      };
+      console.log('[signup] Request payload:', { ...signupPayload, password: '***', confirmPassword: '***' });
+
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'signup', shopName, ownerName, email, mobile, password, confirmPassword, address, city, serviceAreas, servicesOffered, referralCode: referralCode || undefined }),
+        body: JSON.stringify(signupPayload),
       });
       const data = await res.json();
+      console.log('[signup] Response:', data);
 
       if (!res.ok) {
         if (data.errors) {
@@ -232,14 +314,27 @@
         } else {
           showAlert(data.error || 'Registration failed. Please try again.', 'error');
         }
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Account →';
         return;
       }
 
-      // Success
+      // Save auth data
       localStorage.setItem('cc_token', data.token);
       localStorage.setItem('cc_shop', JSON.stringify(data.shop));
-      showAlert('Account created! Redirecting to your dashboard…', 'success');
-      setTimeout(() => window.location.href = '/shop-dashboard.html', 1200);
+
+      // Check if this is a paid plan requiring checkout
+      if (data.checkoutRequired && data.orderId && data.keyId) {
+        console.log('[signup] Paid plan — opening Razorpay checkout');
+        showAlert('Account created! Opening payment...', 'success');
+        await loadRazorpayScript();
+        openRazorpayCheckout(data, data.shop);
+      } else {
+        // Free plan or no payment needed — redirect to dashboard
+        console.log('[signup] Free plan — redirecting to dashboard');
+        showAlert('Account created! Redirecting to your dashboard…', 'success');
+        setTimeout(() => window.location.href = '/shop-dashboard.html', 1200);
+      }
     } catch (err) {
       console.error('[signup] Network error:', err);
       showAlert('Network error. Please check your connection.', 'error');

@@ -400,35 +400,40 @@ async function handleAdminGet(request, response, sql, auth, action) {
 }
 
 async function adminListPricing(request, response, sql, auth) {
-  const plans = await sql`
-    SELECT sp.id as plan_id, sp.name as plan_name, sp.display_name,
-           spp.id as pricing_id, spp.currency, spp.price_monthly, spp.price_quarterly,
-           spp.price_halfyearly, spp.price_yearly
-    FROM subscription_plans sp
-    LEFT JOIN subscription_plan_prices spp ON sp.id = spp.plan_id
-    ORDER BY sp.id, spp.currency
-  `;
+  let result = {};
+  try {
+    const plans = await sql`
+      SELECT sp.id as plan_id, sp.name as plan_name, sp.display_name,
+             spp.id as pricing_id, spp.currency, spp.price_monthly, spp.price_quarterly,
+             spp.price_halfyearly, spp.price_yearly
+      FROM subscription_plans sp
+      LEFT JOIN subscription_plan_prices spp ON sp.id = spp.plan_id
+      ORDER BY sp.id, spp.currency
+    `;
 
-  const result = plans.reduce((acc, row) => {
-    if (!acc[row.plan_id]) {
-      acc[row.plan_id] = {
-        plan_id: row.plan_id,
-        plan_name: row.plan_name,
-        display_name: row.display_name,
-        pricing: {},
-      };
-    }
-    if (row.currency) {
-      acc[row.plan_id].pricing[row.currency] = {
-        pricing_id: row.pricing_id,
-        monthly: parseFloat(row.price_monthly || 0),
-        quarterly: parseFloat(row.price_quarterly || 0),
-        halfyearly: parseFloat(row.price_halfyearly || 0),
-        yearly: parseFloat(row.price_yearly || 0),
-      };
-    }
-    return acc;
-  }, {});
+    result = plans.reduce((acc, row) => {
+      if (!acc[row.plan_id]) {
+        acc[row.plan_id] = {
+          plan_id: row.plan_id,
+          plan_name: row.plan_name,
+          display_name: row.display_name,
+          pricing: {},
+        };
+      }
+      if (row.currency) {
+        acc[row.plan_id].pricing[row.currency] = {
+          pricing_id: row.pricing_id,
+          monthly: parseFloat(row.price_monthly || 0),
+          quarterly: parseFloat(row.price_quarterly || 0),
+          halfyearly: parseFloat(row.price_halfyearly || 0),
+          yearly: parseFloat(row.price_yearly || 0),
+        };
+      }
+      return acc;
+    }, {});
+  } catch (e) {
+    console.warn("[admin/pricing] Tables may not exist:", e.message);
+  }
 
   return response.status(200).json({ plans: Object.values(result) });
 }
@@ -585,32 +590,44 @@ async function adminListUsers(request, response, sql, auth) {
   const role = request.query?.role || "";
   const offset = (page - 1) * limit;
 
-  let whereClause = "WHERE 1=1";
-  const qp = [];
-  if (search) { qp.push(`%${search}%`); whereClause += ` AND (u.name ILIKE $${qp.length} OR u.email ILIKE $${qp.length})`; }
-  if (role) { qp.push(role); whereClause += ` AND u.role = $${qp.length}`; }
+  let users = [];
+  let total = 0;
+  try {
+    let whereClause = "WHERE 1=1";
+    const qp = [];
+    if (search) { qp.push(`%${search}%`); whereClause += ` AND (u.name ILIKE $${qp.length} OR u.email ILIKE $${qp.length})`; }
+    if (role) { qp.push(role); whereClause += ` AND u.role = $${qp.length}`; }
 
-  const users = await sql(`
-    SELECT u.id, u.email, u.name, u.role, u.repair_shop_id, u.is_active, u.last_login, u.created_at,
-           rs.shop_name as shop_name
-    FROM users u LEFT JOIN repair_shops rs ON rs.id = u.repair_shop_id
-    ${whereClause}
-    ORDER BY u.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
-  `, [...qp, limit, offset]);
+    users = await sql(`
+      SELECT u.id, u.email, u.name, u.role, u.repair_shop_id, u.is_active, u.last_login, u.created_at,
+             rs.shop_name as shop_name
+      FROM users u LEFT JOIN repair_shops rs ON rs.id = u.repair_shop_id
+      ${whereClause}
+      ORDER BY u.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
+    `, [...qp, limit, offset]);
 
-  const countResult = await sql(`SELECT COUNT(*) as total FROM users u ${whereClause}`, qp);
+    const countResult = await sql(`SELECT COUNT(*) as total FROM users u ${whereClause}`, qp);
+    total = parseInt(countResult[0]?.total || "0", 10);
+  } catch (e) {
+    console.warn("[admin/users] Table may not exist:", e.message);
+  }
 
   return response.status(200).json({
     users,
-    pagination: { page, limit, total: parseInt(countResult[0]?.total || "0", 10) },
+    pagination: { page, limit, total },
   });
 }
 
 // ─── ADMIN LIST PLANS ────────────────────────────────────────────────────────
 async function adminListPlans(request, response, sql, auth) {
-  const plans = await sql`
-    SELECT * FROM subscription_plans ORDER BY is_active DESC, price_monthly_usd ASC
-  `;
+  let plans = [];
+  try {
+    plans = await sql`
+      SELECT * FROM subscription_plans ORDER BY is_active DESC, price_monthly_usd ASC
+    `;
+  } catch (e) {
+    console.warn("[admin/plans] Table may not exist:", e.message);
+  }
   return response.status(200).json({ plans });
 }
 
@@ -621,25 +638,32 @@ async function adminListPayments(request, response, sql, auth) {
   const status = request.query?.status || "";
   const offset = (page - 1) * limit;
 
-  let whereClause = "WHERE 1=1";
-  const qp = [];
-  if (status) { qp.push(status); whereClause += ` AND p.status = $${qp.length}`; }
+  let payments = [];
+  let total = 0;
+  try {
+    let whereClause = "WHERE 1=1";
+    const qp = [];
+    if (status) { qp.push(status); whereClause += ` AND p.status = $${qp.length}`; }
 
-  const payments = await sql(`
-    SELECT p.id, p.payment_id, p.transaction_id, p.gateway, p.currency, p.amount, p.status,
-           p.invoice_number, p.description, p.refund_amount, p.refund_reason, p.refunded_at,
-           p.created_at, p.updated_at,
-           rs.shop_name, rs.owner_name as shop_owner
-    FROM payments p LEFT JOIN repair_shops rs ON rs.id = p.repair_shop_id
-    ${whereClause}
-    ORDER BY p.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
-  `, [...qp, limit, offset]);
+    payments = await sql(`
+      SELECT p.id, p.payment_id, p.transaction_id, p.gateway, p.currency, p.amount, p.status,
+             p.invoice_number, p.description, p.refund_amount, p.refund_reason, p.refunded_at,
+             p.created_at, p.updated_at,
+             rs.shop_name, rs.owner_name as shop_owner
+      FROM payments p LEFT JOIN repair_shops rs ON rs.id = p.repair_shop_id
+      ${whereClause}
+      ORDER BY p.created_at DESC LIMIT $${qp.length + 1} OFFSET $${qp.length + 2}
+    `, [...qp, limit, offset]);
 
-  const countResult = await sql(`SELECT COUNT(*) as total FROM payments p ${whereClause}`, qp);
+    const countResult = await sql(`SELECT COUNT(*) as total FROM payments p ${whereClause}`, qp);
+    total = parseInt(countResult[0]?.total || "0", 10);
+  } catch (e) {
+    console.warn("[admin/payments] Table may not exist:", e.message);
+  }
 
   return response.status(200).json({
     payments,
-    pagination: { page, limit, total: parseInt(countResult[0]?.total || "0", 10) },
+    pagination: { page, limit, total },
   });
 }
 
@@ -656,50 +680,74 @@ async function adminGetSettings(request, response, sql, auth) {
 // ─── ADMIN ANALYTICS ─────────────────────────────────────────────────────────
 async function adminAnalytics(request, response, sql, auth) {
   // Monthly bookings and revenue for last 12 months
-  const monthly = await sql`
-    SELECT date_trunc('month', created_at)::date as month,
-           COUNT(*) as bookings,
-           COALESCE(SUM(final_cost), 0) as revenue
-    FROM bookings
-    WHERE created_at >= now() - INTERVAL '12 months'
-    GROUP BY date_trunc('month', created_at)::date
-    ORDER BY month ASC
-  `;
+  let monthly = [];
+  let activeShops = [];
+  let topCities = [];
+  let subBreakdown = [];
+  let growth = {};
 
-  // Most active shops (top 10 by bookings)
-  const activeShops = await sql`
-    SELECT rs.id, rs.shop_name, rs.city, COUNT(b.id) as booking_count,
-           COALESCE(SUM(b.final_cost), 0) as total_revenue
-    FROM repair_shops rs
-    JOIN bookings b ON b.repair_shop_id = rs.id
-    GROUP BY rs.id, rs.shop_name, rs.city
-    ORDER BY booking_count DESC LIMIT 10
-  `;
+  try {
+    monthly = await sql`
+      SELECT date_trunc('month', created_at)::date as month,
+             COUNT(*) as bookings,
+             COALESCE(SUM(final_cost), 0) as revenue
+      FROM bookings
+      WHERE created_at >= now() - INTERVAL '12 months'
+      GROUP BY date_trunc('month', created_at)::date
+      ORDER BY month ASC
+    `;
+  } catch (e) {
+    console.warn("[admin/analytics] Bookings query failed:", e.message);
+  }
 
-  // Top cities
-  const topCities = await sql`
-    SELECT city, COUNT(*) as shop_count FROM repair_shops
-    WHERE city IS NOT NULL AND city != ''
-    GROUP BY city ORDER BY shop_count DESC LIMIT 10
-  `;
+  try {
+    activeShops = await sql`
+      SELECT rs.id, rs.shop_name, rs.city, COUNT(b.id) as booking_count,
+             COALESCE(SUM(b.final_cost), 0) as total_revenue
+      FROM repair_shops rs
+      JOIN bookings b ON b.repair_shop_id = rs.id
+      GROUP BY rs.id, rs.shop_name, rs.city
+      ORDER BY booking_count DESC LIMIT 10
+    `;
+  } catch (e) {
+    console.warn("[admin/analytics] Active shops query failed:", e.message);
+  }
 
-  // Subscription breakdown
-  const subBreakdown = await sql`
-    SELECT s.status, COUNT(*) as count FROM subscriptions s GROUP BY s.status
-  `;
+  try {
+    topCities = await sql`
+      SELECT city, COUNT(*) as shop_count FROM repair_shops
+      WHERE city IS NOT NULL AND city != ''
+      GROUP BY city ORDER BY shop_count DESC LIMIT 10
+    `;
+  } catch (e) {
+    console.warn("[admin/analytics] Top cities query failed:", e.message);
+  }
 
-  // Growth metrics
-  const growth = await sql`
-    SELECT
-      (SELECT COUNT(*) FROM repair_shops WHERE created_at >= date_trunc('month', now())) as new_shops_this_month,
-      (SELECT COUNT(*) FROM bookings WHERE created_at >= date_trunc('month', now())) as bookings_this_month,
-      (SELECT COUNT(*) FROM users WHERE created_at >= date_trunc('month', now())) as new_users_this_month
-  `;
+  // Subscription breakdown — may not exist yet
+  try {
+    subBreakdown = await sql`
+      SELECT s.status, COUNT(*) as count FROM subscriptions s GROUP BY s.status
+    `;
+  } catch (e) {
+    console.warn("[admin/analytics] Subscriptions table may not exist:", e.message);
+  }
+
+  try {
+    const growthRows = await sql`
+      SELECT
+        (SELECT COUNT(*) FROM repair_shops WHERE created_at >= date_trunc('month', now())) as new_shops_this_month,
+        (SELECT COUNT(*) FROM bookings WHERE created_at >= date_trunc('month', now())) as bookings_this_month,
+        (SELECT COUNT(*) FROM users WHERE created_at >= date_trunc('month', now())) as new_users_this_month
+    `;
+    growth = growthRows[0] || {};
+  } catch (e) {
+    console.warn("[admin/analytics] Growth query failed:", e.message);
+  }
 
   return response.status(200).json({
     monthly, activeShops, topCities,
     subscriptions: subBreakdown,
-    growth: growth[0] || {},
+    growth,
   });
 }
 
@@ -1528,8 +1576,9 @@ async function adminListGateways(request, response, sql, auth) {
   const admin = await requireSuperAdmin(auth, sql, response);
   if (!admin) return;
   const gateways = await getGatewayList();
+  let rows = [];
   try {
-    const rows = await sql`SELECT provider, key_id FROM payment_gateways`;
+    rows = await sql`SELECT * FROM payment_gateways ORDER BY priority ASC`;
     const keyMap = {};
     rows.forEach(r => { keyMap[r.provider] = r.key_id ? mask(decrypt(r.key_id)) : null; });
     gateways.forEach(gw => { gw.maskedKeyId = keyMap[gw.provider] || null; });
