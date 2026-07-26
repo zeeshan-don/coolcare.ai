@@ -50,7 +50,6 @@
     <p style="color:var(--ink2);font-size:13px;margin-bottom:24px;">
       You will receive an email and WhatsApp notification once your account is activated.
     </p>
-    <div class="details" id="details"></div>
     <a href="/login.html" class="btn">Back to Login →</a>
     <p class="redirect" id="redirectMsg" style="color:var(--muted);font-size:12px;margin-top:16px">You can close this page. We'll notify you when your account is ready.</p>
   </div>
@@ -58,41 +57,20 @@
 </div>
 
 <script>
-const token = localStorage.getItem('cc_token');
-if (!token) window.location.href = '/login.html';
+// IMPORTANT: payment-success.html should NEVER auto-authenticate a user.
+// The JWT token is only issued after successful payment + admin approval.
+// Clear any stale tokens that may have been stored from the signup flow.
+localStorage.removeItem('cc_token');
+localStorage.removeItem('cc_shop');
+localStorage.removeItem('cc_user');
+sessionStorage.removeItem('cc_checkout_shop');
 
-async function verifyPayment() {
-  try {
-    const res = await fetch('/api/payments', { headers: { Authorization: `Bearer ${token}` } });
-    if (res.status === 401) { window.location.href = '/login.html'; return; }
-    const data = await res.json();
-    const sub = data.subscription;
-    const payments = data.payments || [];
-    const latest = payments.find(p => p.status === 'completed') || payments[0];
-
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('content').style.display = 'block';
-
-    const rows = [];
-    if (sub?.plan_name || sub?.display_name) rows.push(['Plan', sub.display_name || sub.plan_name]);
-    if (sub?.billing_cycle) rows.push(['Billing', sub.billing_cycle.charAt(0).toUpperCase() + sub.billing_cycle.slice(1)]);
-    if (sub?.current_period_end) rows.push(['Expires', new Date(sub.current_period_end).toLocaleDateString()]);
-    if (latest?.invoice_number) rows.push(['Invoice', latest.invoice_number]);
-    if (latest?.amount) rows.push(['Amount', `${latest.currency || 'USD'} ${parseFloat(latest.amount).toFixed(2)}`]);
-    if (latest?.transaction_id) rows.push(['Transaction', latest.transaction_id]);
-
-    document.getElementById('details').innerHTML = rows.map(([l, v]) =>
-      `<div class="detail-row"><span class="detail-label">${l}</span><span class="detail-value">${v}</span></div>`
-    ).join('') || '<p style="color:var(--muted);text-align:center">Subscription activated successfully.</p>';
-
-  } catch (err) {
-    document.getElementById('loading').innerHTML = '<p style="color:var(--muted)">Could not verify payment. Please try refreshing the page.</p>';
-    document.getElementById('content').style.display = 'block';
-    document.getElementById('content').querySelector('h1').textContent = 'Payment Received!';
-    document.getElementById('content').querySelector('.sub').textContent = 'Your payment is being processed. You will be notified once your account is activated.';
-  }
-}
-verifyPayment();
+// Show a static success page — no API call needed since the webhook already
+// processed the payment server-side. No auth token exists at this point.
+setTimeout(function () {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+}, 1200);
 </script>
 </body>
 </html>

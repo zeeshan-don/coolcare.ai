@@ -240,15 +240,9 @@ async function handleSignup(request, response, body) {
     } catch (e) { console.warn("[auth/signup] Referral record creation failed:", e.message); }
   }
 
-  const jti = makeJti();
-  const token = signToken({
-    sub: shop.id,
-    role: "owner",
-    user_type: "shop",
-    repair_shop_id: shop.id,
-  }, jti);
-
   // ── Create Razorpay order (paid plan only, no free trial) ────────────────
+  // IMPORTANT: No JWT token is generated here. For paid plans, the user must
+  // complete payment AND get admin approval before receiving an authenticated session.
   console.log("[auth/signup] Creating payment order for shop #" + shop.id);
 
   try {
@@ -296,22 +290,9 @@ async function handleSignup(request, response, body) {
         `;
       } catch (e) { /* ok */ }
 
-      // Return success with token, but indicate checkout failed
+      // Order creation failed — return error, no token issued
       return response.status(201).json({
-        token,
-        shop: {
-          id: shop.id,
-          name: shop.owner_name,
-          shopName: shop.shop_name,
-          email: shop.email,
-          mobile: shop.mobile,
-          city: shop.city,
-          role: "owner",
-          userType: "shop",
-          repairShopId: shop.id,
-          subscriptionStatus: "inactive",
-          subscriptionRequired: true,
-        },
+        shopId: shop.id,
         checkoutRequired: false,
         checkoutError: orderResult.error,
       });
@@ -326,20 +307,7 @@ async function handleSignup(request, response, body) {
     console.log("[auth/signup] Returning checkout payload for shop #" + shop.id);
 
     return response.status(201).json({
-      token,
-      shop: {
-        id: shop.id,
-        name: shop.owner_name,
-        shopName: shop.shop_name,
-        email: shop.email,
-        mobile: shop.mobile,
-        city: shop.city,
-        role: "owner",
-        userType: "shop",
-        repairShopId: shop.id,
-        subscriptionStatus: "inactive",
-        subscriptionRequired: true,
-      },
+      shopId: shop.id,
       checkoutRequired: true,
       gateway: orderResult.gateway || 'razorpay',
       orderId: orderResult.orderId || null,
@@ -348,6 +316,8 @@ async function handleSignup(request, response, body) {
       currency: orderResult.currency || currency,
       invoiceNumber: orderResult.invoiceNumber || invoiceNumber,
       billingCycle,
+      subscriptionStatus: "inactive",
+      subscriptionRequired: true,
       isTestMode: orderResult.isTestMode || false,
     });
   } catch (err) {
@@ -355,20 +325,7 @@ async function handleSignup(request, response, body) {
 
     // If payment setup fails, still create the account but indicate no checkout
     return response.status(201).json({
-      token,
-      shop: {
-        id: shop.id,
-        name: shop.owner_name,
-        shopName: shop.shop_name,
-        email: shop.email,
-        mobile: shop.mobile,
-        city: shop.city,
-        role: "owner",
-        userType: "shop",
-        repairShopId: shop.id,
-        subscriptionStatus: "inactive",
-        subscriptionRequired: true,
-      },
+      shopId: shop.id,
       checkoutRequired: false,
       checkoutError: err.message,
     });

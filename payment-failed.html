@@ -32,12 +32,21 @@
   <p class="sub">We couldn't process your payment. Please try again or use a different payment method.</p>
   <div class="btns">
     <a href="/index.html#pricing" class="btn btn-primary">Try Again →</a>
-    <a href="/shop-dashboard.html" class="btn btn-ghost">Back to Dashboard</a>
+    <a href="/login.html" class="btn btn-ghost">Back to Login</a>
   </div>
   <div class="help">
     <p>If the problem persists, contact us at <strong style="color:var(--ink2)">support@coolcare.ai</strong></p>
     <p style="margin-top:6px">Common reasons: insufficient funds, incorrect card details, or bank security restrictions.</p>
   </div>
 </div>
+<script>
+  // Clear any stored auth tokens — payment failed, no session should exist
+  localStorage.removeItem('cc_token');
+  localStorage.removeItem('cc_shop');
+  localStorage.removeItem('cc_user');
+  sessionStorage.removeItem('cc_checkout_shop');
+  sessionStorage.removeItem('cc_pending_checkout');
+  console.log('[payment-failed] Cleared auth tokens');
+</script>
 </body>
 </html>

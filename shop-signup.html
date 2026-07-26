@@ -319,16 +319,18 @@
         return;
       }
 
-      // Save auth data
-      localStorage.setItem('cc_token', data.token);
-      localStorage.setItem('cc_shop', JSON.stringify(data.shop));
+      // For paid plans: do NOT save any auth token. User must complete payment
+      // and receive admin approval before they can log in.
+      // Only save the shop info temporarily for the checkout flow.
+      const shopData = { shopId: data.shopId, email: email, owner_name: ownerName, mobile: mobile };
+      sessionStorage.setItem('cc_checkout_shop', JSON.stringify(shopData));
 
       // Always require checkout for paid plans (no free trial)
       if (data.checkoutRequired && data.orderId && data.keyId) {
         console.log('[signup] Opening Razorpay checkout');
         showAlert('Account created! Opening payment...', 'success');
         await loadRazorpayScript();
-        openRazorpayCheckout(data, data.shop);
+        openRazorpayCheckout(data, shopData);
       } else if (data.checkoutError) {
         // Gateway failed — show error, don't redirect to dashboard
         console.error('[signup] Checkout error:', data.checkoutError);
