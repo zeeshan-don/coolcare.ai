@@ -757,116 +757,138 @@ async function handleDemoPreload(request, response) {
 
     // ── Only regenerate data if needed (first time or data was wiped) ──────
     if (needsFullSetup) {
-      // Delete old data
-      await sql`DELETE FROM booking_timeline WHERE booking_id IN (SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId})`;
-      await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
-      await sql`DELETE FROM conversation_state WHERE repair_shop_id = ${demoShopId}`;
-      await sql`DELETE FROM shop_notifications WHERE repair_shop_id = ${demoShopId}`;
-      await sql`DELETE FROM bookings WHERE repair_shop_id = ${demoShopId}`;
-      await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
-      await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
-      await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
-      await sql`DELETE FROM payments WHERE repair_shop_id = ${demoShopId}`;
+      // All demo data operations are wrapped in a transaction for atomicity.
+      // This prevents partial inserts if a concurrent request or error occurs.
+      await sql`BEGIN`;
+      try {
+        // Delete old data
+        await sql`DELETE FROM booking_timeline WHERE booking_id IN (SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId})`;
+        await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM conversation_state WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM shop_notifications WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM bookings WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM payments WHERE repair_shop_id = ${demoShopId}`;
 
-      // Insert AI settings
-      await sql`
-        INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days,
-          supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
-        VALUES (${demoShopId}, ${DEMO.ai_settings.greeting_message},
-          ${JSON.stringify(DEMO.shop.business_hours)}::jsonb,
-          ${DEMO.ai_settings.working_days},
-          ${DEMO.ai_settings.supported_services},
-          ${DEMO.ai_settings.knowledge_base},
-          ${DEMO.ai_settings.fallback_response},
-          ${DEMO.ai_settings.transfer_to_human}, now())
-      `;
-
-      // Insert technicians (8)
-      for (const tech of DEMO.technicians) {
+        // Insert AI settings — UPSERT to prevent duplicate key errors on UNIQUE(repair_shop_id)
+        // Using ON CONFLICT DO UPDATE guarantees idempotency even under concurrent requests
         await sql`
-          INSERT INTO technicians (repair_shop_id, name, phone, email, services, specialization, active)
-          VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email},
-            ${tech.services || tech.specialization}, ${tech.specialization}, ${tech.active})
+          INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days,
+            supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at, created_at)
+          VALUES (${demoShopId}, ${DEMO.ai_settings.greeting_message},
+            ${JSON.stringify(DEMO.shop.business_hours)}::jsonb,
+            ${DEMO.ai_settings.working_days},
+            ${DEMO.ai_settings.supported_services},
+            ${DEMO.ai_settings.knowledge_base},
+            ${DEMO.ai_settings.fallback_response},
+            ${DEMO.ai_settings.transfer_to_human}, now(), now())
+          ON CONFLICT (repair_shop_id) DO UPDATE SET
+            greeting_message = EXCLUDED.greeting_message,
+            business_hours = EXCLUDED.business_hours,
+            working_days = EXCLUDED.working_days,
+            supported_services = EXCLUDED.supported_services,
+            knowledge_base = EXCLUDED.knowledge_base,
+            fallback_response = EXCLUDED.fallback_response,
+            transfer_to_human = EXCLUDED.transfer_to_human,
+            updated_at = now()
         `;
-      }
 
-      // Fetch technician IDs
-      const techRows = await sql`SELECT id, name FROM technicians WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
-      const techMap = {};
-      techRows.forEach((t, i) => { techMap[i] = t.id; });
-
-      // Insert bookings (200+)
-      for (let i = 0; i < DEMO.bookings.length; i++) {
-        const b = DEMO.bookings[i];
-        const cust = DEMO.customers[b.customerIdx];
-        const techId = b.techIdx != null ? techMap[b.techIdx] || null : null;
-        const techName = b.techIdx != null && DEMO.technicians[b.techIdx] ? DEMO.technicians[b.techIdx].name : null;
-        let priority = 'normal';
-        if (b.urgency === 'urgent') priority = 'urgent';
-        else if (b.urgency === 'today') priority = 'high';
-        await sql`
-          INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
-            area, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
-            priority, invoice_number, created_at, updated_at, customer_notes)
-          VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
-            ${b.service}, ${b.area}, ${b.urgency}, ${b.status},
-            ${techId}, ${techName}, ${b.cost ? b.cost * 0.7 : null}, ${b.final_cost || null},
-            ${priority},
-            ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
-            ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})
-        `;
-      }
-
-      // Insert subscription
-      const planRows = await sql`SELECT id FROM subscription_plans WHERE name = 'pro' LIMIT 1`;
-      if (planRows.length > 0) {
-        const subEnd = new Date(); subEnd.setFullYear(subEnd.getFullYear() + 1);
-        await sql`INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
-          gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
-          VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
-            'demo-sub-001', 12470, 'INR', now(), ${subEnd.toISOString()}, now())`;
-      }
-
-      // Insert payment
-      await sql`INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
-        invoice_number, description, created_at)
-        VALUES (${demoShopId}, 'demo', 'INR', 12470, 'completed',
-          'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())`;
-
-      // Insert conversations (batched for speed)
-      for (const conv of DEMO.conversations) {
-        const cust = DEMO.customers[conv.customerIdx];
-        for (const msg of conv.messages) {
-          await sql`INSERT INTO whatsapp_conversations (repair_shop_id, customer_number, customer_name, direction, message_text, created_at)
-            VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
-              ${msg.role === 'customer' ? 'inbound' : 'outbound'}, ${msg.text}, now())`;
+        // Insert technicians (8)
+        for (const tech of DEMO.technicians) {
+          await sql`
+            INSERT INTO technicians (repair_shop_id, name, phone, email, services, specialization, active)
+            VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email},
+              ${tech.services || tech.specialization}, ${tech.specialization}, ${tech.active})
+          `;
         }
-      }
 
-      // Insert timeline
-      const insertedBookings = await sql`SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
-      for (let i = 0; i < Math.min(DEMO.timeline.length, 50); i++) {
-        const t = DEMO.timeline[i];
-        if (t.bookingId < 1 || t.bookingId > insertedBookings.length) continue;
-        const actualBookingId = insertedBookings[t.bookingId - 1]?.id;
-        if (!actualBookingId) continue;
-        await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, notes, created_at)
-          VALUES (${actualBookingId}, ${t.action}, ${t.oldValue}, ${t.newValue},
-            ${t.actorType}, ${t.notes || null}, now())`;
-      }
+        // Fetch technician IDs
+        const techRows = await sql`SELECT id, name FROM technicians WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
+        const techMap = {};
+        techRows.forEach((t, i) => { techMap[i] = t.id; });
 
-      // Insert notifications
-      for (let i = 0; i < DEMO.notifications.length; i++) {
-        const n = DEMO.notifications[i];
-        await sql`INSERT INTO shop_notifications (repair_shop_id, type, title, message, is_read, metadata, created_at)
-          VALUES (${demoShopId}, ${n.type}, ${n.title}, ${n.message}, ${n.is_read},
-            ${JSON.stringify(n.metadata || {})}::jsonb, now())`;
-      }
+        // Insert bookings (200+)
+        for (let i = 0; i < DEMO.bookings.length; i++) {
+          const b = DEMO.bookings[i];
+          const cust = DEMO.customers[b.customerIdx];
+          const techId = b.techIdx != null ? techMap[b.techIdx] || null : null;
+          const techName = b.techIdx != null && DEMO.technicians[b.techIdx] ? DEMO.technicians[b.techIdx].name : null;
+          let priority = 'normal';
+          if (b.urgency === 'urgent') priority = 'urgent';
+          else if (b.urgency === 'today') priority = 'high';
+          await sql`
+            INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
+              area, address, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
+              priority, invoice_number, created_at, updated_at, customer_notes)
+            VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
+              ${b.service}, ${b.area}, ${cust.address || b.area}, ${b.urgency}, ${b.status},
+              ${techId}, ${techName}, ${b.cost ? b.cost * 0.7 : null}, ${b.final_cost || null},
+              ${priority},
+              ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
+              ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})
+          `;
+        }
 
-      // Invalidate cache since we regenerated data
-      invalidateDemoCache();
-      
-      console.log("[auth/demo-preload] Full demo data generated for shop #" + demoShopId);
+        // Insert subscription
+        const planRows = await sql`SELECT id FROM subscription_plans WHERE name = 'pro' LIMIT 1`;
+        if (planRows.length > 0) {
+          const subEnd = new Date(); subEnd.setFullYear(subEnd.getFullYear() + 1);
+          await sql`INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+            gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
+            VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
+              'demo-sub-001', 12470, 'INR', now(), ${subEnd.toISOString()}, now())`;
+        }
+
+        // Insert payment
+        await sql`INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
+          invoice_number, description, created_at)
+          VALUES (${demoShopId}, 'demo', 'INR', 12470, 'completed',
+            'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())`;
+
+        // Insert conversations (batched for speed)
+        for (const conv of DEMO.conversations) {
+          const cust = DEMO.customers[conv.customerIdx];
+          for (const msg of conv.messages) {
+            await sql`INSERT INTO whatsapp_conversations (repair_shop_id, customer_number, customer_name, direction, message_text, created_at)
+              VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
+                ${msg.role === 'customer' ? 'inbound' : 'outbound'}, ${msg.text}, now())`;
+          }
+        }
+
+        // Insert timeline
+        const insertedBookings = await sql`SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
+        for (let i = 0; i < Math.min(DEMO.timeline.length, 50); i++) {
+          const t = DEMO.timeline[i];
+          if (t.bookingId < 1 || t.bookingId > insertedBookings.length) continue;
+          const actualBookingId = insertedBookings[t.bookingId - 1]?.id;
+          if (!actualBookingId) continue;
+          await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, notes, created_at)
+            VALUES (${actualBookingId}, ${t.action}, ${t.oldValue}, ${t.newValue},
+              ${t.actorType}, ${t.notes || null}, now())`;
+        }
+
+        // Insert notifications
+        for (let i = 0; i < DEMO.notifications.length; i++) {
+          const n = DEMO.notifications[i];
+          await sql`INSERT INTO shop_notifications (repair_shop_id, type, title, message, is_read, metadata, created_at)
+            VALUES (${demoShopId}, ${n.type}, ${n.title}, ${n.message}, ${n.is_read},
+              ${JSON.stringify(n.metadata || {})}::jsonb, now())`;
+        }
+
+        await sql`COMMIT`;
+
+        // Invalidate cache since we regenerated data
+        invalidateDemoCache();
+        
+        console.log("[auth/demo-preload] Full demo data generated for shop #" + demoShopId);
+      } catch (txErr) {
+        // Silent rollback: database may have already rolled back on constraint violation
+        try { await sql`ROLLBACK`; } catch (_) { /* ignore */ }
+        console.error("[auth/demo-preload] Transaction failed, rolled back:", txErr.message);
+        throw txErr;
+      }
     } else {
       console.log("[auth/demo-preload] Demo data already exists, reusing for shop #" + demoShopId);
     }
@@ -943,131 +965,152 @@ async function handleDemoLogin(request, response) {
     }
     
     if (needsSetup) {
-      if (existing.length > 0) {
-        // Delete old data
-        await sql`DELETE FROM booking_timeline WHERE booking_id IN (SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId})`;
-        await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
-        await sql`DELETE FROM conversation_state WHERE repair_shop_id = ${demoShopId}`;
-        await sql`DELETE FROM shop_notifications WHERE repair_shop_id = ${demoShopId}`;
-        await sql`DELETE FROM bookings WHERE repair_shop_id = ${demoShopId}`;
-        await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
-        await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
-        await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
-        await sql`DELETE FROM payments WHERE repair_shop_id = ${demoShopId}`;
-      } else {
-        // Create new demo shop
-        const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
-        const shopRows = await sql`
-          INSERT INTO repair_shops
-            (shop_name, owner_name, email, mobile, password_hash,
-             address, city, state, pincode, service_areas, services_offered, role,
-             subscription_status, is_demo, is_active, referral_code,
-             approval_status, gst_number, business_hours, language, timezone,
-             selected_country, selected_currency)
-          VALUES
-            (${DEMO.shop.shop_name}, ${DEMO.shop.owner_name}, ${DEMO.shop.email}, ${DEMO.shop.mobile},
-             ${passwordHash}, ${DEMO.shop.address}, ${DEMO.shop.city},
-             ${DEMO.shop.state || 'Karnataka'}, ${DEMO.shop.pincode || '560038'},
-             ${DEMO.shop.service_areas}, ${DEMO.shop.services_offered}, 'owner',
-             'active', true, true, 'DEMO-0001',
-             'approved', ${DEMO.shop.gst_number || '29ABCDE1234F1Z5'},
-             ${JSON.stringify(DEMO.shop.business_hours)}::jsonb, 'en', 'Asia/Kolkata',
-             'IN', 'INR')
-          RETURNING id
-        `;
-        demoShopId = shopRows[0].id;
-      }
-
-      // Insert AI settings
-      await sql`INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days,
-        supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
-        VALUES (${demoShopId}, ${DEMO.ai_settings.greeting_message},
-          ${JSON.stringify(DEMO.shop.business_hours)}::jsonb,
-          ${DEMO.ai_settings.working_days}, ${DEMO.ai_settings.supported_services},
-          ${DEMO.ai_settings.knowledge_base}, ${DEMO.ai_settings.fallback_response},
-          ${DEMO.ai_settings.transfer_to_human}, now())`;
-
-      // Insert technicians
-      for (const tech of DEMO.technicians) {
-        await sql`INSERT INTO technicians (repair_shop_id, name, phone, email, services, specialization, active)
-          VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email}, ${tech.services || tech.specialization}, ${tech.specialization}, ${tech.active})`;
-      }
-
-      // Fetch technician IDs
-      const techRows = await sql`SELECT id, name FROM technicians WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
-      const techMap = {};
-      techRows.forEach((t, i) => { techMap[i] = t.id; });
-
-      // Insert bookings (batched)
-      for (let i = 0; i < DEMO.bookings.length; i++) {
-        const b = DEMO.bookings[i];
-        const cust = DEMO.customers[b.customerIdx];
-        const techId = b.techIdx != null ? techMap[b.techIdx] || null : null;
-        const techName = b.techIdx != null && DEMO.technicians[b.techIdx] ? DEMO.technicians[b.techIdx].name : null;
-        let priority = 'normal';
-        if (b.urgency === 'urgent') priority = 'urgent';
-        else if (b.urgency === 'today') priority = 'high';
-        await sql`INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
-          area, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
-          priority, invoice_number, created_at, updated_at, customer_notes)
-          VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
-            ${b.service}, ${b.area}, ${b.urgency}, ${b.status},
-            ${techId}, ${techName}, ${b.cost ? b.cost * 0.7 : null}, ${b.final_cost || null},
-            ${priority},
-            ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
-            ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})`;
-      }
-
-      // Insert subscription
-      const planRows = await sql`SELECT id FROM subscription_plans WHERE name = 'pro' LIMIT 1`;
-      if (planRows.length > 0) {
-        const subEnd = new Date(); subEnd.setFullYear(subEnd.getFullYear() + 1);
-        await sql`INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
-          gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
-          VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
-            'demo-sub-001', 12470, 'INR', now(), ${subEnd.toISOString()}, now())`;
-      }
-
-      // Insert payment
-      await sql`INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
-        invoice_number, description, created_at)
-        VALUES (${demoShopId}, 'demo', 'INR', 12470, 'completed',
-          'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())`;
-
-      // Insert conversations
-      for (const conv of DEMO.conversations) {
-        const cust = DEMO.customers[conv.customerIdx];
-        for (const msg of conv.messages) {
-          await sql`INSERT INTO whatsapp_conversations (repair_shop_id, customer_number, customer_name, direction, message_text, created_at)
-            VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
-              ${msg.role === 'customer' ? 'inbound' : 'outbound'}, ${msg.text}, now())`;
+      // All demo data operations are wrapped in a transaction for atomicity.
+      // This prevents partial inserts if a concurrent request or error occurs.
+      await sql`BEGIN`;
+      try {
+        if (existing.length > 0) {
+          // Delete old data
+          await sql`DELETE FROM booking_timeline WHERE booking_id IN (SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId})`;
+          await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
+          await sql`DELETE FROM conversation_state WHERE repair_shop_id = ${demoShopId}`;
+          await sql`DELETE FROM shop_notifications WHERE repair_shop_id = ${demoShopId}`;
+          await sql`DELETE FROM bookings WHERE repair_shop_id = ${demoShopId}`;
+          await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
+          await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
+          await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
+          await sql`DELETE FROM payments WHERE repair_shop_id = ${demoShopId}`;
+        } else {
+          // Create new demo shop
+          const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
+          const shopRows = await sql`
+            INSERT INTO repair_shops
+              (shop_name, owner_name, email, mobile, password_hash,
+               address, city, state, pincode, service_areas, services_offered, role,
+               subscription_status, is_demo, is_active, referral_code,
+               approval_status, gst_number, business_hours, language, timezone,
+               selected_country, selected_currency)
+            VALUES
+              (${DEMO.shop.shop_name}, ${DEMO.shop.owner_name}, ${DEMO.shop.email}, ${DEMO.shop.mobile},
+               ${passwordHash}, ${DEMO.shop.address}, ${DEMO.shop.city},
+               ${DEMO.shop.state || 'Karnataka'}, ${DEMO.shop.pincode || '560038'},
+               ${DEMO.shop.service_areas}, ${DEMO.shop.services_offered}, 'owner',
+               'active', true, true, 'DEMO-0001',
+               'approved', ${DEMO.shop.gst_number || '29ABCDE1234F1Z5'},
+               ${JSON.stringify(DEMO.shop.business_hours)}::jsonb, 'en', 'Asia/Kolkata',
+               'IN', 'INR')
+            RETURNING id
+          `;
+          demoShopId = shopRows[0].id;
         }
-      }
 
-      // Insert timeline
-      const insertedBookings = await sql`SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
-      for (let i = 0; i < Math.min(DEMO.timeline.length, 50); i++) {
-        const t = DEMO.timeline[i];
-        if (t.bookingId < 1 || t.bookingId > insertedBookings.length) continue;
-        const actualBookingId = insertedBookings[t.bookingId - 1]?.id;
-        if (!actualBookingId) continue;
-        await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, notes, created_at)
-          VALUES (${actualBookingId}, ${t.action}, ${t.oldValue}, ${t.newValue},
-            ${t.actorType}, ${t.notes || null}, now())`;
-      }
+        // Insert AI settings — UPSERT to prevent duplicate key errors on UNIQUE(repair_shop_id)
+        await sql`INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days,
+          supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at, created_at)
+          VALUES (${demoShopId}, ${DEMO.ai_settings.greeting_message},
+            ${JSON.stringify(DEMO.shop.business_hours)}::jsonb,
+            ${DEMO.ai_settings.working_days}, ${DEMO.ai_settings.supported_services},
+            ${DEMO.ai_settings.knowledge_base}, ${DEMO.ai_settings.fallback_response},
+            ${DEMO.ai_settings.transfer_to_human}, now(), now())
+          ON CONFLICT (repair_shop_id) DO UPDATE SET
+            greeting_message = EXCLUDED.greeting_message,
+            business_hours = EXCLUDED.business_hours,
+            working_days = EXCLUDED.working_days,
+            supported_services = EXCLUDED.supported_services,
+            knowledge_base = EXCLUDED.knowledge_base,
+            fallback_response = EXCLUDED.fallback_response,
+            transfer_to_human = EXCLUDED.transfer_to_human,
+            updated_at = now()`;
 
-      // Insert notifications
-      for (let i = 0; i < DEMO.notifications.length; i++) {
-        const n = DEMO.notifications[i];
-        await sql`INSERT INTO shop_notifications (repair_shop_id, type, title, message, is_read, metadata, created_at)
-          VALUES (${demoShopId}, ${n.type}, ${n.title}, ${n.message}, ${n.is_read},
-            ${JSON.stringify(n.metadata || {})}::jsonb, now())`;
-      }
+        // Insert technicians
+        for (const tech of DEMO.technicians) {
+          await sql`INSERT INTO technicians (repair_shop_id, name, phone, email, services, specialization, active)
+            VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email}, ${tech.services || tech.specialization}, ${tech.specialization}, ${tech.active})`;
+        }
 
-      // Invalidate cache since we regenerated
-      invalidateDemoCache();
-      
-      console.log("[auth/demo-login] Demo environment ready for shop #" + demoShopId);
+        // Fetch technician IDs
+        const techRows = await sql`SELECT id, name FROM technicians WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
+        const techMap = {};
+        techRows.forEach((t, i) => { techMap[i] = t.id; });
+
+        // Insert bookings (batched)
+        for (let i = 0; i < DEMO.bookings.length; i++) {
+          const b = DEMO.bookings[i];
+          const cust = DEMO.customers[b.customerIdx];
+          const techId = b.techIdx != null ? techMap[b.techIdx] || null : null;
+          const techName = b.techIdx != null && DEMO.technicians[b.techIdx] ? DEMO.technicians[b.techIdx].name : null;
+          let priority = 'normal';
+          if (b.urgency === 'urgent') priority = 'urgent';
+          else if (b.urgency === 'today') priority = 'high';
+          await sql`INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
+            area, address, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
+            priority, invoice_number, created_at, updated_at, customer_notes)
+            VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
+              ${b.service}, ${b.area}, ${cust.address || b.area}, ${b.urgency}, ${b.status},
+              ${techId}, ${techName}, ${b.cost ? b.cost * 0.7 : null}, ${b.final_cost || null},
+              ${priority},
+              ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
+              ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})`;
+        }
+
+        // Insert subscription
+        const planRows = await sql`SELECT id FROM subscription_plans WHERE name = 'pro' LIMIT 1`;
+        if (planRows.length > 0) {
+          const subEnd = new Date(); subEnd.setFullYear(subEnd.getFullYear() + 1);
+          await sql`INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+            gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
+            VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
+              'demo-sub-001', 12470, 'INR', now(), ${subEnd.toISOString()}, now())`;
+        }
+
+        // Insert payment
+        await sql`INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
+          invoice_number, description, created_at)
+          VALUES (${demoShopId}, 'demo', 'INR', 12470, 'completed',
+            'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())`;
+
+        // Insert conversations
+        for (const conv of DEMO.conversations) {
+          const cust = DEMO.customers[conv.customerIdx];
+          for (const msg of conv.messages) {
+            await sql`INSERT INTO whatsapp_conversations (repair_shop_id, customer_number, customer_name, direction, message_text, created_at)
+              VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
+                ${msg.role === 'customer' ? 'inbound' : 'outbound'}, ${msg.text}, now())`;
+          }
+        }
+
+        // Insert timeline
+        const insertedBookings = await sql`SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
+        for (let i = 0; i < Math.min(DEMO.timeline.length, 50); i++) {
+          const t = DEMO.timeline[i];
+          if (t.bookingId < 1 || t.bookingId > insertedBookings.length) continue;
+          const actualBookingId = insertedBookings[t.bookingId - 1]?.id;
+          if (!actualBookingId) continue;
+          await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, notes, created_at)
+            VALUES (${actualBookingId}, ${t.action}, ${t.oldValue}, ${t.newValue},
+              ${t.actorType}, ${t.notes || null}, now())`;
+        }
+
+        // Insert notifications
+        for (let i = 0; i < DEMO.notifications.length; i++) {
+          const n = DEMO.notifications[i];
+          await sql`INSERT INTO shop_notifications (repair_shop_id, type, title, message, is_read, metadata, created_at)
+            VALUES (${demoShopId}, ${n.type}, ${n.title}, ${n.message}, ${n.is_read},
+              ${JSON.stringify(n.metadata || {})}::jsonb, now())`;
+        }
+
+        await sql`COMMIT`;
+
+        // Invalidate cache since we regenerated
+        invalidateDemoCache();
+        
+        console.log("[auth/demo-login] Demo environment ready for shop #" + demoShopId);
+      } catch (txErr) {
+        // Silent rollback: database may have already rolled back on constraint violation
+        try { await sql`ROLLBACK`; } catch (_) { /* ignore */ }
+        console.error("[auth/demo-login] Transaction failed, rolled back:", txErr.message);
+        throw txErr;
+      }
     }
 
     perfMark('demo-login: data ready');
