@@ -249,6 +249,88 @@
     }
   }
 
+  // ── Progressive Loading Screen ────────────────────────────────────────────
+  // Shows a polished loading animation on first dashboard visit, then
+  // progressively renders content as it becomes available.
+  let dashboardLoaded = false;
+
+  function injectDashboardLoader() {
+    if (document.getElementById('dashLoader')) return;
+    const div = document.createElement('div');
+    div.id = 'dashLoader';
+    div.style.cssText = 'position:fixed;inset:0;z-index:99995;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.4s ease';
+    div.innerHTML = `
+      <div style="margin-bottom:32px;text-align:center">
+        <div style="font:700 24px/1.2 'Inter',sans-serif;color:#fff;letter-spacing:-0.3px;margin-bottom:6px;">
+          Loading Dashboard...
+        </div>
+        <div style="font:400 13px/1.5 'Inter',sans-serif;color:var(--muted);">
+          Fetching your business data
+        </div>
+      </div>
+      <div style="width:280px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div class="dash-load-step" data-dstep="1">
+            <span class="dls-icon"></span>
+            <span class="dls-label">Summary cards</span>
+          </div>
+          <div class="dash-load-step" data-dstep="2">
+            <span class="dls-icon"></span>
+            <span class="dls-label">Revenue chart</span>
+          </div>
+          <div class="dash-load-step" data-dstep="3">
+            <span class="dls-icon"></span>
+            <span class="dls-label">Recent activity</span>
+          </div>
+          <div class="dash-load-step" data-dstep="4">
+            <span class="dls-icon"></span>
+            <span class="dls-label">Bookings & customers</span>
+          </div>
+        </div>
+      </div>
+      <style>
+        .dash-load-step { display:flex;align-items:center;gap:10px;padding:7px 0;font:500 12px/1 'Inter',sans-serif;color:var(--muted);transition:all 0.3s;border-bottom:1px solid var(--border); }
+        .dash-load-step:last-child{border-bottom:none}
+        .dash-load-step.active .dls-label{color:#fff}
+        .dash-load-step.done .dls-label{color:var(--green)}
+        .dash-load-step .dls-icon{width:16px;height:16px;flex-shrink:0}
+        .dash-load-step.done .dls-icon::before{content:'\2713';color:var(--green);font-size:14px;font-weight:700}
+        .dash-load-step.active .dls-icon{border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:dashLoadSpin 0.5s linear infinite}
+        @keyframes dashLoadSpin{to{transform:rotate(360deg)}}
+      </style>
+    `;
+    document.body.appendChild(div);
+  }
+
+  function showDashboardLoader() {
+    injectDashboardLoader();
+    const items = document.querySelectorAll('.dash-load-step');
+    let step = 0;
+    function advance() {
+      if (step > 0 && step <= items.length) {
+        items[step - 1].classList.remove('active');
+        items[step - 1].classList.add('done');
+      }
+      if (step < items.length) {
+        items[step].classList.add('active');
+        step++;
+      }
+    }
+    advance();
+    const interval = setInterval(advance, 300);
+    return {
+      done: () => {
+        clearInterval(interval);
+        items.forEach(el => { el.classList.remove('active'); el.classList.add('done'); });
+      },
+      hide: () => {
+        clearInterval(interval);
+        const el = document.getElementById('dashLoader');
+        if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }
+      }
+    };
+  }
+
   function logout() {
     fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
     localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user');
@@ -269,6 +351,28 @@
 
   // ── Unified dashboard loader (works for both demo and real) ────────────────
   async function loadDashboard() {
+    // Dashboard loader: show only after 150ms delay (avoids flash for cached responses)
+    let loaderCtrl = null;
+    let loaderTimeout = null;
+    if (!dashboardLoaded && isDemo) {
+      injectDashboardLoader();
+      loaderTimeout = setTimeout(() => {
+        const el = document.getElementById('dashLoader');
+        if (el) { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; }
+        // Start animation
+        const items = document.querySelectorAll('.dash-load-step');
+        if (items.length) {
+          let step = 0;
+          function adv() {
+            if (step > 0 && step <= items.length) { items[step - 1].classList.remove('active'); items[step - 1].classList.add('done'); }
+            if (step < items.length) { items[step].classList.add('active'); step++; }
+          }
+          adv();
+          loaderCtrl = setInterval(adv, 300);
+        }
+      }, 150);
+    }
+
     try {
       const params = new URLSearchParams({ page: currentPage, limit: 20 });
       if (currentFilter !== 'all') params.set('status', currentFilter);
@@ -324,9 +428,24 @@
         document.getElementById('shopName').textContent = data.shop.shop_name || '';
         localStorage.setItem('cc_shop', JSON.stringify({ shopName: data.shop.shop_name }));
       }
+      // Hide loader once first load is complete
+      clearTimeout(loaderTimeout);
+      if (loaderCtrl) clearInterval(loaderCtrl);
+      const dashEl = document.getElementById('dashLoader');
+      if (dashEl) {
+        // Mark all steps done
+        document.querySelectorAll('.dash-load-step').forEach(el => { el.classList.remove('active'); el.classList.add('done'); });
+        dashEl.style.opacity = '0';
+        setTimeout(() => dashEl.remove(), 400);
+      }
+      dashboardLoaded = true;
     } catch (err) {
       console.error('[dashboard] Load error:', err);
       document.getElementById('bookingsList').innerHTML = '<div class="empty">Failed to load dashboard. Please refresh.</div>';
+      clearTimeout(loaderTimeout);
+      if (loaderCtrl) clearInterval(loaderCtrl);
+      const dashEl = document.getElementById('dashLoader');
+      if (dashEl) { dashEl.style.opacity = '0'; setTimeout(() => dashEl.remove(), 400); }
     }
   }
 

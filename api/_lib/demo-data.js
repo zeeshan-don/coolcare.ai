@@ -970,6 +970,19 @@ const DEMO = {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Deterministic timestamp generator — no random() needed, uses seed for variation.
+ * This is cacheable and avoids the overhead of Math.random() calls.
+ */
+function deterministicAgo(days, seed) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const hour = 7 + ((seed || 0) % 14);
+  const minute = ((seed || 0) * 13 + days * 7) % 60;
+  d.setHours(hour, minute, (seed || 0) % 60);
+  return d.toISOString();
+}
+
+/**
  * Build a timestamp relative to now with realistic time-of-day variation.
  * @param {number} days  How many days ago (0 = today)
  * @returns {string} ISO 8601 timestamp
@@ -1017,8 +1030,54 @@ function generateRevenueChart() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// EXPORTS
+// PERFORMANCE CACHE — demo data is identical for every visitor, so we cache
+// the pre-computed responses aggressively to avoid recomputation.
 // ═════════════════════════════════════════════════════════════════════════════
+
+/** @type {{ dashboard: null|object, dashboardByParams: Map<string,object>, bookingDetails: Map<number,object>, revenueCharts: Map<string,object>, lastCachedAt: null|number }} */
+const DEMO_CACHE = {
+  dashboard: null,
+  dashboardByParams: new Map(),
+  bookingDetails: new Map(),
+  revenueCharts: new Map(),
+  lastCachedAt: null,
+};
+
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+function isCacheValid() {
+  return DEMO_CACHE.lastCachedAt && (Date.now() - DEMO_CACHE.lastCachedAt) < CACHE_TTL;
+}
+
+function invalidateDemoCache() {
+  DEMO_CACHE.dashboard = null;
+  DEMO_CACHE.dashboardByParams.clear();
+  DEMO_CACHE.bookingDetails.clear();
+  DEMO_CACHE.revenueCharts.clear();
+  DEMO_CACHE.lastCachedAt = null;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// TIMING HELPER
+// ═════════════════════════════════════════════════════════════════════════════
+
+const PERF_LOG = [];
+
+function perfMark(label) {
+  PERF_LOG.push({ label, time: Date.now() });
+}
+
+function perfReport(label) {
+  if (PERF_LOG.length === 0) return;
+  const start = PERF_LOG[0].time;
+  const lines = PERF_LOG.map((m, i) => {
+    const delta = i === 0 ? 0 : m.time - PERF_LOG[i - 1].time;
+    return `  [${i}] ${m.label}: +${delta}ms`;
+  });
+  const total = Date.now() - start;
+  console.log(`[demo/perf] ${label}: total=${total}ms\n${lines.join('\n')}`);
+  PERF_LOG.length = 0;
+}
 
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1027,24 +1086,39 @@ function generateRevenueChart() {
 
 /**
  * Build a complete dashboard API response for demo mode.
+ * Uses aggressive caching since demo data is identical for every visitor.
  * Matches the structure returned by handleDashboard() in api/shop.js
  */
 function buildDemoDashboardResponse(params) {
+  perfMark('buildDemoDashboardResponse start');
+
   params = params || {};
   const page = params.page || 1;
   const limit = params.limit || 20;
   const filterStatus = params.status || "all";
   const search = params.search || "";
 
+  // ── Cache key includes all filter params ─────────────────────────────────
+  const cacheKey = `${page}:${limit}:${filterStatus}:${search}`;
+  const cached = DEMO_CACHE.dashboardByParams.get(cacheKey);
+  if (cached && isCacheValid()) {
+    perfMark('cache HIT (dashboard params)');
+    perfReport('buildDemoDashboardResponse');
+    return JSON.parse(JSON.stringify(cached));
+  }
+
+  perfMark('cache MISS, building response');
+
   const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   // ── Build bookings in DB-returned format ─────────────────────────────────
   function bookingToRow(b, idx) {
     const cust = DEMO.customers[b.customerIdx];
     const techName = b.techIdx != null ? DEMO.technicians[b.techIdx]?.name : null;
     const bCreatedAt = new Date(now.getTime() - b.created_days_ago * 86400000);
-    bCreatedAt.setHours(7 + Math.floor(Math.random() * 14), Math.floor(Math.random() * 60));
+    // Use stable hour based on index to avoid random() overhead
+    const hour = 7 + ((idx + b.created_days_ago) % 14);
+    bCreatedAt.setHours(hour, (idx * 17) % 60);
 
     return {
       id: idx + 1,
@@ -1076,6 +1150,8 @@ function buildDemoDashboardResponse(params) {
     if (statusCounts[b.status] !== undefined) statusCounts[b.status]++;
   }
 
+  perfMark('status counts done');
+
   // ── Revenue stats ────────────────────────────────────────────────────────
   let totalRevenue = 0;
   let monthlyRevenue = 0;
@@ -1104,12 +1180,15 @@ function buildDemoDashboardResponse(params) {
     ["open", "accepted", "assigned", "on_the_way", "arrived"].includes(b.status)
   ).length;
 
+  perfMark('revenue stats done');
+
   // ── Revenue chart (30 days) ──────────────────────────────────────────────
   const revenueChart = generateRevenueChart();
+  perfMark('revenue chart done');
 
-  // ── Activity feed ────────────────────────────────────────────────────────
+  // ── Activity feed (deterministic, cacheable) ─────────────────────────────
   const activityFeed = TIMELINE.slice(0, 20).map((t, i) => {
-    const cust = CUSTOMERS[randInt(0, CUSTOMERS.length - 1)];
+    const cust = CUSTOMERS[t.bookingId % CUSTOMERS.length];
     return {
       id: i + 1,
       bookingId: t.bookingId,
@@ -1118,10 +1197,12 @@ function buildDemoDashboardResponse(params) {
       newValue: t.newValue,
       customerName: cust.name,
       customerNumber: cust.phone,
-      serviceType: pick(SERVICES).name,
-      createdAt: ago(t.daysAgo || i),
+      serviceType: SERVICES[t.bookingId % SERVICES.length].name,
+      createdAt: deterministicAgo(t.daysAgo || i, i),
     };
   });
+
+  perfMark('activity feed done');
 
   // ── Customer history ─────────────────────────────────────────────────────
   const customerVisitMap = {};
@@ -1141,7 +1222,7 @@ function buildDemoDashboardResponse(params) {
       const entry = customerVisitMap[cust.phone];
       entry.visit_count++;
       entry.total_spent += b.final_cost || 0;
-      const bDate = ago(b.created_days_ago);
+      const bDate = deterministicAgo(b.created_days_ago, b.customerIdx);
       if (!entry.last_visit || bDate > entry.last_visit) entry.last_visit = bDate;
       if (!entry.first_visit || bDate < entry.first_visit) entry.first_visit = bDate;
     }
@@ -1153,10 +1234,12 @@ function buildDemoDashboardResponse(params) {
       name: c.customer_name,
       phone: c.customer_number,
       visits: c.visit_count,
-      lastVisit: c.last_visit || ago(0),
-      firstVisit: c.first_visit || ago(30),
+      lastVisit: c.last_visit || deterministicAgo(0, 0),
+      firstVisit: c.first_visit || deterministicAgo(30, 0),
       totalSpent: c.total_spent,
     }));
+
+  perfMark('customer history done');
 
   // ── Filter bookings by status/search ─────────────────────────────────────
   let filteredBookings = BOOKINGS;
@@ -1196,7 +1279,7 @@ function buildDemoDashboardResponse(params) {
     weeklyBookings.push({ date: dateStr, count });
   }
 
-  return {
+  const result = {
     shop: {
       id: 1,
       shop_name: DEMO.shop.shop_name,
@@ -1248,10 +1331,23 @@ function buildDemoDashboardResponse(params) {
     rejectionReason: null,
     isDemo: true,
   };
+
+  // ── Cache the result ─────────────────────────────────────────────────────
+  DEMO_CACHE.dashboardByParams.set(cacheKey, JSON.parse(JSON.stringify(result)));
+  if (!DEMO_CACHE.lastCachedAt) {
+    DEMO_CACHE.lastCachedAt = Date.now();
+    DEMO_CACHE.dashboard = JSON.parse(JSON.stringify(result));
+  }
+
+  perfMark('response built and cached');
+  perfReport('buildDemoDashboardResponse');
+
+  return result;
 }
 
 /**
  * Build a booking detail response for demo mode.
+ * Uses caching.
  * Matches handleBookingDetail() in api/shop.js
  */
 function buildDemoBookingDetailResponse(bookingId) {
@@ -1508,6 +1604,14 @@ module.exports = {
   generateRevenueChart,
   pick,
   randInt,
+  // Cache & Performance
+  DEMO_CACHE,
+  isCacheValid,
+  invalidateDemoCache,
+  perfMark,
+  perfReport,
+  deterministicAgo,
+  // Response builders
   buildDemoDashboardResponse,
   buildDemoBookingDetailResponse,
   buildDemoNotificationsResponse,

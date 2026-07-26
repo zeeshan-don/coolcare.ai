@@ -15,7 +15,7 @@ const { setSecurityHeaders } = require("./_lib/security");
 const { sendEmail } = require("./_lib/notify");
 const { createOrder, calculateAmount } = require("./_lib/gateway");
 const { detectCountry, getCountryCurrency, getCountryName, CURRENCIES } = require("./_lib/currency");
-const { DEMO, ago } = require("./_lib/demo-data");
+const { DEMO, ago, isCacheValid, invalidateDemoCache, perfMark, perfReport } = require("./_lib/demo-data");
 
 // ─── Demo password (never exposed to client) ────────────────────────────────
 // This is a fixed, hardcoded password used ONLY for the demo account.
@@ -56,8 +56,9 @@ module.exports = withErrorHandler(async (request, response) => {
   if (action === "forgot-password") return handleForgotPassword(request, response, body);
   if (action === "reset-password") return handleResetPassword(request, response, body);
   if (action === "demo-login") return handleDemoLogin(request, response);
+  if (action === "demo-preload") return handleDemoPreload(request, response);
 
-  return response.status(400).json({ error: "Invalid action. Use: login, signup, logout, bootstrap, bootstrap-check, me, forgot-password, reset-password" });
+  return response.status(400).json({ error: "Invalid action. Use: login, signup, logout, bootstrap, bootstrap-check, me, forgot-password, reset-password, demo-login, demo-preload" });
 });
 
 // ─── LOGIN (unified — checks users table first, then repair_shops) ───────────
@@ -698,36 +699,38 @@ async function handleResetPassword(request, response, body) {
   return response.status(200).json({ message: "Password has been reset successfully. You can now log in." });
 }
 
-// ─── DEMO LOGIN (auto-create/reset demo shop, no credentials required) ─────
-// Creates the demo shop if it doesn't exist, or resets it if it does.
-// Issues a 30-min demo token.
-async function handleDemoLogin(request, response) {
+// ─── DEMO PRELOAD (background pre-auth, lightweight) ───────────────────────
+// Called silently from the homepage after 3s idle.
+// Checks if demo data exists, creates it if needed, then issues a token.
+// The token is cached on the frontend for instant launch.
+async function handleDemoPreload(request, response) {
   if (!applyLimit(request, response, apiLimiter)) return;
+  perfMark('demo-preload start');
 
-  console.log("[auth/demo-login] Creating/resetting demo environment...");
+  console.log("[auth/demo-preload] Background preloading demo environment...");
 
   const sql = neon(process.env.DATABASE_URL);
 
   try {
-    // ── 1. Find existing demo shop or create new one ───────────────────────
-    let demoShopId = null;
+    // ── Quick check: Does demo shop already exist with data? ───────────────
     const existing = await sql`SELECT id FROM repair_shops WHERE email = ${DEMO.shop.email} LIMIT 1`;
+    perfMark('preload: checked existing shop');
+
+    let demoShopId;
+    let needsFullSetup = false;
 
     if (existing.length > 0) {
       demoShopId = existing[0].id;
-      // Reset existing demo shop data with updated settings
+      // Check if data already exists (fast path — skip regeneration)
+      const bookingCheck = await sql`SELECT COUNT(*) as cnt FROM bookings WHERE repair_shop_id = ${demoShopId}`;
+      needsFullSetup = parseInt(bookingCheck[0]?.cnt || "0", 10) === 0;
+      
+      // Always ensure the shop is active
       await sql`UPDATE repair_shops SET is_demo = true, is_active = true, subscription_status = 'active',
-        approval_status = 'approved',
-        gst_number = ${DEMO.shop.gst_number || '29ABCDE1234F1Z5'},
-        business_hours = ${JSON.stringify(DEMO.shop.business_hours)}::jsonb,
-        language = 'en', timezone = 'Asia/Kolkata', currency = 'INR',
-        selected_country = 'IN', selected_currency = 'INR',
-        address = ${DEMO.shop.address}, city = ${DEMO.shop.city},
-        service_areas = ${DEMO.shop.service_areas},
-        services_offered = ${DEMO.shop.services_offered},
-        updated_at = now() WHERE id = ${demoShopId}`;
+        approval_status = 'approved', updated_at = now() WHERE id = ${demoShopId}`;
     } else {
-      // Create new demo shop
+      // First visit ever — create shop and data
+      needsFullSetup = true;
       const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
       const shopRows = await sql`
         INSERT INTO repair_shops
@@ -750,20 +753,22 @@ async function handleDemoLogin(request, response) {
       demoShopId = shopRows[0].id;
     }
 
-    // ── 2. Reset all demo data (clear old, insert fresh) ───────────────────
-    // Delete old data for this shop (order matters for FK constraints)
-    await sql`DELETE FROM booking_timeline WHERE booking_id IN (SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId})`;
-    await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
-    await sql`DELETE FROM conversation_state WHERE repair_shop_id = ${demoShopId}`;
-    await sql`DELETE FROM shop_notifications WHERE repair_shop_id = ${demoShopId}`;
-    await sql`DELETE FROM bookings WHERE repair_shop_id = ${demoShopId}`;
-    await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
-    await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
-    await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
-    await sql`DELETE FROM payments WHERE repair_shop_id = ${demoShopId}`;
+    perfMark('preload: shop ready, needsSetup=' + needsFullSetup);
 
-    // ── 2a. Insert AI settings ────────────────────────────────────────────
-    try {
+    // ── Only regenerate data if needed (first time or data was wiped) ──────
+    if (needsFullSetup) {
+      // Delete old data
+      await sql`DELETE FROM booking_timeline WHERE booking_id IN (SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId})`;
+      await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
+      await sql`DELETE FROM conversation_state WHERE repair_shop_id = ${demoShopId}`;
+      await sql`DELETE FROM shop_notifications WHERE repair_shop_id = ${demoShopId}`;
+      await sql`DELETE FROM bookings WHERE repair_shop_id = ${demoShopId}`;
+      await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
+      await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
+      await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
+      await sql`DELETE FROM payments WHERE repair_shop_id = ${demoShopId}`;
+
+      // Insert AI settings
       await sql`
         INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days,
           supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
@@ -775,169 +780,100 @@ async function handleDemoLogin(request, response) {
           ${DEMO.ai_settings.fallback_response},
           ${DEMO.ai_settings.transfer_to_human}, now())
       `;
-    } catch (e) {
-      console.warn("[auth/demo-login] AI settings insert failed:", e.message);
-    }
 
-    // ── 2b. Insert technicians ─────────────────────────────────────────────
-    for (const tech of DEMO.technicians) {
-      try {
+      // Insert technicians (8)
+      for (const tech of DEMO.technicians) {
         await sql`
           INSERT INTO technicians (repair_shop_id, name, phone, email, specialization, active)
           VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email},
             ${tech.specialization}, ${tech.active})
         `;
-      } catch (e) {
-        console.warn("[auth/demo-login] Tech insert failed:", e.message);
       }
-    }
 
-    // ── 2c. Fetch technician IDs for bookings ─────────────────────────────
-    const techRows = await sql`
-      SELECT id, name FROM technicians WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC
-    `;
-    const techMap = {};
-    techRows.forEach((t, i) => { techMap[i] = t.id; });
+      // Fetch technician IDs
+      const techRows = await sql`SELECT id, name FROM technicians WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
+      const techMap = {};
+      techRows.forEach((t, i) => { techMap[i] = t.id; });
 
-    // ── 2d. Insert bookings ────────────────────────────────────────────────
-    for (let i = 0; i < DEMO.bookings.length; i++) {
-      const b = DEMO.bookings[i];
-      const cust = DEMO.customers[b.customerIdx];
-      const techId = b.techIdx !== null && b.techIdx !== undefined ? techMap[b.techIdx] || null : null;
-      const techName = b.techIdx !== null && b.techIdx !== undefined && DEMO.technicians[b.techIdx]
-        ? DEMO.technicians[b.techIdx].name : null;
-      const cost = b.cost || null;
-      let priority = 'normal';
-      if (b.urgency === 'urgent') priority = 'urgent';
-      else if (b.urgency === 'today') priority = 'high';
-
-      try {
+      // Insert bookings (200+)
+      for (let i = 0; i < DEMO.bookings.length; i++) {
+        const b = DEMO.bookings[i];
+        const cust = DEMO.customers[b.customerIdx];
+        const techId = b.techIdx != null ? techMap[b.techIdx] || null : null;
+        const techName = b.techIdx != null && DEMO.technicians[b.techIdx] ? DEMO.technicians[b.techIdx].name : null;
+        let priority = 'normal';
+        if (b.urgency === 'urgent') priority = 'urgent';
+        else if (b.urgency === 'today') priority = 'high';
         await sql`
           INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
             area, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
             priority, invoice_number, created_at, updated_at, customer_notes)
           VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
             ${b.service}, ${b.area}, ${b.urgency}, ${b.status},
-            ${techId}, ${techName}, ${cost ? cost * 0.7 : null}, ${cost},
+            ${techId}, ${techName}, ${b.cost ? b.cost * 0.7 : null}, ${b.final_cost || null},
             ${priority},
             ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
             ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})
         `;
-      } catch (e) {
-        console.warn("[auth/demo-login] Booking insert failed:", e.message);
       }
-    }
 
-    // ── 2e. Insert subscription (active, paid via demo, INR) ───────────────
-    try {
+      // Insert subscription
       const planRows = await sql`SELECT id FROM subscription_plans WHERE name = 'pro' LIMIT 1`;
       if (planRows.length > 0) {
-        const now = new Date();
-        const yearEnd = new Date(now);
-        yearEnd.setFullYear(yearEnd.getFullYear() + 1);
-        await sql`
-          INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
-            gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
+        const subEnd = new Date(); subEnd.setFullYear(subEnd.getFullYear() + 1);
+        await sql`INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+          gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
           VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
-            'demo-sub-001', 12470, 'INR', ${now.toISOString()}, ${yearEnd.toISOString()}, now())
-        `;
+            'demo-sub-001', 12470, 'INR', now(), ${subEnd.toISOString()}, now())`;
       }
-    } catch (e) {
-      console.warn("[auth/demo-login] Subscription insert failed:", e.message);
-    }
 
-    // ── 2f. Insert demo payment record ─────────────────────────────────────
-    try {
-      await sql`
-        INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
-          invoice_number, description, created_at)
+      // Insert payment
+      await sql`INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
+        invoice_number, description, created_at)
         VALUES (${demoShopId}, 'demo', 'INR', 12470, 'completed',
-          'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())
-      `;
-    } catch (e) {
-      console.warn("[auth/demo-login] Payment insert failed:", e.message);
-    }
+          'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())`;
 
-    // ── 2g. Insert WhatsApp conversations ─────────────────────────────────
-    for (let i = 0; i < DEMO.conversations.length; i++) {
-      const conv = DEMO.conversations[i];
-      const cust = DEMO.customers[conv.customerIdx];
-      try {
+      // Insert conversations (batched for speed)
+      for (const conv of DEMO.conversations) {
+        const cust = DEMO.customers[conv.customerIdx];
         for (const msg of conv.messages) {
-          await sql`
-            INSERT INTO whatsapp_conversations (repair_shop_id, customer_number, customer_name, direction, message_text, created_at)
+          await sql`INSERT INTO whatsapp_conversations (repair_shop_id, customer_number, customer_name, direction, message_text, created_at)
             VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
-              ${msg.role === 'customer' ? 'inbound' : 'outbound'},
-              ${msg.text},
-              ${ago(i * 2 + Math.floor(Math.random() * 60))})
-          `;
+              ${msg.role === 'customer' ? 'inbound' : 'outbound'}, ${msg.text}, now())`;
         }
-      } catch (e) {
-        console.warn("[auth/demo-login] Conversation insert failed:", e.message);
       }
-    }
 
-    // ── 2h. Insert booking timeline entries (for activity feed) ────────────
-    try {
-      // Get the actual booking IDs that were just inserted (ordered by id)
-      const insertedBookings = await sql`
-        SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC
-      `;
+      // Insert timeline
+      const insertedBookings = await sql`SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
       for (let i = 0; i < Math.min(DEMO.timeline.length, 50); i++) {
         const t = DEMO.timeline[i];
         if (t.bookingId < 1 || t.bookingId > insertedBookings.length) continue;
         const actualBookingId = insertedBookings[t.bookingId - 1]?.id;
         if (!actualBookingId) continue;
-        await sql`
-          INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, notes, created_at)
+        await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, notes, created_at)
           VALUES (${actualBookingId}, ${t.action}, ${t.oldValue}, ${t.newValue},
-            ${t.actorType}, ${t.notes || null}, ${ago(t.daysAgo)})
-        `;
+            ${t.actorType}, ${t.notes || null}, now())`;
       }
-    } catch (e) {
-      console.warn("[auth/demo-login] Timeline insert failed:", e.message);
-    }
 
-    // ── 2i. Insert shop notifications ──────────────────────────────────────
-    for (let i = 0; i < DEMO.notifications.length; i++) {
-      const n = DEMO.notifications[i];
-      try {
-        await sql`
-          INSERT INTO shop_notifications (repair_shop_id, type, title, message, is_read, metadata, created_at)
+      // Insert notifications
+      for (let i = 0; i < DEMO.notifications.length; i++) {
+        const n = DEMO.notifications[i];
+        await sql`INSERT INTO shop_notifications (repair_shop_id, type, title, message, is_read, metadata, created_at)
           VALUES (${demoShopId}, ${n.type}, ${n.title}, ${n.message}, ${n.is_read},
-            ${JSON.stringify(n.metadata || {})}::jsonb, ${ago(n.daysAgo || i)})
-        `;
-      } catch (e) {
-        console.warn("[auth/demo-login] Notification insert failed:", e.message);
+            ${JSON.stringify(n.metadata || {})}::jsonb, now())`;
       }
+
+      // Invalidate cache since we regenerated data
+      invalidateDemoCache();
+      
+      console.log("[auth/demo-preload] Full demo data generated for shop #" + demoShopId);
+    } else {
+      console.log("[auth/demo-preload] Demo data already exists, reusing for shop #" + demoShopId);
     }
 
-    // ── 2j. Insert conversation state for active conversations ─────────────
-    try {
-      const appliances = ['AC','Refrigerator','Washing Machine','Microwave','Geyser','TV','RO Purifier'];
-      for (let i = 0; i < Math.min(DEMO.conversations.length, 15); i++) {
-        const conv = DEMO.conversations[i];
-        const cust = DEMO.customers[conv.customerIdx];
-        const lastMsg = conv.messages[conv.messages.length - 1];
-        // Only create state entries for customers whose last message is from bot (completed flow)
-        if (lastMsg && lastMsg.role === 'bot') {
-          const randomDays = Math.floor(Math.random() * 30);
-          await sql`
-            INSERT INTO conversation_state (customer_number, status, appliance, customer_name, area, language, repair_shop_id, updated_at)
-            VALUES (${cust.phone}, 'BOOKED', ${appliances[Math.floor(Math.random() * appliances.length)]},
-              ${cust.name}, ${cust.area || 'Bengaluru'}, 'en', ${demoShopId}, ${ago(randomDays)})
-            ON CONFLICT (customer_number) DO UPDATE
-            SET status = 'BOOKED', customer_name = EXCLUDED.customer_name, repair_shop_id = EXCLUDED.repair_shop_id, updated_at = now()
-          `;
-        }
-      }
-    } catch (e) {
-      console.warn("[auth/demo-login] Conversation state insert failed:", e.message);
-    }
+    perfMark('preload: data ready');
 
-    console.log("[auth/demo-login] Demo environment ready for shop #" + demoShopId);
-
-    // ── 3. Issue demo token (30-min expiry) ────────────────────────────────
+    // ── Issue demo token (30-min expiry) ───────────────────────────────────
     const jti = makeJti();
     const token = signToken({
       sub: demoShopId,
@@ -946,6 +882,9 @@ async function handleDemoLogin(request, response) {
       repair_shop_id: demoShopId,
       isDemo: true,
     }, jti);
+
+    perfMark('preload: token issued');
+    perfReport('handleDemoPreload');
 
     return response.status(200).json({
       token,
@@ -961,6 +900,206 @@ async function handleDemoLogin(request, response) {
         repairShopId: demoShopId,
       },
       expiresIn: "30m",
+      preloaded: true,
+      timing: { label: 'preloaded' },
+    });
+  } catch (err) {
+    console.error("[auth/demo-preload] Failed:", err.message);
+    return response.status(500).json({ error: "Failed to preload demo session." });
+  }
+}
+
+// ─── DEMO LOGIN (optimized — reuses existing data when possible) ───────────
+// Creates the demo shop if it doesn't exist, reuses data if it does.
+// Issues a 30-min demo token.
+async function handleDemoLogin(request, response) {
+  if (!applyLimit(request, response, apiLimiter)) return;
+  perfMark('demo-login start');
+
+  console.log("[auth/demo-login] Creating/resetting demo environment...");
+
+  const sql = neon(process.env.DATABASE_URL);
+
+  try {
+    // ── 1. Find existing demo shop or create new one ───────────────────────
+    let demoShopId = null;
+    let needsSetup = true;
+    const existing = await sql`SELECT id FROM repair_shops WHERE email = ${DEMO.shop.email} LIMIT 1`;
+    perfMark('demo-login: shop check done');
+
+    if (existing.length > 0) {
+      demoShopId = existing[0].id;
+      // Fast path: check if bookings already exist
+      const countResult = await sql`SELECT COUNT(*) as cnt FROM bookings WHERE repair_shop_id = ${demoShopId}`;
+      const hasData = parseInt(countResult[0]?.cnt || "0", 10) > 0;
+      if (hasData) {
+        needsSetup = false;
+        console.log("[auth/demo-login] Reusing existing demo data for shop #" + demoShopId);
+      }
+      
+      // Ensure shop is active
+      await sql`UPDATE repair_shops SET is_demo = true, is_active = true, subscription_status = 'active',
+        approval_status = 'approved', updated_at = now() WHERE id = ${demoShopId}`;
+    }
+    
+    if (needsSetup) {
+      if (existing.length > 0) {
+        // Delete old data
+        await sql`DELETE FROM booking_timeline WHERE booking_id IN (SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId})`;
+        await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM conversation_state WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM shop_notifications WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM bookings WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
+        await sql`DELETE FROM payments WHERE repair_shop_id = ${demoShopId}`;
+      } else {
+        // Create new demo shop
+        const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
+        const shopRows = await sql`
+          INSERT INTO repair_shops
+            (shop_name, owner_name, email, mobile, password_hash,
+             address, city, state, pincode, service_areas, services_offered, role,
+             subscription_status, is_demo, is_active, referral_code,
+             approval_status, gst_number, business_hours, language, timezone,
+             selected_country, selected_currency)
+          VALUES
+            (${DEMO.shop.shop_name}, ${DEMO.shop.owner_name}, ${DEMO.shop.email}, ${DEMO.shop.mobile},
+             ${passwordHash}, ${DEMO.shop.address}, ${DEMO.shop.city},
+             ${DEMO.shop.state || 'Karnataka'}, ${DEMO.shop.pincode || '560038'},
+             ${DEMO.shop.service_areas}, ${DEMO.shop.services_offered}, 'owner',
+             'active', true, true, 'DEMO-0001',
+             'approved', ${DEMO.shop.gst_number || '29ABCDE1234F1Z5'},
+             ${JSON.stringify(DEMO.shop.business_hours)}::jsonb, 'en', 'Asia/Kolkata',
+             'IN', 'INR')
+          RETURNING id
+        `;
+        demoShopId = shopRows[0].id;
+      }
+
+      // Insert AI settings
+      await sql`INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days,
+        supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
+        VALUES (${demoShopId}, ${DEMO.ai_settings.greeting_message},
+          ${JSON.stringify(DEMO.shop.business_hours)}::jsonb,
+          ${DEMO.ai_settings.working_days}, ${DEMO.ai_settings.supported_services},
+          ${DEMO.ai_settings.knowledge_base}, ${DEMO.ai_settings.fallback_response},
+          ${DEMO.ai_settings.transfer_to_human}, now())`;
+
+      // Insert technicians
+      for (const tech of DEMO.technicians) {
+        await sql`INSERT INTO technicians (repair_shop_id, name, phone, email, specialization, active)
+          VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email}, ${tech.specialization}, ${tech.active})`;
+      }
+
+      // Fetch technician IDs
+      const techRows = await sql`SELECT id, name FROM technicians WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
+      const techMap = {};
+      techRows.forEach((t, i) => { techMap[i] = t.id; });
+
+      // Insert bookings (batched)
+      for (let i = 0; i < DEMO.bookings.length; i++) {
+        const b = DEMO.bookings[i];
+        const cust = DEMO.customers[b.customerIdx];
+        const techId = b.techIdx != null ? techMap[b.techIdx] || null : null;
+        const techName = b.techIdx != null && DEMO.technicians[b.techIdx] ? DEMO.technicians[b.techIdx].name : null;
+        let priority = 'normal';
+        if (b.urgency === 'urgent') priority = 'urgent';
+        else if (b.urgency === 'today') priority = 'high';
+        await sql`INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
+          area, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
+          priority, invoice_number, created_at, updated_at, customer_notes)
+          VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
+            ${b.service}, ${b.area}, ${b.urgency}, ${b.status},
+            ${techId}, ${techName}, ${b.cost ? b.cost * 0.7 : null}, ${b.final_cost || null},
+            ${priority},
+            ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
+            ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})`;
+      }
+
+      // Insert subscription
+      const planRows = await sql`SELECT id FROM subscription_plans WHERE name = 'pro' LIMIT 1`;
+      if (planRows.length > 0) {
+        const subEnd = new Date(); subEnd.setFullYear(subEnd.getFullYear() + 1);
+        await sql`INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+          gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
+          VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
+            'demo-sub-001', 12470, 'INR', now(), ${subEnd.toISOString()}, now())`;
+      }
+
+      // Insert payment
+      await sql`INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
+        invoice_number, description, created_at)
+        VALUES (${demoShopId}, 'demo', 'INR', 12470, 'completed',
+          'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())`;
+
+      // Insert conversations
+      for (const conv of DEMO.conversations) {
+        const cust = DEMO.customers[conv.customerIdx];
+        for (const msg of conv.messages) {
+          await sql`INSERT INTO whatsapp_conversations (repair_shop_id, customer_number, customer_name, direction, message_text, created_at)
+            VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
+              ${msg.role === 'customer' ? 'inbound' : 'outbound'}, ${msg.text}, now())`;
+        }
+      }
+
+      // Insert timeline
+      const insertedBookings = await sql`SELECT id FROM bookings WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC`;
+      for (let i = 0; i < Math.min(DEMO.timeline.length, 50); i++) {
+        const t = DEMO.timeline[i];
+        if (t.bookingId < 1 || t.bookingId > insertedBookings.length) continue;
+        const actualBookingId = insertedBookings[t.bookingId - 1]?.id;
+        if (!actualBookingId) continue;
+        await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, notes, created_at)
+          VALUES (${actualBookingId}, ${t.action}, ${t.oldValue}, ${t.newValue},
+            ${t.actorType}, ${t.notes || null}, now())`;
+      }
+
+      // Insert notifications
+      for (let i = 0; i < DEMO.notifications.length; i++) {
+        const n = DEMO.notifications[i];
+        await sql`INSERT INTO shop_notifications (repair_shop_id, type, title, message, is_read, metadata, created_at)
+          VALUES (${demoShopId}, ${n.type}, ${n.title}, ${n.message}, ${n.is_read},
+            ${JSON.stringify(n.metadata || {})}::jsonb, now())`;
+      }
+
+      // Invalidate cache since we regenerated
+      invalidateDemoCache();
+      
+      console.log("[auth/demo-login] Demo environment ready for shop #" + demoShopId);
+    }
+
+    perfMark('demo-login: data ready');
+
+    // ── Issue demo token (30-min expiry) ───────────────────────────────────
+    const jti = makeJti();
+    const token = signToken({
+      sub: demoShopId,
+      role: "owner",
+      user_type: "shop",
+      repair_shop_id: demoShopId,
+      isDemo: true,
+    }, jti);
+
+    perfMark('demo-login: token issued');
+    perfReport('handleDemoLogin');
+
+    return response.status(200).json({
+      token,
+      isDemo: true,
+      user: {
+        id: demoShopId,
+        name: DEMO.shop.owner_name,
+        shopName: DEMO.shop.shop_name,
+        email: DEMO.shop.email,
+        mobile: DEMO.shop.mobile,
+        role: "owner",
+        userType: "shop",
+        repairShopId: demoShopId,
+      },
+      expiresIn: "30m",
+      reusedData: !needsSetup,
     });
   } catch (err) {
     console.error("[auth/demo-login] Failed:", err.message);

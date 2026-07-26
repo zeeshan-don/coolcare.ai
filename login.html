@@ -255,10 +255,130 @@
   });
 
   // ── Demo Mode Login ────────────────────────────────────────────────────────
+  // Uses the same loading animation and preload logic as the homepage.
+
+  function injectDemoLoader() {
+    if (document.getElementById('demoLoader')) return;
+    const loader = document.createElement('div');
+    loader.id = 'demoLoader';
+    loader.innerHTML = `
+      <div style="position:fixed;inset:0;z-index:99999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s ease;" id="demoLoaderInner">
+        <div style="margin-bottom:40px;text-align:center">
+          <div style="font:700 28px/1.2 'Inter',system-ui,sans-serif;color:#fff;letter-spacing:-0.5px;margin-bottom:8px;">Launching Demo Workspace...</div>
+          <div style="font:400 14px/1.5 'Inter',system-ui,sans-serif;color:var(--muted);">Preparing a live repair business...</div>
+        </div>
+        <div style="width:320px">
+          <div class="dl-item"><span class="dl-icon">◻</span><span class="dl-label">Connecting AI Assistant</span><span class="dl-status"></span></div>
+          <div class="dl-item"><span class="dl-icon">◻</span><span class="dl-label">Loading WhatsApp conversations</span><span class="dl-status"></span></div>
+          <div class="dl-item"><span class="dl-icon">◻</span><span class="dl-label">Preparing technicians</span><span class="dl-status"></span></div>
+          <div class="dl-item"><span class="dl-icon">◻</span><span class="dl-label">Loading bookings</span><span class="dl-status"></span></div>
+          <div class="dl-item"><span class="dl-icon">◻</span><span class="dl-label">Building dashboard</span><span class="dl-status"></span></div>
+        </div>
+        <div style="margin-top:32px;width:320px">
+          <div style="height:3px;background:var(--border2);border-radius:2px;overflow:hidden">
+            <div id="dlProgress" style="height:100%;width:0%;background:var(--green);border-radius:2px;transition:width 0.5s ease;"></div>
+          </div>
+          <div style="margin-top:8px;font:500 11px 'Inter',sans-serif;color:var(--muted2);text-align:center" id="dlTimer">Setting up your demo...</div>
+        </div>
+      </div>
+      <style>
+        .dl-item{display:flex;align-items:center;gap:12px;padding:10px 0;font:500 13px/1 'Inter',sans-serif;color:var(--muted);transition:all 0.3s;border-bottom:1px solid var(--border)}
+        .dl-item:last-child{border-bottom:none}
+        .dl-item.active .dl-label{color:#fff}
+        .dl-item.done .dl-label{color:var(--green)}
+        .dl-icon{width:20px;text-align:center;font-size:14px}
+        .dl-item.active .dl-icon,.dl-item.done .dl-icon{color:var(--green)}
+        .dl-item.done .dl-status:after{content:'\2713';color:var(--green)}
+        .dl-item.active .dl-status:after{content:'';display:inline-block;width:14px;height:14px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:dlSpin 0.6s linear infinite}
+        @keyframes dlSpin{to{transform:rotate(360deg)}}
+      </style>
+    `;
+    document.body.appendChild(loader);
+  }
+
+  function showDemoLoaderDelayed() {
+    injectDemoLoader();
+    let shown = false, interval = null, items = null, step = 0;
+    const timeoutId = setTimeout(() => {
+      const inner = document.getElementById('demoLoaderInner');
+      if (!inner) return;
+      inner.style.opacity = '1';
+      inner.style.pointerEvents = 'auto';
+      shown = true;
+      items = document.querySelectorAll('.dl-item');
+      step = 0;
+
+      function adv() {
+        if (step >= 5) return;
+        if (step > 0) { items[step - 1].classList.remove('active'); items[step - 1].classList.add('done'); }
+        items[step].classList.add('active');
+        const bar = document.getElementById('dlProgress');
+        if (bar) bar.style.width = ((step + 1) / 5 * 100) + '%';
+        step++;
+      }
+      adv();
+      interval = setInterval(() => {
+        adv();
+        if (step >= 5) {
+          clearInterval(interval);
+          items[4].classList.remove('active'); items[4].classList.add('done');
+          const bar = document.getElementById('dlProgress');
+          if (bar) bar.style.width = '100%';
+          document.getElementById('dlTimer').textContent = 'Almost ready...';
+        }
+      }, 400);
+    }, 300);
+
+    return {
+      isShown: () => shown,
+      complete: () => {
+        clearTimeout(timeoutId);
+        if (interval) clearInterval(interval);
+        if (items) items.forEach(el => { el.classList.remove('active'); el.classList.add('done'); });
+        const bar = document.getElementById('dlProgress'); if (bar) bar.style.width = '100%';
+        const t = document.getElementById('dlTimer'); if (t) t.textContent = 'Ready!';
+      },
+      hide: () => {
+        clearTimeout(timeoutId);
+        if (interval) clearInterval(interval);
+        const inner = document.getElementById('demoLoaderInner');
+        if (inner) { inner.style.opacity = '0'; inner.style.pointerEvents = 'none'; }
+        setTimeout(() => { const el = document.getElementById('demoLoader'); if (el) el.remove(); }, 500);
+      }
+    };
+  }
+
   async function startDemo() {
     const btn = event?.target;
     if (btn) { btn.disabled = true; btn.textContent = 'Loading demo...'; }
+
+    // Check for preloaded session (set by homepage preloader)
+    const cachedToken = sessionStorage.getItem('cc_preload_token');
+    const cachedUser = sessionStorage.getItem('cc_preload_user');
+    const cachedTs = sessionStorage.getItem('cc_preload_ts');
+    const cacheAge = cachedTs ? Date.now() - parseInt(cachedTs, 10) : Infinity;
+
+    if (cachedToken && cachedUser && cacheAge < 25 * 60 * 1000) {
+      const user = JSON.parse(cachedUser);
+      localStorage.setItem('cc_token', cachedToken);
+      localStorage.setItem('cc_user', cachedUser);
+      localStorage.setItem('cc_shop', JSON.stringify({
+        id: user.id, shopName: user.shopName,
+        ownerName: user.name, email: user.email,
+        mobile: user.mobile, role: user.role,
+      }));
+      localStorage.setItem('cc_is_demo', 'true');
+      sessionStorage.removeItem('cc_preload_token');
+      sessionStorage.removeItem('cc_preload_user');
+      sessionStorage.removeItem('cc_preload_ts');
+      window.location.href = '/shop-dashboard.html';
+      return;
+    }
+
+    const loaderCtrl = showDemoLoaderDelayed();
+
     try {
+      const startTime = Date.now();
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -266,10 +386,13 @@
       });
       const data = await res.json();
       if (!res.ok) {
+        loaderCtrl.hide();
         showAlert('Demo is unavailable. Please try again later.', 'error');
         if (btn) { btn.disabled = false; btn.textContent = '🎮 Try Live Demo'; }
         return;
       }
+
+      const elapsed = Date.now() - startTime;
       localStorage.setItem('cc_token', data.token);
       localStorage.setItem('cc_user', JSON.stringify(data.user));
       localStorage.setItem('cc_shop', JSON.stringify({
@@ -278,8 +401,15 @@
         mobile: data.user.mobile, role: data.user.role,
       }));
       localStorage.setItem('cc_is_demo', 'true');
-      window.location.href = '/shop-dashboard.html';
+
+      if (elapsed < 1000 && !loaderCtrl.isShown()) {
+        window.location.href = '/shop-dashboard.html';
+      } else {
+        loaderCtrl.complete();
+        setTimeout(() => { window.location.href = '/shop-dashboard.html'; }, 400);
+      }
     } catch (err) {
+      loaderCtrl.hide();
       showAlert('Demo is unavailable. Please try again later.', 'error');
       if (btn) { btn.disabled = false; btn.textContent = '🎮 Try Live Demo'; }
     }
