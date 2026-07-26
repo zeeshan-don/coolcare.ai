@@ -250,11 +250,12 @@ function generateCustomers(count) {
 
 // ─── Generator: Technicians (8) ────────────────────────────────────────────
 function generateTechnicians() {
-  return [
+  const technicians = [
     {
       name: "Rajesh Kumar",
       phone: "+919876543201",
       email: "rajesh@coolcare.demo",
+      services: ["AC Repair", "AC Service", "AC Installation", "Gas Refill", "Refrigerator Repair"],
       specialization: ["AC Repair", "AC Installation", "Gas Refill", "Refrigerator Repair", "HVAC"],
       active: true,
       rating: 4.8,
@@ -265,6 +266,7 @@ function generateTechnicians() {
       name: "Suresh Patel",
       phone: "+919876543202",
       email: "suresh@coolcare.demo",
+      services: ["Washing Machine Repair", "Washing Machine Installation", "Dishwasher Repair", "Dryer Repair"],
       specialization: ["Washing Machine Repair", "Dishwasher Repair", "Dryer Repair", "Kitchen Appliances"],
       active: true,
       rating: 4.9,
@@ -275,6 +277,7 @@ function generateTechnicians() {
       name: "Amit Singh",
       phone: "+919876543203",
       email: "amit@coolcare.demo",
+      services: ["TV Repair", "TV Installation", "Microwave Repair", "Electronics Repair"],
       specialization: ["TV Repair", "Microwave Repair", "Electronics", "Display Repair"],
       active: true,
       rating: 4.7,
@@ -285,6 +288,7 @@ function generateTechnicians() {
       name: "Vijay Sharma",
       phone: "+919876543204",
       email: "vijay@coolcare.demo",
+      services: ["RO Purifier Service", "RO Installation", "Geyser Repair", "Geyser Installation", "Plumbing"],
       specialization: ["RO Purifier", "Geyser Repair", "Water Heater", "Plumbing"],
       active: true,
       rating: 4.6,
@@ -295,6 +299,7 @@ function generateTechnicians() {
       name: "Deepa Iyer",
       phone: "+919876543205",
       email: "deepa@coolcare.demo",
+      services: ["AC Repair", "AC Service", "Refrigerator Repair", "General Appliance Repair"],
       specialization: ["AC Repair", "Refrigerator Repair", "General Appliance", "AC Service"],
       active: true,
       rating: 4.9,
@@ -305,6 +310,7 @@ function generateTechnicians() {
       name: "Prakash Rao",
       phone: "+919876543206",
       email: "prakash@coolcare.demo",
+      services: ["Washing Machine Repair", "Refrigerator Repair", "Microwave Repair", "General Appliance Repair"],
       specialization: ["Washing Machine Repair", "Refrigerator Repair", "Microwave Repair", "General Appliance"],
       active: true,
       rating: 4.5,
@@ -315,6 +321,7 @@ function generateTechnicians() {
       name: "Manjunath Hegde",
       phone: "+919876543207",
       email: "manjunath@coolcare.demo",
+      services: ["AC Installation", "Geyser Installation", "Chimney Repair", "RO Purifier Service", "Plumbing"],
       specialization: ["AC Installation", "Geyser Installation", "Chimney Repair", "RO Purifier"],
       active: true,
       rating: 4.4,
@@ -325,6 +332,7 @@ function generateTechnicians() {
       name: "Kavita Nair",
       phone: "+919876543208",
       email: "kavita@coolcare.demo",
+      services: ["TV Repair", "TV Installation", "Electronics Repair", "Microwave Repair", "Smart Home Setup"],
       specialization: ["TV Repair", "Electronics", "Microwave Repair", "Smart Home"],
       active: true,
       rating: 4.7,
@@ -332,6 +340,27 @@ function generateTechnicians() {
       area: "Electronic City",
     },
   ];
+
+  // ── Validate every technician has all required fields ─────────────────────
+  const REQUIRED_TECH_FIELDS = ['name', 'phone', 'email', 'services', 'specialization', 'active'];
+  for (const tech of technicians) {
+    for (const field of REQUIRED_TECH_FIELDS) {
+      if (tech[field] === undefined || tech[field] === null) {
+        throw new Error(
+          `[demo-data] Validation failed: technician "${tech.name}" is missing required field "${field}". ` +
+          `All fields required: ${REQUIRED_TECH_FIELDS.join(', ')}`
+        );
+      }
+    }
+    if (!Array.isArray(tech.services) || tech.services.length === 0) {
+      throw new Error(
+        `[demo-data] Validation failed: technician "${tech.name}" has empty or invalid "services" field. ` +
+        `Must be a non-empty array.`
+      );
+    }
+  }
+
+  return technicians;
 }
 
 // ─── Generator: Bookings (200+) ───────────────────────────────────────────

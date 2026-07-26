@@ -784,9 +784,9 @@ async function handleDemoPreload(request, response) {
       // Insert technicians (8)
       for (const tech of DEMO.technicians) {
         await sql`
-          INSERT INTO technicians (repair_shop_id, name, phone, email, specialization, active)
+          INSERT INTO technicians (repair_shop_id, name, phone, email, services, specialization, active)
           VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email},
-            ${tech.specialization}, ${tech.active})
+            ${tech.services || tech.specialization}, ${tech.specialization}, ${tech.active})
         `;
       }
 
@@ -989,8 +989,8 @@ async function handleDemoLogin(request, response) {
 
       // Insert technicians
       for (const tech of DEMO.technicians) {
-        await sql`INSERT INTO technicians (repair_shop_id, name, phone, email, specialization, active)
-          VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email}, ${tech.specialization}, ${tech.active})`;
+        await sql`INSERT INTO technicians (repair_shop_id, name, phone, email, services, specialization, active)
+          VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email}, ${tech.services || tech.specialization}, ${tech.specialization}, ${tech.active})`;
       }
 
       // Fetch technician IDs
