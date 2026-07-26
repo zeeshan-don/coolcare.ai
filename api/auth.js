@@ -743,7 +743,7 @@ async function handleDemoLogin(request, response) {
     await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
     await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
     await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
-    await sql`DELETE FROM notifications WHERE repair_shop_id = ${demoShopId}`;
+    await sql`DELETE FROM shop_notifications WHERE repair_shop_id = ${demoShopId}`;
     await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
 
     // ── 2a. Insert AI settings ────────────────────────────────────────────
