@@ -360,6 +360,11 @@ module.exports = withErrorHandler(async (request, response) => {
       `;
 
       // Activate subscription
+      // Update repair_shops with selected currency info
+      try {
+        await sql`UPDATE repair_shops SET selected_currency = ${currency} WHERE id = ${shopId}`;
+      } catch (e) { /* ok */ }
+
       const subId = await activateSubscription(sql, shopId, planName, billingCycle, "razorpay", payment?.id || null, amount, currency);
 
       // Generate invoice

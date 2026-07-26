@@ -83,9 +83,16 @@
       .back{display:none}
       .hamburger{display:flex}
     }
+    /* Demo mode banner */
+    .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
+    .demo-banner.show{display:block}
+    .demo-banner span{background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px}
   </style>
 </head>
 <body>
+<div class="demo-banner" id="demoBanner">
+  🧪 Demo Mode — Changes are not saved. <span>READ ONLY</span>
+</div>
 <nav class="nav">
   <a class="brand" href="/shop-dashboard.html">cool<b>care</b></a>
   <div class="nav-right">
@@ -155,6 +162,7 @@
     <!-- Technician assignment form -->
     <div class="card" style="margin-top:0" id="techForm">
       <h2>Update Technician & Costs</h2>
+      <div id="demoDisableMsg" style="display:none;color:var(--green);font-size:13px;font-weight:500;text-align:center;padding:12px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.2);border-radius:10px;margin-bottom:14px">🔒 This is a demo account. Changes are not saved.</div>
       <div class="grid" style="gap:12px">
         <div class="field">
           <label for="technicianName">Technician Name</label>
@@ -204,9 +212,20 @@
     }
   });
 
+  // ── Demo mode check ────────────────────────────────────────────────────────
+  const isDemo = localStorage.getItem('cc_is_demo') === 'true';
+  if (isDemo) {
+    document.getElementById('demoBanner').classList.add('show');
+    document.getElementById('demoDisableMsg').style.display = 'block';
+    document.getElementById('saveTechBtn').disabled = true;
+    document.getElementById('saveTechBtn').style.opacity = '0.5';
+    document.getElementById('saveTechBtn').style.cursor = 'not-allowed';
+  }
+
   function logout() {
     fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
     localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user');
+    localStorage.removeItem('cc_is_demo');
     window.location.href = '/login.html';
   }
 
@@ -327,6 +346,10 @@
       container.innerHTML = '<div style="color:var(--muted);font-size:14px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;">No further actions available for this status.</div>';
       return;
     }
+    if (isDemo) {
+      container.innerHTML = '<div style="color:var(--green);font-size:13px;font-weight:500;text-align:center;padding:20px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.2);border-radius:10px;">🔒 This is a demo account. Changes are not saved.</div>';
+      return;
+    }
     container.innerHTML = actions.map(a =>
       `<button class="action-btn ${a.cls}" onclick="updateStatus('${a.status}')">${a.icon || ''}<span>${escapeHtml(a.label)}</span></button>`
     ).join('');
@@ -368,6 +391,10 @@
   }
 
   async function saveTechDetails() {
+    if (isDemo) {
+      showToast('🔒 This is a demo account. Changes are not saved.');
+      return;
+    }
     const btn = document.getElementById('saveTechBtn');
     btn.disabled = true;
     btn.textContent = 'Saving…';

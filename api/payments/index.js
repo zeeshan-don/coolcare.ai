@@ -13,8 +13,9 @@ const { withErrorHandler } = require("../_lib/errors");
 const { validate, z } = require("../_lib/validate");
 const { apiLimiter, applyLimit } = require("../_lib/rate-limit");
 const { setSecurityHeaders } = require("../_lib/security");
-const { PLAN_PRICING, detectCurrency, CURRENCIES } = require("../_lib/currency");
+const { PLAN_PRICING, detectCurrency, detectCountry, getCountryCurrency, CURRENCIES, getPlanPricingFromDB } = require("../_lib/currency");
 const { createOrder, calculateAmount, getActiveGateway } = require("../_lib/gateway");
+const { isDemoShop } = require("../_lib/auth");
 
 // Accept "pro" and legacy plan names (backward compat)
 const PLAN_NAMES = ["pro", "starter", "professional", "enterprise"];
@@ -30,6 +31,9 @@ const checkoutSchema = z.object({
   billingCycle: z.enum(["monthly", "quarterly", "halfyearly", "yearly"]).default("monthly"),
   currency: z.string().optional(),
   couponCode: z.string().optional(),
+  // NEW: Frontend sends ONLY plan_id and selected_country for security
+  selectedPlanId: z.coerce.number().int().positive().optional(),
+  selectedCountry: z.string().min(2).max(5).optional(),
 });
 
 const subActionSchema = z.object({
@@ -45,6 +49,16 @@ module.exports = withErrorHandler(async (request, response) => {
 
   const shopId = parseInt(auth.sub, 10);
   const sql = neon(process.env.DATABASE_URL);
+
+  // ── DEMO MODE GUARD ──────────────────────────────────────────────────────
+  const isDemo = auth.isDemo || (shopId ? await isDemoShop(sql, shopId) : false);
+  if (isDemo && request.method === "POST") {
+    return response.status(403).json({
+      error: "This is a demo account. Changes are not saved.",
+      isDemo: true,
+      demoError: true,
+    });
+  }
 
   // GET: view subscription, invoices, payment history
   if (request.method === "GET") {
@@ -135,11 +149,42 @@ async function handleCheckout(request, response, sql, shopId, body) {
   if (!data) return;
 
   const planName = normalizePlanName(data.planName);
-  const currency = (data.currency || detectCurrency(request)).toUpperCase();
-  const billingCycle = data.billingCycle || "monthly";
+  
+  // ── SECURITY: Determine currency and amount from server-side only ──
+  // Frontend sends ONLY selected_plan_id and selected_country (optional)
+  // Backend determines currency, fetches amount from DB
+  let currency;
+  let selectedCountry = data.selectedCountry || null;
+  
+  if (selectedCountry) {
+    // Use country from frontend (user may have changed it)
+    currency = getCountryCurrency(selectedCountry);
+  } else {
+    // Detect from IP or use currency header as fallback
+    const detectedCountry = detectCountry(request);
+    if (detectedCountry) {
+      selectedCountry = detectedCountry;
+      currency = getCountryCurrency(detectedCountry);
+    } else {
+      currency = (data.currency || detectCurrency(request)).toUpperCase();
+    }
+  }
 
-  // Calculate amount from PLAN_PRICING constant (authoritative source)
-  const { amount: baseAmount } = calculateAmount(currency, billingCycle);
+  const billingCycle = data.billingCycle || "monthly";
+  
+  // Determine plan ID from plan name
+  let planId = data.selectedPlanId || null;
+  if (!planId) {
+    try {
+      const planRows = await sql`SELECT id FROM subscription_plans WHERE name = ${planName} LIMIT 1`;
+      if (planRows.length > 0) planId = planRows[0].id;
+    } catch (e) { /* table may not exist */ }
+  }
+  if (!planId) planId = 1; // fallback to plan ID 1
+
+  // ── FETCH AMOUNT FROM DATABASE (authoritative source) ──
+  // NEVER trust any amount from the frontend
+  const { amount: baseAmount } = await calculateAmount(sql, currency, billingCycle, planId);
 
   // Apply coupon if provided
   let discount = 0;

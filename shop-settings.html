@@ -46,9 +46,16 @@
       .nav a[href*="dashboard"]{display:none}
       .hamburger{display:flex}
     }
+    /* Demo mode banner */
+    .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
+    .demo-banner.show{display:block}
+    .demo-banner span{background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px}
   </style>
 </head>
 <body>
+<div class="demo-banner" id="demoBanner">
+  🧪 Demo Mode — Changes are not saved. <span>READ ONLY</span>
+</div>
 <nav class="nav">
   <a class="brand" href="/shop-dashboard.html">cool<b>care</b></a>
   <div style="display:flex;gap:12px;align-items:center">
@@ -121,6 +128,17 @@
 const token = localStorage.getItem('cc_token');
 if (!token) window.location.href = '/login.html';
 
+// ── Demo mode check ──────────────────────────────────────────────────────────
+const isDemo = localStorage.getItem('cc_is_demo') === 'true';
+if (isDemo) {
+  document.getElementById('demoBanner').classList.add('show');
+  document.getElementById('saveBtn').disabled = true;
+  document.getElementById('saveBtn').style.opacity = '0.5';
+  document.getElementById('saveBtn').style.cursor = 'not-allowed';
+  // Disable all inputs
+  document.querySelectorAll('input, select').forEach(el => el.disabled = true);
+}
+
 function toggleMobileMenu() {
   document.getElementById('mobileMenu').classList.toggle('open');
   document.getElementById('hamburger').classList.toggle('open');
@@ -137,6 +155,7 @@ document.addEventListener('click', function(e) {
 function logout() {
   fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
   localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user');
+  localStorage.removeItem('cc_is_demo');
   window.location.href = '/login.html';
 }
 
@@ -163,6 +182,10 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  if (isDemo) {
+    showToast('🔒 This is a demo account. Changes are not saved.');
+    return;
+  }
   const btn = document.getElementById('saveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   const body = {};
@@ -177,7 +200,11 @@ async function saveSettings() {
       body: JSON.stringify({ action: 'save-shop-settings', ...body }),
     });
     if (res.ok) showToast('Settings saved successfully!');
-    else showToast('Failed to save settings');
+    else {
+      const data = await res.json();
+      if (data.isDemo) showToast('🔒 This is a demo account. Changes are not saved.');
+      else showToast('Failed to save settings');
+    }
   } catch (err) { showToast('Network error'); }
   btn.disabled = false; btn.textContent = 'Save Settings';
 }

@@ -1,7 +1,18 @@
 // api/_lib/currency.js
-// Multi-currency support with live exchange rates.
+// Multi-currency support with live exchange rates and IP-based country detection.
 // Single CoolCare Pro plan with exact per-currency pricing.
+// IMPORTANT: Production pricing is read from subscription_plan_prices DB table.
+// PLAN_PRICING constant is a fallback only.
 
+// Country → Currency mapping (used for IP-based detection)
+const COUNTRY_CURRENCY_MAP = {
+  IN: "INR", // India
+  AE: "AED", // United Arab Emirates
+  KW: "KWD", // Kuwait
+  // All other countries → USD
+};
+
+// Currency metadata (symbols, names, locales)
 const CURRENCIES = {
   USD: { symbol: "$", name: "US Dollar", locale: "en-US" },
   INR: { symbol: "₹", name: "Indian Rupee", locale: "en-IN" },
@@ -9,8 +20,17 @@ const CURRENCIES = {
   AED: { symbol: "د.إ", name: "UAE Dirham", locale: "ar-AE" },
 };
 
+// Billing cycle discounts (applied to total cycle amounts)
+const BILLING_DISCOUNTS = {
+  monthly: 0,       // 0% discount (base price)
+  quarterly: 10,    // -10%
+  halfyearly: 15,   // -15%
+  yearly: 20,       // -20%
+};
+
 // CoolCare Pro — exact prices per currency per billing cycle.
-// These are the authoritative prices shown to customers.
+// These are used as fallback if the DB lookup fails.
+// The authoritative source is the subscription_plan_prices table.
 // Quarterly = monthly × 3 × 0.90, Half-Yearly = × 6 × 0.85, Yearly = × 12 × 0.80
 const PLAN_PRICING = {
   USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
@@ -112,6 +132,64 @@ async function getPricing(currency = "USD") {
 }
 
 /**
+ * Get currency for a given country code.
+ * @param {string} countryCode - ISO 3166-1 alpha-2 country code (e.g., 'IN', 'AE')
+ * @returns {string} Currency code (INR, AED, KWD, or USD for all others)
+ */
+function getCountryCurrency(countryCode) {
+  if (!countryCode) return "USD";
+  return COUNTRY_CURRENCY_MAP[countryCode.toUpperCase()] || "USD";
+}
+
+/**
+ * Get country name for display purposes.
+ */
+function getCountryName(countryCode) {
+  const names = {
+    IN: "India",
+    AE: "United Arab Emirates",
+    KW: "Kuwait",
+    US: "United States",
+    GB: "United Kingdom",
+    CA: "Canada",
+    AU: "Australia",
+    SG: "Singapore",
+    MY: "Malaysia",
+    SA: "Saudi Arabia",
+    QA: "Qatar",
+    BH: "Bahrain",
+    OM: "Oman",
+  };
+  return names[countryCode?.toUpperCase()] || countryCode || "Unknown";
+}
+
+/**
+ * Detect user's country from request headers (IP geolocation).
+ * Falls back to null (will default to USD pricing).
+ */
+function detectCountry(request) {
+  // x-vercel-ip-country is set by Vercel edge network
+  const country = (request.headers["x-vercel-ip-country"] || "").toUpperCase();
+  if (country && /^[A-Z]{2}$/.test(country)) return country;
+
+  // Try Cloudflare header
+  const cfCountry = (request.headers["cf-ipcountry"] || "").toUpperCase();
+  if (cfCountry && /^[A-Z]{2}$/.test(cfCountry)) return cfCountry;
+
+  // Try Accept-Language header for hints
+  const acceptLang = request.headers["accept-language"] || "";
+  if (acceptLang) {
+    const match = acceptLang.match(/[_-]([A-Za-z]{2})(?:[;,]|$)/);
+    if (match) {
+      const localeCountry = match[1].toUpperCase();
+      return localeCountry;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Detect user's currency from their country/locale.
  * Falls back to USD.
  */
@@ -122,27 +200,54 @@ function detectCurrency(request) {
     return headerCurrency.toUpperCase();
   }
 
-  // Try to detect from Accept-Language or country headers
-  const country = (request.headers["x-vercel-ip-country"] || "").toUpperCase();
-  const countryMap = {
-    IN: "INR",
-    KW: "KWD",
-    AE: "AED",
-    US: "USD",
-    GB: "USD",
-    CA: "USD",
-    AU: "USD",
-  };
+  // Detect from country
+  const country = detectCountry(request);
+  if (country) {
+    return getCountryCurrency(country);
+  }
 
-  return countryMap[country] || "USD";
+  return "USD";
+}
+
+/**
+ * Fetch pricing for a plan from the database.
+ * Falls back to PLAN_PRICING constant.
+ */
+async function getPlanPricingFromDB(sql, planId, currency) {
+  try {
+    const rows = await sql`
+      SELECT price_monthly, price_quarterly, price_halfyearly, price_yearly
+      FROM subscription_plan_prices
+      WHERE plan_id = ${planId} AND currency = ${currency} AND active = true
+      LIMIT 1
+    `;
+    if (rows.length > 0) {
+      return {
+        monthly: parseFloat(rows[0].price_monthly),
+        quarterly: parseFloat(rows[0].price_quarterly),
+        halfyearly: parseFloat(rows[0].price_halfyearly),
+        yearly: parseFloat(rows[0].price_yearly),
+      };
+    }
+  } catch (err) {
+    console.warn("[currency] DB pricing lookup failed:", err.message);
+  }
+  // Fallback to hardcoded pricing
+  return PLAN_PRICING[currency] || PLAN_PRICING.USD;
 }
 
 module.exports = {
   CURRENCIES,
   PLAN_PRICING,
   FALLBACK_RATES,
+  BILLING_DISCOUNTS,
+  COUNTRY_CURRENCY_MAP,
   getExchangeRates,
   convertPrice,
   getPricing,
   detectCurrency,
+  detectCountry,
+  getCountryCurrency,
+  getCountryName,
+  getPlanPricingFromDB,
 };

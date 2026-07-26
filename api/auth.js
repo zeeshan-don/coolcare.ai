@@ -14,6 +14,23 @@ const { loginLimiter, signupLimiter, apiLimiter, applyLimit } = require("./_lib/
 const { setSecurityHeaders } = require("./_lib/security");
 const { sendEmail } = require("./_lib/notify");
 const { createOrder, calculateAmount } = require("./_lib/gateway");
+const { detectCountry, getCountryCurrency, getCountryName, CURRENCIES } = require("./_lib/currency");
+const { DEMO, ago } = require("./_lib/demo-data");
+
+// ─── Demo password (never exposed to client) ────────────────────────────────
+// This is a fixed, hardcoded password used ONLY for the demo account.
+// It is never shown in the frontend.
+const DEMO_PASSWORD = "DemoCoolCare2024!";
+
+// ─── Helper: check if a shop is the demo shop ───────────────────────────────
+async function isDemoShop(sql, shopId) {
+  try {
+    const rows = await sql`SELECT id, is_demo FROM repair_shops WHERE id = ${shopId} AND is_demo = true LIMIT 1`;
+    return rows.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
 
 // Generate unique referral code: COOLCARE-XXXX
 function generateReferralCode() {
@@ -38,6 +55,7 @@ module.exports = withErrorHandler(async (request, response) => {
   if (action === "me") return handleMe(request, response);
   if (action === "forgot-password") return handleForgotPassword(request, response, body);
   if (action === "reset-password") return handleResetPassword(request, response, body);
+  if (action === "demo-login") return handleDemoLogin(request, response);
 
   return response.status(400).json({ error: "Invalid action. Use: login, signup, logout, bootstrap, bootstrap-check, me, forgot-password, reset-password" });
 });
@@ -200,16 +218,23 @@ async function handleSignup(request, response, body) {
     } catch (e) { /* ok */ }
   }
 
-  // ── Create shop as inactive — NO free trial, NO auto-activation ─────────
-  // Account will only be usable after payment + super admin approval.
+  // ── Detect country and determine currency ────────────────────────────────
+  // From request: check selectedCountry from frontend, otherwise detect from IP
+  let selectedCountry = data.selectedCountry || null;
+  if (!selectedCountry) {
+    selectedCountry = detectCountry(request);
+  }
   const planName = data.planName || 'pro';
   const billingCycle = data.billingCycle || 'monthly';
-  const currency = (data.currency || 'USD').toUpperCase();
+  const currency = selectedCountry
+    ? getCountryCurrency(selectedCountry)
+    : (data.currency || 'USD').toUpperCase();
 
   console.log("[auth/signup] Decision path:", {
     planName,
     billingCycle,
     currency,
+    selectedCountry,
     reason: 'PAID_PLAN_ONLY — creating payment order (no free trial)',
   });
 
@@ -217,11 +242,13 @@ async function handleSignup(request, response, body) {
     INSERT INTO repair_shops
       (shop_name, owner_name, email, mobile, password_hash,
        address, city, service_areas, services_offered, role,
-       subscription_status, referral_code, referred_by)
+       subscription_status, referral_code, referred_by,
+       selected_country, selected_currency)
     VALUES
       (${data.shopName}, ${data.ownerName}, ${data.email}, ${data.mobile}, ${passwordHash},
        ${data.address || null}, ${data.city}, ${safeServiceAreas}, ${safeServicesOffered}, 'owner',
-       'inactive', ${referralCode}, ${referredBy})
+       'inactive', ${referralCode}, ${referredBy},
+       ${selectedCountry}, ${currency})
     RETURNING id, shop_name, owner_name, email, mobile, city, created_at
   `;
   const shop = rows[0];
@@ -246,9 +273,10 @@ async function handleSignup(request, response, body) {
   console.log("[auth/signup] Creating payment order for shop #" + shop.id);
 
   try {
-    // Calculate the amount
-    const { amount } = calculateAmount(currency, billingCycle);
-    console.log("[auth/signup] Amount calculated:", { amount, currency, billingCycle });
+    // Calculate the amount from DB (authoritative source, don't trust frontend)
+    const planId = 1; // 'pro' plan
+    const { amount } = await calculateAmount(sql, currency, billingCycle, planId);
+    console.log("[auth/signup] Amount calculated from DB:", { amount, currency, billingCycle, planId });
 
     const invoiceNumber = `INV-${Date.now()}-${shop.id}`;
 
@@ -668,6 +696,190 @@ async function handleResetPassword(request, response, body) {
 
   console.log("[auth/reset-password] Password reset for user:", tokenRow.user_id, "type:", tokenRow.user_type);
   return response.status(200).json({ message: "Password has been reset successfully. You can now log in." });
+}
+
+// ─── DEMO LOGIN (auto-create/reset demo shop, no credentials required) ─────
+// Creates the demo shop if it doesn't exist, or resets it if it does.
+// Issues a 30-min demo token.
+async function handleDemoLogin(request, response) {
+  if (!applyLimit(request, response, apiLimiter)) return;
+
+  console.log("[auth/demo-login] Creating/resetting demo environment...");
+
+  const sql = neon(process.env.DATABASE_URL);
+
+  try {
+    // ── 1. Find existing demo shop or create new one ───────────────────────
+    let demoShopId = null;
+    const existing = await sql`SELECT id FROM repair_shops WHERE email = ${DEMO.shop.email} LIMIT 1`;
+
+    if (existing.length > 0) {
+      demoShopId = existing[0].id;
+      // Reset existing demo shop data
+      await sql`UPDATE repair_shops SET is_demo = true, updated_at = now() WHERE id = ${demoShopId}`;
+    } else {
+      // Create new demo shop
+      const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
+      const shopRows = await sql`
+        INSERT INTO repair_shops
+          (shop_name, owner_name, email, mobile, password_hash,
+           address, city, service_areas, services_offered, role,
+           subscription_status, is_demo, is_active, referral_code,
+           selected_country, selected_currency)
+        VALUES
+          (${DEMO.shop.shop_name}, ${DEMO.shop.owner_name}, ${DEMO.shop.email}, ${DEMO.shop.mobile},
+           ${passwordHash}, ${DEMO.shop.address}, ${DEMO.shop.city},
+           ${DEMO.shop.service_areas}, ${DEMO.shop.services_offered}, 'owner',
+           'active', true, true, 'DEMO-0001',
+           'US', 'USD')
+        RETURNING id
+      `;
+      demoShopId = shopRows[0].id;
+    }
+
+    // ── 2. Reset all demo data (clear old, insert fresh) ───────────────────
+    // Delete old data for this shop
+    await sql`DELETE FROM bookings WHERE repair_shop_id = ${demoShopId}`;
+    await sql`DELETE FROM technicians WHERE repair_shop_id = ${demoShopId}`;
+    await sql`DELETE FROM ai_settings WHERE repair_shop_id = ${demoShopId}`;
+    await sql`DELETE FROM whatsapp_conversations WHERE repair_shop_id = ${demoShopId}`;
+    await sql`DELETE FROM notifications WHERE repair_shop_id = ${demoShopId}`;
+    await sql`DELETE FROM subscriptions WHERE repair_shop_id = ${demoShopId}`;
+
+    // ── 2a. Insert AI settings ────────────────────────────────────────────
+    try {
+      await sql`
+        INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days,
+          supported_services, knowledge_base, fallback_response, transfer_to_human, updated_at)
+        VALUES (${demoShopId}, ${DEMO.ai_settings.greeting_message},
+          ${JSON.stringify(DEMO.shop.business_hours)}::jsonb,
+          ${DEMO.ai_settings.working_days},
+          ${DEMO.ai_settings.supported_services},
+          ${DEMO.ai_settings.knowledge_base},
+          ${DEMO.ai_settings.fallback_response},
+          ${DEMO.ai_settings.transfer_to_human}, now())
+      `;
+    } catch (e) {
+      console.warn("[auth/demo-login] AI settings insert failed:", e.message);
+    }
+
+    // ── 2b. Insert technicians ─────────────────────────────────────────────
+    for (const tech of DEMO.technicians) {
+      try {
+        await sql`
+          INSERT INTO technicians (repair_shop_id, name, phone, email, specialization, active)
+          VALUES (${demoShopId}, ${tech.name}, ${tech.phone}, ${tech.email},
+            ${tech.specialization}, ${tech.active})
+        `;
+      } catch (e) {
+        console.warn("[auth/demo-login] Tech insert failed:", e.message);
+      }
+    }
+
+    // ── 2c. Fetch technician IDs for bookings ─────────────────────────────
+    const techRows = await sql`
+      SELECT id, name FROM technicians WHERE repair_shop_id = ${demoShopId} ORDER BY id ASC
+    `;
+    const techMap = {};
+    techRows.forEach((t, i) => { techMap[i] = t.id; });
+
+    // ── 2d. Insert bookings ────────────────────────────────────────────────
+    for (let i = 0; i < DEMO.bookings.length; i++) {
+      const b = DEMO.bookings[i];
+      const cust = DEMO.customers[b.customerIdx];
+      const techId = b.techIdx !== null && b.techIdx !== undefined ? techMap[b.techIdx] || null : null;
+      const techName = b.techIdx !== null && b.techIdx !== undefined && DEMO.technicians[b.techIdx]
+        ? DEMO.technicians[b.techIdx].name : null;
+      const cost = b.cost || null;
+      let priority = 'normal';
+      if (b.urgency === 'urgent') priority = 'urgent';
+      else if (b.urgency === 'today') priority = 'high';
+
+      try {
+        await sql`
+          INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
+            area, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
+            priority, invoice_number, created_at, updated_at, customer_notes)
+          VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
+            ${b.service}, ${b.area}, ${b.urgency}, ${b.status},
+            ${techId}, ${techName}, ${cost ? cost * 0.7 : null}, ${cost},
+            ${priority},
+            ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
+            ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})
+        `;
+      } catch (e) {
+        console.warn("[auth/demo-login] Booking insert failed:", e.message);
+      }
+    }
+
+    // ── 2e. Insert subscription (active, paid via demo) ────────────────────
+    try {
+      const planRows = await sql`SELECT id FROM subscription_plans WHERE name = 'pro' LIMIT 1`;
+      if (planRows.length > 0) {
+        const now = new Date();
+        const yearEnd = new Date(now);
+        yearEnd.setFullYear(yearEnd.getFullYear() + 1);
+        await sql`
+          INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+            gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
+          VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
+            'demo-sub-001', 192, 'USD', ${now.toISOString()}, ${yearEnd.toISOString()}, now())
+        `;
+      }
+    } catch (e) {
+      console.warn("[auth/demo-login] Subscription insert failed:", e.message);
+    }
+
+    // ── 2f. Insert WhatsApp conversations ─────────────────────────────────
+    for (let i = 0; i < DEMO.conversations.length; i++) {
+      const conv = DEMO.conversations[i];
+      const cust = DEMO.customers[conv.customerIdx];
+      try {
+        for (const msg of conv.messages) {
+          await sql`
+            INSERT INTO whatsapp_conversations (repair_shop_id, customer_number, customer_name, role, message, created_at)
+            VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
+              ${msg.role === 'customer' ? 'customer' : 'bot'},
+              ${msg.text},
+              ${ago(i * 2 + Math.floor(Math.random() * 60))})
+          `;
+        }
+      } catch (e) {
+        console.warn("[auth/demo-login] Conversation insert failed:", e.message);
+      }
+    }
+
+    console.log("[auth/demo-login] Demo environment ready for shop #" + demoShopId);
+
+    // ── 3. Issue demo token (30-min expiry) ────────────────────────────────
+    const jti = makeJti();
+    const token = signToken({
+      sub: demoShopId,
+      role: "owner",
+      user_type: "shop",
+      repair_shop_id: demoShopId,
+      isDemo: true,
+    }, jti);
+
+    return response.status(200).json({
+      token,
+      isDemo: true,
+      user: {
+        id: demoShopId,
+        name: DEMO.shop.owner_name,
+        shopName: DEMO.shop.shop_name,
+        email: DEMO.shop.email,
+        mobile: DEMO.shop.mobile,
+        role: "owner",
+        userType: "shop",
+        repairShopId: demoShopId,
+      },
+      expiresIn: "30m",
+    });
+  } catch (err) {
+    console.error("[auth/demo-login] Failed:", err.message);
+    return response.status(500).json({ error: "Failed to create demo session. Please try again." });
+  }
 }
 
 // ─── BUILD RESET EMAIL HTML ──────────────────────────────────────────────────

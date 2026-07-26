@@ -8,9 +8,10 @@ const { neon } = require("@neondatabase/serverless");
 
 const JWT_SECRET  = process.env.JWT_SECRET;
 const JWT_EXPIRES = "7d";
+const DEMO_JWT_EXPIRES = "30m"; // Demo sessions expire after 30 minutes
 
 // ─── Sign a new token ─────────────────────────────────────────────────────────
-// payload: { sub, role, user_type, repair_shop_id? }
+// payload: { sub, role, user_type, repair_shop_id?, isDemo? }
 function signToken(payload, jti) {
   if (!JWT_SECRET) throw new Error("JWT_SECRET env var is not set");
   const data = {
@@ -20,7 +21,9 @@ function signToken(payload, jti) {
     jti,
   };
   if (payload.repair_shop_id) data.repair_shop_id = payload.repair_shop_id;
-  return jwt.sign(data, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+  if (payload.isDemo) data.isDemo = true;
+  const expiresIn = payload.isDemo ? DEMO_JWT_EXPIRES : JWT_EXPIRES;
+  return jwt.sign(data, JWT_SECRET, { expiresIn });
 }
 
 // ─── Generate a short random JTI ─────────────────────────────────────────────
@@ -236,6 +239,15 @@ async function requireActiveSubscription(auth, sql, response) {
   return null;
 }
 
+async function isDemoShop(sql, shopId) {
+  try {
+    const rows = await sql`SELECT id, is_demo FROM repair_shops WHERE id = ${shopId} AND is_demo = true LIMIT 1`;
+    return rows.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 module.exports = {
   signToken,
   makeJti,
@@ -247,4 +259,5 @@ module.exports = {
   requireShopOwner,
   requireActiveSubscription,
   logAdminAction,
+  isDemoShop,
 };

@@ -212,6 +212,7 @@
   </div>
   <div class="nav-actions">
     <a href="/login.html"><button class="btn-ghost">Log in</button></a>
+    <button class="btn-ghost" onclick="startDemo()" style="border-color:var(--green);color:var(--green)">Try Demo</button>
     <a href="/shop-signup.html"><button class="btn-primary">Get started →</button></a>
   </div>
 </nav>
@@ -226,7 +227,8 @@
       <p>CoolCare turns WhatsApp conversations and missed calls into booked home appliance service jobs — without adding work for your team.</p>
       <div class="hero-actions">
         <a href="/shop-signup.html"><button class="btn-hero">Get started →</button></a>
-        <a href="/login.html"><button class="btn-hero-ghost">Renew subscription</button></a>
+        <button class="btn-hero-ghost" onclick="startDemo()" style="border-color:var(--green);color:var(--green)">Try Live Demo →</button>
+        <a href="/login.html"><button class="btn-hero-ghost">Login</button></a>
       </div>
       <div class="proof">
         <div class="faces">
@@ -409,8 +411,8 @@
   <div class="shop-cta-inner">
     <div class="tag">For Repair Shops</div>
     <h2>Are you a repair shop owner?</h2>
-    <p>Register on CoolCare to receive bookings, manage jobs and automatically notify customers at every step — all from one dashboard.</p>
-    <div class="cta-btns">
+    <p>Register on CoolCare to receive bookings, manage jobs and automatically notify customers at every step — all from one dashboard.</p>        <div class="cta-btns">
+      <button class="cta-btn-ghost" onclick="startDemo()" style="border-color:var(--green);color:var(--green)">🎮 Try Live Demo</button>
       <a href="/shop-signup.html" class="cta-btn-primary">Register your shop →</a>
       <a href="/login.html" class="cta-btn-ghost">Already registered? Log in</a>
     </div>
@@ -467,30 +469,71 @@
 
   const cycleLabels = { monthly: '/mo', quarterly: '/qtr', halfyearly: '/6mo', yearly: '/yr' };
   const cycleDiscounts = { monthly: 0, quarterly: 10, halfyearly: 15, yearly: 20 };
+  const countryCurrencyMap = { IN: 'INR', AE: 'AED', KW: 'KWD' };
 
-  function detectBrowserCurrency() {
-    const saved = localStorage.getItem('cc_currency');
-    if (saved) return saved;
-    const locale = navigator.language || 'en-US';
-    const parts = locale.split(/[-_]/);
-    const country = (parts[1] || parts[0]).toUpperCase();
-    const map = { IN: 'INR', KW: 'KWD', AE: 'AED', US: 'USD', GB: 'USD', CA: 'USD', AU: 'USD', NZ: 'USD', SG: 'USD' };
-    return map[country] || 'USD';
-  }
+  // Country names for display
+  const countryNames = {
+    IN: 'India', AE: 'United Arab Emirates', KW: 'Kuwait',
+    US: 'United States', GB: 'United Kingdom', CA: 'Canada',
+    AU: 'Australia', SG: 'Singapore', MY: 'Malaysia',
+    SA: 'Saudi Arabia', QA: 'Qatar', BH: 'Bahrain', OM: 'Oman',
+  };
 
-  let currentCurrency = localStorage.getItem('cc_currency') || detectBrowserCurrency();
+  // Country flag emojis
+  const countryFlags = {
+    IN: '🇮🇳', AE: '🇦🇪', KW: '🇰🇼', US: '🇺🇸',
+    GB: '🇬🇧', CA: '🇨🇦', AU: '🇦🇺', SG: '🇸🇬',
+  };
+
+  let currentCurrency = localStorage.getItem('cc_currency') || 'USD';
+  let currentCountry = localStorage.getItem('cc_country') || null;
   let currentCycle = 'monthly';
   const currencySelect = document.getElementById('currencySelect');
 
+  // ── Auto-detect country from IP on first load ──
+  async function detectUserCountry() {
+    if (currentCountry) return;
+    try {
+      const res = await fetch('/api/currency');
+      const data = await res.json();
+      if (data.detectedCountry) {
+        currentCountry = data.detectedCountry;
+        localStorage.setItem('cc_country', currentCountry);
+      }
+      if (data.detectedCurrency) {
+        currentCurrency = data.detectedCurrency;
+        localStorage.setItem('cc_currency', currentCurrency);
+      }
+    } catch (e) {
+      // Fallback to browser locale detection
+      const locale = navigator.language || 'en-US';
+      const parts = locale.split(/[-_]/);
+      const country = (parts[1] || parts[0]).toUpperCase();
+      if (countryCurrencyMap[country]) {
+        currentCurrency = countryCurrencyMap[country];
+        currentCountry = country;
+        localStorage.setItem('cc_currency', currentCurrency);
+        localStorage.setItem('cc_country', country);
+      }
+    }
+  }
+
+  async function initPricing() {
+    await detectUserCountry();
+    await initCurrencySelect();
+    loadPricing(currentCurrency);
+  }
+
   const currencyLabels = {
-    USD: '🇺🇸 USD ($)',
-    INR: '🇮🇳 INR (₹)',
-    AED: '🇦🇪 AED (د.إ)',
-    KWD: '🇰🇼 KWD (KD)',
+    USD: { label: 'US Dollar', flag: '🇺🇸' },
+    INR: { label: 'Indian Rupee', flag: '🇮🇳' },
+    AED: { label: 'UAE Dirham', flag: '🇦🇪' },
+    KWD: { label: 'Kuwaiti Dinar', flag: '🇰🇼' },
   };
 
   function buildCurrencyOption(currency) {
-    return `<option value="${currency.code}">${currencyLabels[currency.code] || currency.code} (${currency.symbol})</option>`;
+    const info = currencyLabels[currency.code] || { label: currency.code, flag: '' };
+    return `<option value="${currency.code}">${info.flag} ${currency.code} (${currency.symbol})</option>`;
   }
 
   async function initCurrencySelect() {
@@ -500,12 +543,31 @@
       const supported = data.supported || [];
       currencySelect.innerHTML = supported.map(buildCurrencyOption).join('');
       currencySelect.value = currentCurrency;
+      
+      // Update country notice
+      updateCountryNotice(data);
     } catch (err) {
       currencySelect.value = currentCurrency;
     }
   }
 
-  initCurrencySelect();
+  function updateCountryNotice(data) {
+    const country = data.detectedCountry || currentCountry;
+    if (country && countryCurrencyMap[country]) {
+      const flag = countryFlags[country] || '';
+      const name = countryNames[country] || country;
+      const currency = countryCurrencyMap[country];
+      const existing = document.getElementById('countryNotice');
+      if (!existing) {
+        const container = document.querySelector('#pricing > div:first-child');
+        const notice = document.createElement('div');
+        notice.id = 'countryNotice';
+        notice.style.cssText = 'font-size:12px;color:var(--muted);margin-top:8px;margin-bottom:12px';
+        notice.innerHTML = `${flag} <strong style="color:var(--ink2)">${name}</strong> — prices shown in <strong style="color:var(--ink2)">${currency}</strong>`;
+        container.appendChild(notice);
+      }
+    }
+  }
 
   function switchBilling(cycle) {
     currentCycle = cycle;
@@ -517,6 +579,13 @@
     if (amount == null || Number.isNaN(amount)) return '—';
     const decimals = Number.isInteger(amount) ? 0 : 2;
     return `${symbol}${amount.toFixed(decimals)}`;
+  }
+
+  function getSignupUrl() {
+    let url = `/shop-signup.html?billing=${currentCycle}`;
+    if (currentCountry) url += `&country=${currentCountry}`;
+    url += `&currency=${currentCurrency}`;
+    return url;
   }
 
   async function loadPricing(currency) {
@@ -548,15 +617,46 @@
           <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Everything you need to grow</p>
           <div style="font-size:48px;font-weight:800;color:#fff;margin:12px 0;letter-spacing:-1px">${displayPrice}</div>
           ${discount > 0 ? `<div style="display:inline-block;color:var(--green);font-size:12px;font-weight:700;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:99px;padding:4px 12px;margin-bottom:8px">Save ${discount}% vs monthly</div>` : '<div style="height:24px"></div>'}
-          <div style="text-align:left;margin:24px auto;max-width:260px">${PRO_FEATURES.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
-          <a href="/shop-signup.html?billing=${currentCycle}"><button class="btn-hero" style="width:100%;font-size:14px;padding:14px">Get started →</button></a>
+          <div style="text-align:left;margin:24px auto;max-width:260px;display:flex;flex-direction:column;gap:8px">${PRO_FEATURES.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
+          <a href="${getSignupUrl()}"><button class="btn-hero" style="width:100%;font-size:14px;padding:14px">Get started →</button></a>
         </div>`;
     } catch (err) {
       cardEl.innerHTML = `<div style="color:var(--muted);padding:24px">Could not load pricing. Please refresh the page.</div>`;
     }
   }
 
-  loadPricing(currentCurrency);
+  // Start with auto-detection
+  initPricing();
+  // ── Demo Mode ──────────────────────────────────────────────────────────────
+  async function startDemo() {
+    const btn = event?.target;
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading demo...'; }
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'demo-login' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert('Demo is unavailable. Please try again later.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Try Live Demo →'; }
+        return;
+      }
+      localStorage.setItem('cc_token', data.token);
+      localStorage.setItem('cc_user', JSON.stringify(data.user));
+      localStorage.setItem('cc_shop', JSON.stringify({
+        id: data.user.id, shopName: data.user.shopName,
+        ownerName: data.user.name, email: data.user.email,
+        mobile: data.user.mobile, role: data.user.role,
+      }));
+      localStorage.setItem('cc_is_demo', 'true');
+      window.location.href = '/shop-dashboard.html';
+    } catch (err) {
+      alert('Demo is unavailable. Please try again later.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Try Live Demo →'; }
+    }
+  }
 </script>
 </body>
 </html>

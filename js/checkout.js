@@ -9,8 +9,8 @@
     return localStorage.getItem('cc_token');
   }
 
-  function savePendingCheckout(billingCycle, currency) {
-    sessionStorage.setItem('cc_checkout_pending', JSON.stringify({ billingCycle, currency, ts: Date.now() }));
+  function savePendingCheckout(billingCycle, currency, country) {
+    sessionStorage.setItem('cc_checkout_pending', JSON.stringify({ billingCycle, currency, country, ts: Date.now() }));
   }
 
   function loadPendingCheckout() {
@@ -80,31 +80,40 @@
   async function startCheckout(opts) {
     var billingCycle = opts.billingCycle || 'monthly';
     var currency = (opts.currency || localStorage.getItem('cc_currency') || 'USD').toUpperCase();
+    var country = opts.country || localStorage.getItem('cc_country') || null;
     var onError = opts.onError || function (msg) { alert(msg); };
     var onStart = opts.onStart || function () {};
 
     var token = getToken();
     if (!token) {
-      savePendingCheckout(billingCycle, currency);
-      window.location.href = '/shop-signup.html?billing=' + encodeURIComponent(billingCycle) + '&currency=' + encodeURIComponent(currency);
+      var redirectUrl = '/shop-signup.html?billing=' + encodeURIComponent(billingCycle) + '&currency=' + encodeURIComponent(currency);
+      if (country) redirectUrl += '&country=' + encodeURIComponent(country);
+      savePendingCheckout(billingCycle, currency, country);
+      window.location.href = redirectUrl;
       return;
     }
 
     onStart();
 
     try {
+      var body = {
+        action: 'checkout',
+        planName: 'pro',
+        billingCycle: billingCycle,
+        currency: currency,
+      };
+      // Send country info for security (backend will determine amount)
+      if (country) {
+        body.selectedCountry = country;
+      }
+      
       var res = await fetch('/api/payments', {
         method: 'POST',
         headers: {
           Authorization: 'Bearer ' + token,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          action: 'checkout',
-          planName: 'pro',
-          billingCycle: billingCycle,
-          currency: currency,
-        }),
+        body: JSON.stringify(body),
       });
 
       var data = await res.json();

@@ -107,9 +107,16 @@
       .nav-user{display:none}
       .hamburger{display:flex}
     }
+    /* Demo mode banner */
+    .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
+    .demo-banner.show{display:block}
+    .demo-banner span{background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px}
   </style>
 </head>
 <body>
+<div class="demo-banner" id="demoBanner">
+  🧪 Demo Mode — Changes are not saved. <span>READ ONLY</span>
+</div>
 <nav class="nav">
   <a class="brand" href="/shop-dashboard.html">← cool<b>care</b></a>
   <div class="nav-right">
@@ -210,6 +217,13 @@
 const TOKEN = localStorage.getItem('cc_token');
 if (!TOKEN) { window.location.replace('/login.html'); }
 
+// ── Demo mode check ──────────────────────────────────────────────────────────
+const isDemo = localStorage.getItem('cc_is_demo') === 'true';
+if (isDemo) {
+  document.getElementById('demoBanner').classList.add('show');
+  // Disable renewal button for demo users
+}
+
 function toggleMobileMenu() {
   document.getElementById('mobileMenu').classList.toggle('open');
   document.getElementById('hamburger').classList.toggle('open');
@@ -226,6 +240,7 @@ document.addEventListener('click', function(e) {
 function logout() {
   fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
   localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user');
+  localStorage.removeItem('cc_is_demo');
   window.location.href = '/login.html';
 }
 
@@ -256,6 +271,16 @@ async function api(url, opts) {
     return res;
   } catch(e) { toast('Network error'); return null; }
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+  // If demo, disable renew button and show toast on click
+  if (isDemo) {
+    const renewBtn = document.getElementById('renewBtn');
+    if (renewBtn) {
+      renewBtn.onclick = function() { toast('🔒 This is a demo account. Changes are not saved.'); };
+    }
+  }
+});
 
 async function loadSubscription() {
   const res = await api('/api/payments');

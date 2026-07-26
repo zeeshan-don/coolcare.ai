@@ -7,7 +7,7 @@
 // Security: auth required, multi-tenant, rate-limited.
 
 const { neon } = require("@neondatabase/serverless");
-const { requireAuth, requireActiveSubscription } = require("./_lib/auth");
+const { requireAuth, requireActiveSubscription, isDemoShop } = require("./_lib/auth");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
@@ -36,6 +36,16 @@ module.exports = withErrorHandler(async (request, response) => {
   const shopId = parseInt(auth.sub, 10);
   const sql = neon(process.env.DATABASE_URL);
   const body = request.body || {};
+
+  // ── DEMO MODE GUARD ──────────────────────────────────────────────────────
+  const isDemo = auth.isDemo || (shopId ? await isDemoShop(sql, shopId) : false);
+  if (isDemo) {
+    return response.status(403).json({
+      error: "This is a demo account. Changes are not saved.",
+      isDemo: true,
+      demoError: true,
+    });
+  }
 
   // Route by action or by presence of fields (backward-compat)
   if (body.action === "update" || (body.id && !body.customerNumber)) {

@@ -7,7 +7,7 @@
 
 const { neon } = require("@neondatabase/serverless");
 const { decrypt } = require("./encrypt");
-const { PLAN_PRICING } = require("./currency");
+const { PLAN_PRICING, getPlanPricingFromDB } = require("./currency");
 
 // ─── Config cache (5 min TTL) ───────────────────────────────────────────────
 let gwCache = { data: null, fetchedAt: 0 };
@@ -113,12 +113,31 @@ async function getActiveGateway() {
 
 /**
  * Calculate the payment amount for a given plan, billing cycle, and currency.
- * Uses PLAN_PRICING constant as authoritative source.
+ * Uses the subscription_plan_prices DB table as authoritative source.
+ * Falls back to PLAN_PRICING constant if DB is unavailable.
+ *
+ * @param {object} sql - Neon database client (optional, falls back to constant without it)
+ * @param {string} currency - Currency code (INR, USD, AED, KWD)
+ * @param {string} billingCycle - Billing cycle (monthly, quarterly, halfyearly, yearly)
+ * @param {number} planId - Plan ID (defaults to 1 for 'pro' plan)
+ * @returns {Promise<{ amount: number, currency: string }>}
  */
-function calculateAmount(currency, billingCycle) {
+async function calculateAmount(sql, currency, billingCycle, planId = 1) {
+  // If we have a DB connection, try to fetch from DB first
+  if (sql && typeof sql === 'function') {
+    try {
+      const prices = await getPlanPricingFromDB(sql, planId, currency);
+      if (prices) {
+        return { amount: prices[billingCycle] || prices.monthly, currency };
+      }
+    } catch (err) {
+      console.warn("[gateway] DB calculateAmount failed, using fallback:", err.message);
+    }
+  }
+
+  // Fallback to hardcoded PLAN_PRICING constant
   const prices = PLAN_PRICING[currency];
   if (!prices) {
-    // Unknown currency — fall back to USD
     return { amount: PLAN_PRICING.USD[billingCycle] || PLAN_PRICING.USD.monthly, currency: "USD" };
   }
   return { amount: prices[billingCycle] || prices.monthly, currency };
@@ -137,15 +156,25 @@ function toRazorpayAmount(amount, currency) {
 // ─── Strategy: Create Order ─────────────────────────────────────────────────
 /**
  * Create a payment order/checkout session using the active gateway.
+ * IMPORTANT SECURITY: The `amount` parameter MUST come from a DB-verified source
+ * (calculated by handleCheckout or handleSignup which read from subscription_plan_prices).
+ * We use the provided amount directly — NEVER recalculate or trust frontend amounts here.
+ *
  * Returns: { gateway, checkoutUrl | orderId, amount, currency, keyId, invoiceNumber }
  */
-async function createOrder({ shopId, billingCycle, currency, invoiceNumber, paymentDbId, originUrl }) {
+async function createOrder({ shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, originUrl }) {
   const gw = await getActiveGateway();
   if (!gw) {
     return { gateway: "none", message: "No payment gateway configured." };
   }
 
-  const { amount } = calculateAmount(currency, billingCycle);
+  // SECURITY: Use the DB-verified amount passed by the caller.
+  // Do NOT recalculate here — the amount was already fetched from
+  // subscription_plan_prices by handleCheckout or handleSignup.
+  if (amount === undefined || amount === null) {
+    console.error("[gateway] No amount provided — caller must pass a DB-verified amount");
+    return { gateway: gw.provider, error: "Internal configuration error" };
+  }
 
   switch (gw.provider) {
     case "razorpay":

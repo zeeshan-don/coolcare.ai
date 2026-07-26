@@ -103,9 +103,18 @@
       .header h1{font-size:28px}
       .nav{position:relative}
     }
+    /* Demo mode banner */
+    .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
+    .demo-banner.show{display:block}
+    .demo-banner span{background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px}
+    .demo-disabled{opacity:0.5;pointer-events:none;cursor:not-allowed !important}
+    .demo-tag{display:inline-block;background:rgba(34,197,94,0.12);color:var(--green);border:1px solid rgba(34,197,94,0.2);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;letter-spacing:0.3px;margin-left:6px;vertical-align:middle}
   </style>
 </head>
 <body>
+<div class="demo-banner" id="demoBanner">
+  🧪 Demo Mode — Changes are not saved. <span>READ ONLY</span>
+</div>
 <nav class="nav">
   <a class="brand" href="/shop-dashboard.html">cool<b>care</b></a>
   <div class="nav-right">
@@ -113,7 +122,7 @@
     <a href="/shop-ai-settings.html" class="nav-link">AI Settings</a>
     <a href="/shop-settings.html" class="nav-link">Settings</a>
     <div class="bell" onclick="window.location.href='/shop-notifications.html'" title="Notifications">🔔<span class="bell-count" id="bellCount" style="display:none">0</span></div>
-    <button class="logout-btn" onclick="logout()">Log Out</button>
+    <button class="logout-btn" id="logoutBtn" onclick="logout()">Log Out</button>
     <button class="hamburger" id="hamburger" onclick="toggleMobileMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
   </div>
 </nav>
@@ -225,9 +234,16 @@
     }
   });
 
+  // ── Demo mode check ────────────────────────────────────────────────────────
+  const isDemo = localStorage.getItem('cc_is_demo') === 'true';
+  if (isDemo) {
+    document.getElementById('demoBanner').classList.add('show');
+  }
+
   function logout() {
     fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
     localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user');
+    localStorage.removeItem('cc_is_demo');
     window.location.href = '/login.html';
   }
 
@@ -400,6 +416,35 @@
 
   function openBooking(id) { window.location.href = `/shop-booking.html?id=${id}`; }
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // ── Handle demo response errors ────────────────────────────────────────────
+  async function apiCall(url, opts) {
+    const res = await fetch(url, opts);
+    if (res.status === 403) {
+      try {
+        const data = await res.json();
+        if (data.isDemo) {
+          showDemoToast();
+          return null;
+        }
+      } catch (e) {}
+    }
+    return res;
+  }
+
+  function showDemoToast() {
+    let toast = document.getElementById('demoToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'demoToast';
+      toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;border:1px solid rgba(34,197,94,0.3);color:var(--green);padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.5);transition:all 0.3s;text-align:center';
+      document.body.appendChild(toast);
+    }
+    toast.textContent = '🔒 This is a demo account. Changes are not saved.';
+    toast.style.opacity = '1';
+    clearTimeout(toast._hide);
+    toast._hide = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+  }
 
   loadDashboard();
   setInterval(loadDashboard, 30000);

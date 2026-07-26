@@ -282,10 +282,17 @@
 </div>
 
 <div class="tab-panel" id="panel-pricing">
-  <div class="section-head"><h1>Plan Pricing</h1><button class="btn btn-primary" onclick="openPricingModal()">+ Create Pricing</button></div>
+  <div class="section-head"><h1>Plan Pricing (Subscription Plans)</h1><button class="btn btn-primary" onclick="openPricingModal()">+ Add Currency Pricing</button></div>
   <div class="table-wrap">
-    <table><thead><tr><th>Plan</th><th>Currency</th><th>Monthly</th><th>Quarterly</th><th>Half-yearly</th><th>Yearly</th><th>Actions</th></tr></thead>
-    <tbody id="pricingBody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody></table>
+    <table><thead><tr><th>Plan</th><th>Currency</th><th>Monthly</th><th>Quarterly</th><th>Half-yearly</th><th>Yearly</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody id="pricingBody"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody></table>
+  </div>
+  <div style="margin-top:12px">
+    <p style="color:var(--muted2);font-size:12px">
+      💡 <strong style="color:var(--ink2)">Multi-Currency Pricing</strong> — Prices are fetched from the database.
+      Disable a currency to hide it from the pricing page. Add new currencies anytime.
+      The backend always uses DB prices for payment calculation — never trusts the frontend.
+    </p>
   </div>
 </div>
 
@@ -1009,7 +1016,11 @@ async function loadPricingAdmin() {
         <td>${fmt(p.quarterly)}</td>
         <td>${fmt(p.halfyearly)}</td>
         <td>${fmt(p.yearly)}</td>
-        <td><button class="act" onclick="openPricingModal(${plan.plan_id},'${cur}')">Edit</button></td>
+        <td><span class="badge ${p.active !== false ? 'badge-active' : 'badge-inactive'}">${p.active !== false ? 'Active' : 'Disabled'}</span></td>
+        <td>
+          <button class="act" onclick="openPricingModal(${plan.plan_id},'${cur}')">Edit</button>
+          <button class="act ${p.active !== false ? 'danger' : ''}" onclick="togglePricingActive(${p.pricing_id}, ${p.active !== false ? 'false' : 'true'})">${p.active !== false ? 'Disable' : 'Enable'}</button>
+        </td>
       </tr>`);
     }
   }
@@ -1037,6 +1048,22 @@ function openPricingModal(planId = '', currency = '') {
   document.getElementById('pp_halfyearly').value = existing ? existing.halfyearly : '';
   document.getElementById('pp_yearly').value = existing ? existing.yearly : '';
   document.getElementById('pricingModal').classList.add('open');
+}
+
+// ─── Toggle pricing active status ────────────────────────────────────────
+async function togglePricingActive(pricingId, newActive) {
+  const res = await api('/api/shop', {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'toggle-plan-pricing',
+      pricingId,
+      active: newActive,
+    }),
+  });
+  if (!res) return;
+  const data = await res.json();
+  toast(data.message || 'Pricing status updated');
+  loadPricingAdmin();
 }
 
 async function savePricing() {

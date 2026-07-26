@@ -100,6 +100,8 @@
         </div>
       </div>
 
+      <div id="countrySelectorContainer"></div>
+
       <div class="section-label">Referral Code (Optional)</div>
       <div class="field">
         <label for="referralCode">Referral Code</label>
@@ -162,6 +164,12 @@
 
   // Redirect if already logged in
   if (localStorage.getItem('cc_token')) window.location.href = '/shop-dashboard.html';
+  
+  // Render country selector after detecting country
+  detectUserCountry().then(() => {
+    const container = document.getElementById('countrySelectorContainer');
+    if (container) container.innerHTML = getCountrySelector();
+  });
 
   const form    = document.getElementById('signupForm');
   const submitBtn = document.getElementById('submitBtn');
@@ -184,6 +192,98 @@
     document.querySelectorAll('.err-msg').forEach(e => e.classList.remove('show'));
     document.querySelectorAll('.error').forEach(e => e.classList.remove('error'));
     hideAlert();
+  }  // ── Country & Currency Detection ──
+  let detectedCountry = null;
+  let detectedCurrency = 'USD';
+  
+  const countryCurrencyMap = { IN: 'INR', AE: 'AED', KW: 'KWD' };
+  const countryNames = { IN: 'India', AE: 'United Arab Emirates', KW: 'Kuwait' };
+  const countryFlags = { IN: '🇮🇳', AE: '🇦🇪', KW: '🇰🇼' };
+
+  // Auto-detect country from API on page load
+  async function detectUserCountry() {
+    // Check URL param first
+    const urlCountry = urlParams.get('country');
+    if (urlCountry) {
+      detectedCountry = urlCountry;
+      detectedCurrency = countryCurrencyMap[urlCountry] || urlCurrency || 'USD';
+      return;
+    }
+    // Check saved preference
+    const saved = localStorage.getItem('cc_country');
+    if (saved && countryCurrencyMap[saved]) {
+      detectedCountry = saved;
+      detectedCurrency = countryCurrencyMap[saved];
+      return;
+    }
+    // Detect from API
+    try {
+      const res = await fetch('/api/currency');
+      const data = await res.json();
+      if (data.detectedCountry) {
+        detectedCountry = data.detectedCountry;
+        if (countryCurrencyMap[detectedCountry]) {
+          detectedCurrency = countryCurrencyMap[detectedCountry];
+        }
+      }
+    } catch (e) {
+      // Fallback to browser locale
+      const locale = navigator.language || 'en-US';
+      const parts = locale.split(/[-_]/);
+      const browserCountry = (parts[1] || parts[0]).toUpperCase();
+      if (countryCurrencyMap[browserCountry]) {
+        detectedCountry = browserCountry;
+        detectedCurrency = countryCurrencyMap[browserCountry];
+      }
+    }
+  }
+
+  // Build country selector HTML
+  function getCountrySelector() {
+    const countries = [
+      { code: 'IN', name: 'India', currency: 'INR' },
+      { code: 'AE', name: 'United Arab Emirates', currency: 'AED' },
+      { code: 'KW', name: 'Kuwait', currency: 'KWD' },
+    ];
+    const defaultCountry = detectedCountry && countryCurrencyMap[detectedCountry] ? detectedCountry : '';
+    return `
+      <div class="section-label">Billing Country</div>
+      <div class="field">
+        <label for="billingCountry">Select your country</label>
+        <select id="billingCountry" onchange="onCountryChange(this.value)">
+          <option value="">🌍 Other (USD pricing)</option>
+          ${countries.map(c =>
+            `<option value="${c.code}" ${c.code === defaultCountry ? 'selected' : ''}>
+              ${countryFlags[c.code] || ''} ${c.name} (${c.currency})
+            </option>`
+          ).join('')}
+        </select>
+        <div style="color:var(--muted);font-size:11px;margin-top:4px;">
+          ${detectedCurrency !== urlCurrency
+            ? `Pricing will be in <strong style="color:var(--ink2)">${detectedCurrency}</strong>`
+            : `Prices shown in <strong style="color:var(--ink2)">${urlCurrency}</strong>`
+          }
+        </div>
+      </div>`;
+  }
+
+  // Country change handler
+  function onCountryChange(countryCode) {
+    if (countryCode && countryCurrencyMap[countryCode]) {
+      detectedCountry = countryCode;
+      detectedCurrency = countryCurrencyMap[countryCode];
+      localStorage.setItem('cc_country', countryCode);
+      localStorage.setItem('cc_currency', detectedCurrency);
+      
+      // Update the URL parameter
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.set('currency', detectedCurrency);
+      newUrl.searchParams.set('country', countryCode);
+      window.history.replaceState({}, '', newUrl);
+    } else {
+      detectedCountry = null;
+      detectedCurrency = urlCurrency || 'USD';
+    }
   }
 
   // ── Load Razorpay script dynamically ──
@@ -253,9 +353,10 @@
     // If user came from pricing page, they selected a paid plan (always 'pro' in this version)
     const planName     = 'pro';
     const billingCycle = urlBilling;
-    const currency     = urlCurrency;
+    const currency     = detectedCurrency || urlCurrency;
+    const selectedCountry = detectedCountry;
 
-    console.log('[signup] Selected plan:', { planName, billingCycle, currency, fromURL: { billing: urlBilling, currency: urlCurrency } });
+    console.log('[signup] Selected plan:', { planName, billingCycle, currency, selectedCountry, fromURL: { billing: urlBilling, currency: urlCurrency } });
 
     // Client-side validation
     let valid = true;
@@ -296,6 +397,7 @@
         planName,
         billingCycle,
         currency,
+        selectedCountry: selectedCountry || undefined,
       };
       console.log('[signup] Request payload:', { ...signupPayload, password: '***', confirmPassword: '***' });
 

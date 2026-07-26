@@ -66,6 +66,11 @@
       <div class="forgot"><a href="/forgot-password.html">Forgot password?</a></div>
       <button type="submit" class="btn" id="loginBtn">Sign in</button>
     </form>
+    <div style="margin:16px 0;text-align:center;position:relative">
+      <div style="border-top:1px solid var(--border);margin:10px 0;"></div>
+      <span style="position:relative;top:-12px;background:var(--bg2);padding:0 12px;color:var(--muted);font-size:12px">or</span>
+    </div>
+    <button class="btn-demo" onclick="startDemo()" style="width:100%;background:rgba(34,197,94,0.1);color:var(--green);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px;font:600 15px inherit;cursor:pointer;transition:all 0.2s;margin-bottom:14px">🎮 Try Live Demo</button>
     <div class="link">New to CoolCare? <a href="/shop-signup.html">Register your shop</a></div>
     <div class="link"><a href="/">Back to home</a></div>
   </div>
@@ -177,6 +182,7 @@
 
       if (!res.ok) {
         showAlert(data.error || 'Login failed. Please check your credentials.', 'error');
+        btn.disabled = false; btn.textContent = 'Sign in';
         return;
       }
 
@@ -187,6 +193,7 @@
         ownerName: data.user.name, email: data.user.email,
         mobile: data.user.mobile, role: data.user.role,
       }));
+      localStorage.removeItem('cc_is_demo');
 
       window.location.href = redirectByRole(data.user);
     } catch (err) {
@@ -246,6 +253,37 @@
       btn.disabled = false; btn.textContent = 'Create Super Admin';
     }
   });
+
+  // ── Demo Mode Login ────────────────────────────────────────────────────────
+  async function startDemo() {
+    const btn = event?.target;
+    if (btn) { btn.disabled = true; btn.textContent = 'Loading demo...'; }
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'demo-login' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showAlert('Demo is unavailable. Please try again later.', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '🎮 Try Live Demo'; }
+        return;
+      }
+      localStorage.setItem('cc_token', data.token);
+      localStorage.setItem('cc_user', JSON.stringify(data.user));
+      localStorage.setItem('cc_shop', JSON.stringify({
+        id: data.user.id, shopName: data.user.shopName,
+        ownerName: data.user.name, email: data.user.email,
+        mobile: data.user.mobile, role: data.user.role,
+      }));
+      localStorage.setItem('cc_is_demo', 'true');
+      window.location.href = '/shop-dashboard.html';
+    } catch (err) {
+      showAlert('Demo is unavailable. Please try again later.', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '🎮 Try Live Demo'; }
+    }
+  }
 
   checkBootstrap();
 </script>

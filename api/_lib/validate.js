@@ -95,6 +95,8 @@ const signupSchema = z.object({
   planName: z.enum(["pro"]).optional().default("pro"),
   billingCycle: z.enum(["monthly", "quarterly", "halfyearly", "yearly"]).optional().default("monthly"),
   currency: z.string().min(1).max(10).optional(),
+  // Country detection and selection
+  selectedCountry: z.string().min(2).max(5).optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],

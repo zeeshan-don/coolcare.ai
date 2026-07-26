@@ -17,7 +17,7 @@
 // POST /api/shop  body: { action: "save-settings", settings: {} } → settings
 
 const { neon } = require("@neondatabase/serverless");
-const { requireAuth, requireRole, requirePlatformAdmin, requireSuperAdmin, requireActiveSubscription, logAdminAction } = require("./_lib/auth");
+const { requireAuth, requireRole, requirePlatformAdmin, requireSuperAdmin, requireActiveSubscription, logAdminAction, isDemoShop } = require("./_lib/auth");
 const { notifyStatusChange, sendEmail, sendWhatsApp } = require("./_lib/notify");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, aiSettingsSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
@@ -47,7 +47,7 @@ const planPricingSchema = z.object({
 });
 
 // Admin GET actions
-const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-pricing", "admin-payments", "admin-settings", "admin-analytics", "admin-gateways", "admin-subscriptions", "admin-invoices", "admin-payment-logs", "admin-pending-activations"]);
+const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-pricing", "admin-payments", "admin-settings", "admin-analytics", "admin-gateways", "admin-subscriptions", "admin-invoices", "admin-payment-logs", "admin-pending-activations", "admin-subscription-plans"]);
 // Admin POST actions
 const ADMIN_POST_ACTIONS = new Set([
   "suspend", "activate", "delete", "edit-shop", "approve-shop", "reject-shop", "reset-password",
@@ -55,6 +55,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "create-plan", "edit-plan", "delete-plan", "duplicate-plan", "save-plan-pricing", "save-settings",
   "extend-subscription", "change-plan",
   "save-gateway", "toggle-gateway",
+  "toggle-plan-pricing",
 ]);
 // Gated shop actions (require active subscription)
 const GATED_POST_ACTIONS = new Set(["update"]);
@@ -89,9 +90,23 @@ module.exports = withErrorHandler(async (request, response) => {
     return response.status(400).json({ error: "Invalid GET action" });
   }
 
+  // ── DEMO MODE GUARD: Block all write operations for demo shops ──────────
+  const isDemo = auth.isDemo || (shopId ? await isDemoShop(sql, shopId) : false);
+
   if (request.method === "POST") {
     const body = request.body || {};
     const action = body.action;
+
+    // Block all write operations for demo shops
+    if (isDemo && action !== 'mark-notification-read') {
+      // Allow reading notifications but block everything else
+      return response.status(403).json({
+        error: "This is a demo account. Changes are not saved.",
+        isDemo: true,
+        demoError: true,
+      });
+    }
+
     // Admin actions
     if (ADMIN_POST_ACTIONS.has(action)) return handleAdminPost(request, response, sql, auth, body);
     // Gated actions (require active subscription)
@@ -258,6 +273,7 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     subscriptionStatus,
     approvalStatus,
     rejectionReason,
+    isDemo: !!auth.isDemo,
   });
 }
 
@@ -395,6 +411,7 @@ async function handleAdminGet(request, response, sql, auth, action) {
     case "admin-pending-activations": return adminPendingActivations(request, response, sql, auth);
     case "admin-invoices": return adminListInvoices(request, response, sql, auth);
     case "admin-payment-logs": return adminListPaymentLogs(request, response, sql, auth);
+    case "admin-subscription-plans": return adminListSubscriptionPlans(request, response, sql, auth);
     default: return response.status(400).json({ error: "Unknown admin GET action" });
   }
 }
@@ -405,7 +422,7 @@ async function adminListPricing(request, response, sql, auth) {
     const plans = await sql`
       SELECT sp.id as plan_id, sp.name as plan_name, sp.display_name,
              spp.id as pricing_id, spp.currency, spp.price_monthly, spp.price_quarterly,
-             spp.price_halfyearly, spp.price_yearly
+             spp.price_halfyearly, spp.price_yearly, spp.active as pricing_active
       FROM subscription_plans sp
       LEFT JOIN subscription_plan_prices spp ON sp.id = spp.plan_id
       ORDER BY sp.id, spp.currency
@@ -427,6 +444,7 @@ async function adminListPricing(request, response, sql, auth) {
           quarterly: parseFloat(row.price_quarterly || 0),
           halfyearly: parseFloat(row.price_halfyearly || 0),
           yearly: parseFloat(row.price_yearly || 0),
+          active: row.pricing_active,
         };
       }
       return acc;
@@ -796,6 +814,9 @@ async function handleAdminPost(request, response, sql, auth, body) {
     // ── Gateway management (Super Admin only) ────────────────
     case "save-gateway": return adminSaveGateway(request, response, sql, auth, body, actorType, actorId, ip);
     case "toggle-gateway": return adminToggleGateway(request, response, sql, auth, body, actorType, actorId, ip);
+
+    // ── Subscription Plans management (Super Admin only) ──────
+    case "toggle-plan-pricing": return adminTogglePlanPricing(sql, response, body, actorType, actorId, ip);
 
     default: return response.status(400).json({ error: "Unknown admin action" });
   }
@@ -1167,6 +1188,77 @@ async function adminSavePlanPricing(sql, response, body, actorType, actorId, ip)
   `;
   await logAdminAction(sql, { actorType, actorId, action: "create_plan_pricing", targetType: "plan_pricing", targetId: rows[0].id, ip });
   return response.status(201).json({ message: "Pricing saved" });
+}
+
+// ─── ADMIN LIST SUBSCRIPTION PLANS (for admin subscription plans page) ─────
+async function adminListSubscriptionPlans(request, response, sql, auth) {
+  // Requires super admin
+  const sa = await requireSuperAdmin(auth, sql, response);
+  if (!sa) return;
+
+  try {
+    const plans = await sql`
+      SELECT sp.id as plan_id, sp.name, sp.display_name, sp.is_active as plan_active,
+             spp.id as pricing_id, spp.currency, spp.price_monthly, spp.price_quarterly,
+             spp.price_halfyearly, spp.price_yearly, spp.active as pricing_active,
+             spp.created_at as pricing_created, spp.updated_at as pricing_updated
+      FROM subscription_plans sp
+      LEFT JOIN subscription_plan_prices spp ON sp.id = spp.plan_id
+      ORDER BY sp.id, spp.currency
+    `;
+
+    // Group by plan
+    const result = plans.reduce((acc, row) => {
+      const pid = row.plan_id;
+      if (!acc[pid]) {
+        acc[pid] = {
+          plan_id: pid,
+          name: row.name,
+          display_name: row.display_name,
+          is_active: row.plan_active,
+          pricing: {},
+        };
+      }
+      if (row.currency) {
+        acc[pid].pricing[row.currency] = {
+          pricing_id: row.pricing_id,
+          monthly: parseFloat(row.price_monthly || 0),
+          quarterly: parseFloat(row.price_quarterly || 0),
+          halfyearly: parseFloat(row.price_halfyearly || 0),
+          yearly: parseFloat(row.price_yearly || 0),
+          active: row.pricing_active,
+        };
+      }
+      return acc;
+    }, {});
+
+    return response.status(200).json({ plans: Object.values(result) });
+  } catch (err) {
+    console.error("[admin/subscription-plans] Failed:", err.message);
+    return response.status(500).json({ error: "Failed to load subscription plans" });
+  }
+}
+
+// ─── ADMIN TOGGLE PLAN PRICING ACTIVE ───────────────────────────────────────
+async function adminTogglePlanPricing(sql, response, body, actorType, actorId, ip) {
+  const pricingId = body.pricingId;
+  if (!pricingId) return response.status(400).json({ error: "pricingId required" });
+
+  const active = body.active !== undefined ? body.active : null;
+  if (active === null) return response.status(400).json({ error: "active flag required" });
+
+  try {
+    await sql`
+      UPDATE subscription_plan_prices
+      SET active = ${active === true || active === 'true'}, updated_at = now()
+      WHERE id = ${pricingId}
+    `;
+    await logAdminAction(sql, { actorType, actorId, action: "toggle_plan_pricing", targetType: "plan_pricing", targetId: pricingId, details: { active }, ip });
+    return response.status(200).json({ message: `Pricing ${active ? 'enabled' : 'disabled'}` });
+  } catch (err) {
+    console.error("[admin/toggle-pricing] Failed:", err.message);
+    return response.status(500).json({ error: "Failed to toggle pricing" });
+  }
 }
 
 async function adminDeletePlan(sql, response, body, actorType, actorId, ip) {
