@@ -20,6 +20,7 @@
     /* NAV */
     .nav{height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:0 32px;position:sticky;top:0;z-index:50;background:rgba(0,0,0,.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
     .brand{font-weight:700;font-size:17px;letter-spacing:-.3px;color:#fff;display:flex;align-items:center;gap:10px}
+    .brand-signature{height:24px;width:auto;vertical-align:middle}
     .brand-tag{background:#fff;color:#000;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase}
     .nav-right{display:flex;gap:12px;align-items:center}
     .nav-user{font-size:13px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -145,7 +146,7 @@
 <body>
 <!-- NAV -->
 <nav class="nav">
-  <a class="brand" href="/admin.html">coolcare <span class="brand-tag">Admin</span></a>
+  <a class="brand" href="/admin.html">coolcare <span class="brand-tag">Admin</span> by <img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
   <div class="nav-right">
     <span class="nav-role" id="navRole"></span>
     <span class="nav-user" id="navUser"></span>
