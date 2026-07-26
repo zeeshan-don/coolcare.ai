@@ -821,13 +821,13 @@ async function handleDemoPreload(request, response) {
           await sql`
             INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
               area, address, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
-              priority, invoice_number, created_at, updated_at, customer_notes)
+              priority, invoice_number, created_at, customer_notes)
             VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
               ${b.service}, ${b.area}, ${cust.address || b.area}, ${b.urgency}, ${b.status},
               ${techId}, ${techName}, ${b.cost ? b.cost * 0.7 : null}, ${b.final_cost || null},
               ${priority},
               ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
-              ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})
+              ${ago(b.created_days_ago)}, ${'Customer reported ' + b.service.toLowerCase()})
           `;
         }
 
@@ -1044,13 +1044,13 @@ async function handleDemoLogin(request, response) {
           else if (b.urgency === 'today') priority = 'high';
           await sql`INSERT INTO bookings (repair_shop_id, customer_number, customer_name, service_type,
             area, address, urgency, status, technician_id, technician_name, estimated_cost, final_cost,
-            priority, invoice_number, created_at, updated_at, customer_notes)
+            priority, invoice_number, created_at, customer_notes)
             VALUES (${demoShopId}, ${cust.phone}, ${cust.name},
               ${b.service}, ${b.area}, ${cust.address || b.area}, ${b.urgency}, ${b.status},
               ${techId}, ${techName}, ${b.cost ? b.cost * 0.7 : null}, ${b.final_cost || null},
               ${priority},
               ${b.status === 'completed' ? `INV-DEMO-${String(i + 1).padStart(4, '0')}` : null},
-              ${ago(b.created_days_ago)}, now(), ${'Customer reported ' + b.service.toLowerCase()})`;
+              ${ago(b.created_days_ago)}, ${'Customer reported ' + b.service.toLowerCase()})`;
         }
 
         // Insert subscription
