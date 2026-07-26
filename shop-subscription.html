@@ -215,14 +215,17 @@
 
 <script>
 const TOKEN = localStorage.getItem('cc_token');
-if (!TOKEN) { window.location.replace('/login.html'); }
+if (!TOKEN) { window.location.replace('/login.html'); }  // ── Demo mode check ──────────────────────────────────────────────────────────
+  const isDemo = localStorage.getItem('cc_is_demo') === 'true';
+  if (isDemo) {
+    document.getElementById('demoBanner').classList.add('show');
+    // Disable renewal button for demo users
+  }
 
-// ── Demo mode check ──────────────────────────────────────────────────────────
-const isDemo = localStorage.getItem('cc_is_demo') === 'true';
-if (isDemo) {
-  document.getElementById('demoBanner').classList.add('show');
-  // Disable renewal button for demo users
-}
+  // ── INR formatting helper for demo ─────────────────────────────────────────
+  function fmtINR(amount) {
+    return '₹' + Number(amount || 0).toLocaleString('en-IN');
+  }
 
 function toggleMobileMenu() {
   document.getElementById('mobileMenu').classList.toggle('open');

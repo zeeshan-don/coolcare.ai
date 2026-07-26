@@ -1020,4 +1020,501 @@ function generateRevenueChart() {
 // EXPORTS
 // ═════════════════════════════════════════════════════════════════════════════
 
-module.exports = { DEMO, ago, generateRevenueChart, pick, randInt };
+
+// ═════════════════════════════════════════════════════════════════════════════
+// API RESPONSE BUILDERS — returns exact JSON structure frontend expects
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build a complete dashboard API response for demo mode.
+ * Matches the structure returned by handleDashboard() in api/shop.js
+ */
+function buildDemoDashboardResponse(params) {
+  params = params || {};
+  const page = params.page || 1;
+  const limit = params.limit || 20;
+  const filterStatus = params.status || "all";
+  const search = params.search || "";
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // ── Build bookings in DB-returned format ─────────────────────────────────
+  function bookingToRow(b, idx) {
+    const cust = DEMO.customers[b.customerIdx];
+    const techName = b.techIdx != null ? DEMO.technicians[b.techIdx]?.name : null;
+    const bCreatedAt = new Date(now.getTime() - b.created_days_ago * 86400000);
+    bCreatedAt.setHours(7 + Math.floor(Math.random() * 14), Math.floor(Math.random() * 60));
+
+    return {
+      id: idx + 1,
+      customer_number: cust.phone,
+      customer_name: cust.name,
+      service_type: b.service,
+      area: b.area,
+      address: cust.address || b.area,
+      urgency: b.urgency,
+      status: b.status,
+      technician_id: b.techIdx != null ? b.techIdx + 1 : null,
+      technician_name: techName,
+      assigned_technician_name: techName,
+      assigned_technician_phone: techName ? DEMO.technicians[b.techIdx]?.phone : null,
+      technician_notes: b.status === "completed" ? "Job completed successfully. Customer satisfied." : null,
+      estimated_cost: b.status !== "open" && b.status !== "accepted" ? (b.cost || Math.floor((b.final_cost || 1000) * 0.7)) : null,
+      final_cost: b.final_cost || null,
+      priority: b.priority || "normal",
+      customer_notes: "Customer reported " + b.service.toLowerCase(),
+      invoice_number: b.status === "completed" ? "INV-DEMO-" + String(idx + 1).padStart(4, "0") : null,
+      created_at: bCreatedAt.toISOString(),
+      updated_at: new Date(now.getTime() - Math.max(0, b.created_days_ago - 1) * 86400000).toISOString(),
+    };
+  }
+
+  // ── Status counts ────────────────────────────────────────────────────────
+  const statusCounts = { open: 0, accepted: 0, assigned: 0, on_the_way: 0, arrived: 0, completed: 0, cancelled: 0, rejected: 0 };
+  for (const b of BOOKINGS) {
+    if (statusCounts[b.status] !== undefined) statusCounts[b.status]++;
+  }
+
+  // ── Revenue stats ────────────────────────────────────────────────────────
+  let totalRevenue = 0;
+  let monthlyRevenue = 0;
+  let weeklyRevenue = 0;
+  let completedToday = 0;
+  let todayBookings = 0;
+  let monthBookings = 0;
+
+  for (const b of BOOKINGS) {
+    const bDate = new Date(now.getTime() - b.created_days_ago * 86400000);
+    const daysDiff = Math.floor((now - bDate) / 86400000);
+
+    if (b.status === "completed" && b.final_cost) {
+      totalRevenue += b.final_cost;
+      if (daysDiff < 30) monthlyRevenue += b.final_cost;
+      if (daysDiff < 7) weeklyRevenue += b.final_cost;
+    }
+    if (b.created_days_ago < 1) {
+      todayBookings++;
+      if (b.status === "completed") completedToday++;
+    }
+    if (b.created_days_ago < 30) monthBookings++;
+  }
+
+  const pendingJobs = BOOKINGS.filter(b =>
+    ["open", "accepted", "assigned", "on_the_way", "arrived"].includes(b.status)
+  ).length;
+
+  // ── Revenue chart (30 days) ──────────────────────────────────────────────
+  const revenueChart = generateRevenueChart();
+
+  // ── Activity feed ────────────────────────────────────────────────────────
+  const activityFeed = TIMELINE.slice(0, 20).map((t, i) => {
+    const cust = CUSTOMERS[randInt(0, CUSTOMERS.length - 1)];
+    return {
+      id: i + 1,
+      bookingId: t.bookingId,
+      action: t.action,
+      oldValue: t.oldValue,
+      newValue: t.newValue,
+      customerName: cust.name,
+      customerNumber: cust.phone,
+      serviceType: pick(SERVICES).name,
+      createdAt: ago(t.daysAgo || i),
+    };
+  });
+
+  // ── Customer history ─────────────────────────────────────────────────────
+  const customerVisitMap = {};
+  for (const b of BOOKINGS) {
+    if (b.status === "completed") {
+      const cust = CUSTOMERS[b.customerIdx];
+      if (!customerVisitMap[cust.phone]) {
+        customerVisitMap[cust.phone] = {
+          customer_name: cust.name,
+          customer_number: cust.phone,
+          visit_count: 0,
+          total_spent: 0,
+          first_visit: null,
+          last_visit: null,
+        };
+      }
+      const entry = customerVisitMap[cust.phone];
+      entry.visit_count++;
+      entry.total_spent += b.final_cost || 0;
+      const bDate = ago(b.created_days_ago);
+      if (!entry.last_visit || bDate > entry.last_visit) entry.last_visit = bDate;
+      if (!entry.first_visit || bDate < entry.first_visit) entry.first_visit = bDate;
+    }
+  }
+  const customerHistory = Object.values(customerVisitMap)
+    .sort((a, b) => b.visit_count - a.visit_count)
+    .slice(0, 20)
+    .map(c => ({
+      name: c.customer_name,
+      phone: c.customer_number,
+      visits: c.visit_count,
+      lastVisit: c.last_visit || ago(0),
+      firstVisit: c.first_visit || ago(30),
+      totalSpent: c.total_spent,
+    }));
+
+  // ── Filter bookings by status/search ─────────────────────────────────────
+  let filteredBookings = BOOKINGS;
+  if (filterStatus !== "all") {
+    filteredBookings = BOOKINGS.filter(b => b.status === filterStatus);
+  }
+  if (search) {
+    const q = search.toLowerCase();
+    filteredBookings = filteredBookings.filter(b => {
+      const cust = CUSTOMERS[b.customerIdx];
+      return cust.name.toLowerCase().includes(q) || cust.phone.includes(q);
+    });
+  }
+
+  // ── Paginate ─────────────────────────────────────────────────────────────
+  const total = filteredBookings.length;
+  const totalPages = Math.ceil(total / limit);
+  const offset = (page - 1) * limit;
+  const paginated = filteredBookings.slice(offset, offset + limit);
+
+  // ── Recent customers ─────────────────────────────────────────────────────
+  const recentCustomers = Object.values(customerVisitMap)
+    .sort((a, b) => (b.last_visit || "") > (a.last_visit || "") ? 1 : -1)
+    .slice(0, 10)
+    .map(c => ({
+      name: c.customer_name,
+      phone: c.customer_number,
+      lastBooking: c.last_visit,
+    }));
+
+  // ── Weekly bookings ──────────────────────────────────────────────────────
+  const weeklyBookings = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 86400000);
+    const dateStr = d.toISOString().slice(0, 10);
+    const count = BOOKINGS.filter(b => b.created_days_ago === i).length;
+    weeklyBookings.push({ date: dateStr, count });
+  }
+
+  return {
+    shop: {
+      id: 1,
+      shop_name: DEMO.shop.shop_name,
+      owner_name: DEMO.shop.owner_name,
+      email: DEMO.shop.email,
+      mobile: DEMO.shop.mobile,
+      city: DEMO.shop.city,
+      services_offered: DEMO.shop.services_offered,
+      service_areas: DEMO.shop.service_areas,
+      role: "owner",
+    },
+    counts: statusCounts,
+    bookings: paginated.map((b, i) => bookingToRow(b, offset + i)),
+    pagination: { page, limit, total, totalPages },
+    stats: {
+      todayBookings,
+      pendingJobs,
+      completedToday,
+      totalRevenue: Math.round(totalRevenue * 100) / 100,
+      monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
+      weeklyRevenue: Math.round(weeklyRevenue * 100) / 100,
+      monthBookings,
+    },
+    weeklyBookings,
+    revenueChart,
+    activityFeed,
+    customerHistory,
+    recentCustomers,
+    subscription: {
+      id: 1,
+      repair_shop_id: 1,
+      plan_id: 1,
+      plan_name: "pro",
+      plan_display: "Pro",
+      features: ["AI Chatbot", "WhatsApp Integration", "Unlimited Bookings", "Team Accounts", "Analytics"],
+      status: "active",
+      billing_cycle: "yearly",
+      gateway: "demo",
+      gateway_sub_id: "demo-sub-001",
+      amount_paid: 12470,
+      currency: "INR",
+      current_period_start: new Date(now.getTime() - 86400000 * 30).toISOString(),
+      current_period_end: new Date(now.getTime() + 86400000 * 335).toISOString(),
+      created_at: new Date(now.getTime() - 86400000 * 30).toISOString(),
+    },
+    subscriptionRequired: false,
+    subscriptionStatus: "active",
+    approvalStatus: "approved",
+    rejectionReason: null,
+    isDemo: true,
+  };
+}
+
+/**
+ * Build a booking detail response for demo mode.
+ * Matches handleBookingDetail() in api/shop.js
+ */
+function buildDemoBookingDetailResponse(bookingId) {
+  const idx = bookingId - 1;
+  if (idx < 0 || idx >= BOOKINGS.length) return null;
+
+  const b = BOOKINGS[idx];
+  const cust = DEMO.customers[b.customerIdx];
+  const techName = b.techIdx != null ? DEMO.technicians[b.techIdx]?.name : null;
+  const techPhone = b.techIdx != null ? DEMO.technicians[b.techIdx]?.phone : null;
+  const now = new Date();
+  const bCreatedAt = new Date(now.getTime() - b.created_days_ago * 86400000);
+  bCreatedAt.setHours(7 + Math.floor(Math.random() * 14), Math.floor(Math.random() * 60));
+
+  const booking = {
+    id: bookingId,
+    customer_number: cust.phone,
+    customer_name: cust.name,
+    service_type: b.service,
+    area: b.area,
+    address: cust.address || b.area,
+    urgency: b.urgency,
+    status: b.status,
+    technician_id: b.techIdx != null ? b.techIdx + 1 : null,
+    technician_name: techName,
+    assigned_technician_name: techName,
+    assigned_technician_phone: techPhone,
+    technician_notes: b.status === "completed" ? "Job completed successfully. All issues resolved. Customer satisfied." : null,
+    estimated_cost: b.status !== "open" && b.status !== "accepted" ? (b.cost || Math.floor((b.final_cost || 1000) * 0.7)) : null,
+    final_cost: b.final_cost || null,
+    priority: b.priority || "normal",
+    customer_notes: "Customer reported " + b.service.toLowerCase(),
+    invoice_number: b.status === "completed" ? "INV-DEMO-" + String(bookingId).padStart(4, "0") : null,
+    created_at: bCreatedAt.toISOString(),
+    updated_at: new Date(now.getTime() - Math.max(0, b.created_days_ago - 1) * 86400000).toISOString(),
+    shop_name: DEMO.shop.shop_name,
+  };
+
+  // Timeline entries for this booking
+  const timeline = [{
+    id: 1,
+    booking_id: bookingId,
+    action: "booking_created",
+    old_value: null,
+    new_value: null,
+    actor_type: "system",
+    notes: "Booking created via " + pick(["WhatsApp", "phone call", "website"]),
+    created_at: bCreatedAt.toISOString(),
+  }];
+
+  if (b.status !== "open") {
+    timeline.push({
+      id: 2,
+      booking_id: bookingId,
+      action: "status_change",
+      old_value: "open",
+      new_value: b.status === "accepted" ? "accepted" : "accepted",
+      actor_type: "shop",
+      notes: "Booking accepted by shop",
+      created_at: new Date(bCreatedAt.getTime() + 3600000).toISOString(),
+    });
+  }
+  if (b.techIdx != null) {
+    timeline.push({
+      id: 3,
+      booking_id: bookingId,
+      action: "technician_assigned",
+      old_value: null,
+      new_value: techName,
+      actor_type: "shop",
+      notes: "Technician assigned to job",
+      created_at: new Date(bCreatedAt.getTime() + 7200000).toISOString(),
+    });
+  }
+  if (b.status === "completed") {
+    timeline.push({
+      id: 4,
+      booking_id: bookingId,
+      action: "job_completed",
+      old_value: "arrived",
+      new_value: "completed",
+      actor_type: "technician",
+      notes: "Job completed successfully. Customer satisfied.",
+      created_at: new Date(bCreatedAt.getTime() + 14400000).toISOString(),
+    });
+    timeline.push({
+      id: 5,
+      booking_id: bookingId,
+      action: "payment_received",
+      old_value: null,
+      new_value: "₹" + b.final_cost,
+      actor_type: "system",
+      notes: "Payment received via online transfer",
+      created_at: new Date(bCreatedAt.getTime() + 18000000).toISOString(),
+    });
+  }
+
+  const technicians = TECHNICIANS.map((t, i) => ({
+    id: i + 1,
+    name: t.name,
+    phone: t.phone,
+    specialization: t.specialization,
+  }));
+
+  return { booking, timeline, technicians };
+}
+
+/**
+ * Build notifications response for demo mode.
+ * Matches handleGetNotifications() in api/shop.js
+ */
+function buildDemoNotificationsResponse(limit) {
+  limit = limit || 50;
+  const rows = NOTIFICATIONS.slice(0, limit).map((n, i) => ({
+    id: i + 1,
+    repair_shop_id: 1,
+    type: n.type,
+    title: n.title,
+    message: n.message,
+    is_read: n.is_read,
+    link: null,
+    metadata: n.metadata || {},
+    created_at: ago(n.daysAgo || i),
+  }));
+
+  const unreadCount = rows.filter(n => !n.is_read).length;
+
+  return {
+    notifications: rows,
+    unreadCount,
+    pagination: { page: 1, limit, total: rows.length },
+    isDemo: true,
+  };
+}
+
+/**
+ * Build AI settings response for demo mode.
+ */
+function buildDemoAiSettingsResponse() {
+  return {
+    settings: DEMO.ai_settings,
+    shop: DEMO.shop,
+    isDemo: true,
+  };
+}
+
+/**
+ * Build shop settings response for demo mode.
+ */
+function buildDemoShopSettingsResponse() {
+  return {
+    shop: DEMO.shop,
+    whatsappNumber: DEMO.shop.whatsapp_number,
+    isDemo: true,
+  };
+}
+
+/**
+ * Build referrals response for demo mode.
+ */
+function buildDemoReferralsResponse() {
+  return {
+    referralCode: "COOLCARE-DEMO",
+    shareLink: "https://coolcare.ai/shop-signup.html?ref=COOLCARE-DEMO",
+    walletBalance: 1240,
+    discountBalance: 500,
+    stats: { total: 5, successful: 3, pending: 2, earnings: 750 },
+    history: [
+      { id: 1, referrer_shop_id: 1, referred_shop_id: 2, referral_code: "COOLCARE-DEMO", status: "completed", reward_value: 250, referred_shop_name: "Quick Fix Services", referred_email: "owner@quickfix.demo", created_at: ago(30) },
+      { id: 2, referrer_shop_id: 1, referred_shop_id: 3, referral_code: "COOLCARE-DEMO", status: "completed", reward_value: 250, referred_shop_name: "ABC Repairs", referred_email: "info@abcrepairs.demo", created_at: ago(15) },
+      { id: 3, referrer_shop_id: 1, referred_shop_id: 4, referral_code: "COOLCARE-DEMO", status: "completed", reward_value: 250, referred_shop_name: "City Appliance Service", referred_email: "admin@cityappliance.demo", created_at: ago(7) },
+      { id: 4, referrer_shop_id: 1, referred_shop_id: 5, referral_code: "COOLCARE-DEMO", status: "pending", reward_value: 0, referred_shop_name: "Speedy Repairs", referred_email: "owner@speedy.demo", created_at: ago(2) },
+      { id: 5, referrer_shop_id: 1, referred_shop_id: 6, referral_code: "COOLCARE-DEMO", status: "pending", reward_value: 0, referred_shop_name: "Elite Home Services", referred_email: "contact@elite.demo", created_at: ago(1) },
+    ],
+  };
+}
+
+/**
+ * Build WhatsApp logs response for demo mode.
+ */
+function buildDemoWhatsAppLogsResponse() {
+  const logs = CONVERSATIONS.slice(0, 20).map((conv, i) => {
+    const cust = CUSTOMERS[conv.customerIdx];
+    const lastMsg = conv.messages[conv.messages.length - 1];
+    return {
+      id: i + 1,
+      customer_number: cust.phone,
+      customer_name: cust.name,
+      direction: "outbound",
+      message_text: lastMsg.text,
+      status: "delivered",
+      created_at: ago(i * 2),
+    };
+  });
+
+  return { logs, isDemo: true };
+}
+
+/**
+ * Build WhatsApp status response for demo mode.
+ */
+function buildDemoWhatsAppStatusResponse() {
+  return {
+    connected: true,
+    number: DEMO.shop.whatsapp_number,
+    businessProfile: { name: DEMO.shop.shop_name, description: "Professional appliance repair service in Bengaluru" },
+    qualityRating: "GREEN",
+    messageLimit: "250K/24h",
+    isDemo: true,
+  };
+}
+
+/**
+ * Build subscription page response for demo mode.
+ */
+function buildDemoSubscriptionResponse() {
+  const now = new Date();
+  const periodStart = new Date(now.getTime() - 86400000 * 30);
+  const periodEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+
+  return {
+    subscription: {
+      id: 1,
+      status: "active",
+      plan_id: 1,
+      plan_name: "Pro",
+      billing_cycle: "yearly",
+      amount_paid: 12470,
+      currency: "INR",
+      current_period_start: periodStart.toISOString(),
+      current_period_end: periodEnd.toISOString(),
+      gateway: "demo",
+      features: ["AI Chatbot", "WhatsApp Integration", "Unlimited Bookings", "Team Accounts", "Analytics & Reports"],
+    },
+    plans: [
+      { id: 1, name: "Starter", display_name: "Starter", price_monthly: 299, price_yearly: 2990, features: ["Basic Dashboard", "50 Bookings/mo", "Email Support"], is_active: true },
+      { id: 2, name: "Pro", display_name: "Pro", price_monthly: 1299, price_yearly: 12470, features: ["AI Chatbot", "WhatsApp Integration", "Unlimited Bookings", "Team Accounts", "Analytics"], is_active: true },
+      { id: 3, name: "Enterprise", display_name: "Enterprise", price_monthly: 4999, price_yearly: 49990, features: ["Everything in Pro", "Dedicated Account Manager", "Custom Integrations", "Priority Support", "Multi-Location"], is_active: true },
+    ],
+    payments: [
+      { id: 1, invoice_number: "INV-DEMO-0000", amount: 12470, currency: "INR", status: "completed", gateway: "demo", description: "CoolCare Pro — Yearly Subscription (Demo)", created_at: ago(30) },
+    ],
+    isDemo: true,
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EXPORTS — updated
+// ═════════════════════════════════════════════════════════════════════════════
+
+module.exports = {
+  DEMO,
+  ago,
+  generateRevenueChart,
+  pick,
+  randInt,
+  buildDemoDashboardResponse,
+  buildDemoBookingDetailResponse,
+  buildDemoNotificationsResponse,
+  buildDemoAiSettingsResponse,
+  buildDemoShopSettingsResponse,
+  buildDemoReferralsResponse,
+  buildDemoWhatsAppLogsResponse,
+  buildDemoWhatsAppStatusResponse,
+  buildDemoSubscriptionResponse,
+};

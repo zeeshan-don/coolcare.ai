@@ -21,7 +21,6 @@
     .logout-btn:hover{background:transparent;color:#fff;border-color:#555}
     .bell{position:relative;cursor:pointer;font-size:18px;padding:6px}
     .bell-count{position:absolute;top:0;right:0;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
-    /* Hamburger menu */
     .hamburger{display:none;flex-direction:column;gap:4px;cursor:pointer;padding:8px;background:none;border:none}
     .hamburger span{display:block;width:20px;height:2px;background:var(--ink2);border-radius:2px;transition:all 0.3s}
     .hamburger.open span:nth-child(1){transform:rotate(45deg) translate(4px,4px)}
@@ -34,49 +33,40 @@
     .mobile-menu .divider{border-top:1px solid var(--border);margin:6px 0}
     .wrap{max-width:1280px;margin:auto;padding:26px}
     .header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}.header h1{font-size:36px;letter-spacing:-1px;margin:0 0 4px;color:#fff}.header p{color:var(--muted);margin:0;font-size:15px}
-    /* Subscription banner */
     .sub-banner{background:var(--yellow-bg);border:1px solid rgba(234,179,8,0.2);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
     .sub-banner.inactive{background:var(--red-bg);border-color:rgba(239,68,68,0.2)}
     .sub-banner-text{font-size:14px;font-weight:600;color:var(--yellow)}.sub-banner.inactive .sub-banner-text{color:var(--red)}
     .sub-banner-sub{font-size:12px;color:var(--muted)}
     .sub-banner a{display:inline-block;background:#fff;color:#000;font:600 12px 'Inter',sans-serif;border:0;border-radius:8px;padding:8px 16px;cursor:pointer;text-decoration:none}
     .sub-banner a:hover{background:#e5e5e5}
-    /* Stats */
     .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
     .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden}
     .stat-card .label{font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--muted);margin-bottom:4px;text-transform:uppercase}
     .stat-card .value{font-size:32px;font-weight:700;letter-spacing:-0.5px}
     .stat-card.open .value{color:#fff}.stat-card.completed .value{color:var(--green)}.stat-card.cancelled .value{color:var(--muted)}
     .stat-card.revenue .value{color:var(--green);font-size:24px}
-    /* Two-col layout */
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:24px}
-    /* Sections */
     .section-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:18px}
     .section-card h2{font-size:16px;margin:0 0 16px;color:#fff;display:flex;align-items:center;justify-content:space-between}
     .section-card h2 .badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
-    /* Chart */
     .chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding:0 4px}
     .chart-bar{flex:1;background:var(--bg3);border-radius:3px 3px 0 0;min-width:4px;transition:background 0.2s;position:relative}
     .chart-bar:hover{background:var(--green)}.chart-bar.has-value{background:rgba(34,197,94,0.3)}
     .chart-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;padding:0 4px}
-    /* Activity */
     .activity-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
     .activity-item:last-child{border-bottom:0}
     .activity-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);margin-top:6px;flex-shrink:0}
     .activity-dot.status_change{background:var(--green)}.activity-dot.technician_assigned{background:#3b82f6}.activity-dot.priority_change{background:var(--yellow)}
     .activity-text{color:var(--ink2);line-height:1.5}.activity-text strong{color:#fff;font-weight:600}
     .activity-time{color:var(--muted);font-size:11px}
-    /* Customer history table */
     table{width:100%;border-collapse:collapse;font-size:13px}
     th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid var(--border)}
     td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--ink2)}tr:last-child td{border-bottom:0}
-    /* Tabs */
     .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;overflow-x:auto}
     .tab{padding:10px 16px;font-weight:600;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.2s;white-space:nowrap}
     .tab:hover{color:var(--ink)}.tab.active{color:#fff;border-color:#fff}
     .section-header{font-weight:600;font-size:12px;letter-spacing:0.5px;margin-bottom:10px;display:flex;align-items:center;gap:9px;color:var(--muted)}
     .section-header .badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:4px 9px;font-size:11px;font-weight:600}
-    /* Booking cards */
     .bookings-grid{display:grid;gap:10px}
     .booking-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 20px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;cursor:pointer;transition:all 0.2s}
     .booking-card:hover{border-color:var(--border2);transform:translateY(-2px)}
@@ -103,12 +93,34 @@
       .header h1{font-size:28px}
       .nav{position:relative}
     }
-    /* Demo mode banner */
     .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
     .demo-banner.show{display:block}
     .demo-banner span{background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px}
     .demo-disabled{opacity:0.5;pointer-events:none;cursor:not-allowed !important}
     .demo-tag{display:inline-block;background:rgba(34,197,94,0.12);color:var(--green);border:1px solid rgba(34,197,94,0.2);border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;letter-spacing:0.3px;margin-left:6px;vertical-align:middle}
+
+    /* ── Guided Tour Overlay ──────────────────────────────────────────────── */
+    .tour-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9998;display:none}
+    .tour-overlay.show{display:block}
+    .tour-card{position:fixed;z-index:9999;background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:28px 30px;max-width:420px;width:90%;box-shadow:0 24px 80px rgba(0,0,0,0.6);display:none;transition:all 0.3s}
+    .tour-card.show{display:block}
+    .tour-card .step-indicator{display:flex;gap:6px;margin-bottom:20px}
+    .tour-card .step-dot{width:8px;height:8px;border-radius:50%;background:#333;transition:all 0.3s}
+    .tour-card .step-dot.active{background:var(--green);width:24px;border-radius:4px}
+    .tour-card .step-dot.done{background:rgba(34,197,94,0.3)}
+    .tour-card h3{font-size:20px;font-weight:700;margin:0 0 8px;color:#fff;letter-spacing:-0.3px}
+    .tour-card p{font-size:14px;color:var(--ink2);line-height:1.6;margin:0 0 24px}
+    .tour-card .tour-actions{display:flex;justify-content:space-between;align-items:center}
+    .tour-card .tour-actions button{font:600 13px 'Inter',sans-serif;padding:10px 22px;border-radius:10px;cursor:pointer;transition:all 0.2s}
+    .tour-card .tour-skip{background:transparent;border:1px solid #333;color:var(--muted)}
+    .tour-card .tour-skip:hover{color:#fff;border-color:#555}
+    .tour-card .tour-next{background:#fff;border:none;color:#000}
+    .tour-card .tour-next:hover{background:#e5e5e5}
+    .tour-card .tour-prev{background:transparent;border:1px solid #333;color:var(--ink2)}
+    .tour-card .tour-prev:hover{color:#fff;border-color:#555}
+    .tour-highlight{position:relative;z-index:9997}
+    .tour-highlight::after{content:'';position:absolute;inset:-6px;border:2px solid var(--green);border-radius:16px;animation:tourPulse 2s ease-in-out infinite;pointer-events:none}
+    @keyframes tourPulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,0.3)}50%{opacity:0.7;box-shadow:0 0 0 8px rgba(34,197,94,0.1)}}
   </style>
 </head>
 <body>
@@ -137,7 +149,6 @@
 </div>
 
 <div class="wrap">
-  <!-- Subscription banner -->
   <div id="subBanner" style="display:none"></div>
 
   <div class="header">
@@ -148,7 +159,6 @@
     </div>
   </div>
 
-  <!-- Analytics cards -->
   <div class="stats" id="stats">
     <div class="stat-card open"><div class="label">Open</div><div class="value" id="count-open">—</div></div>
     <div class="stat-card accepted"><div class="label">Accepted</div><div class="value" id="count-accepted">—</div></div>
@@ -160,7 +170,6 @@
     <div class="stat-card revenue"><div class="label">Revenue</div><div class="value" id="count-revenue">—</div></div>
   </div>
 
-  <!-- Revenue chart + Activity feed -->
   <div class="grid-2">
     <div class="section-card">
       <h2>Revenue (30 days)</h2>
@@ -173,7 +182,6 @@
     </div>
   </div>
 
-  <!-- Bookings -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
     <div class="section-header" style="margin:0">Bookings <span class="badge" id="totalBadge">0</span></div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -199,7 +207,6 @@
     <button id="nextBtn" onclick="changePage(1)" style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 12px inherit;cursor:pointer;color:var(--muted)">Next →</button>
   </div>
 
-  <!-- Customer history -->
   <div class="section-card" style="margin-top:24px">
     <h2>Customer History <span class="badge" id="custBadge">0</span></h2>
     <div id="customerTable"><div class="empty">No customer data yet</div></div>
@@ -224,7 +231,6 @@
     menu.classList.toggle('open');
     hamburger.classList.toggle('open');
   }
-  // Close mobile menu on link click
   document.addEventListener('click', function(e) {
     const menu = document.getElementById('mobileMenu');
     const hamburger = document.getElementById('hamburger');
@@ -238,6 +244,9 @@
   const isDemo = localStorage.getItem('cc_is_demo') === 'true';
   if (isDemo) {
     document.getElementById('demoBanner').classList.add('show');
+    if (!localStorage.getItem('cc_tour_completed')) {
+      setTimeout(startTour, 800);
+    }
   }
 
   function logout() {
@@ -255,6 +264,10 @@
     window.open(`/api/shop?action=export&${params}`, '_blank');
   }
 
+  // ── INR formatting for demo ────────────────────────────────────────────────
+  function fmt(val) { return '₹' + Number(val || 0).toLocaleString('en-IN'); }
+
+  // ── Unified dashboard loader (works for both demo and real) ────────────────
   async function loadDashboard() {
     try {
       const params = new URLSearchParams({ page: currentPage, limit: 20 });
@@ -265,34 +278,22 @@
       if (res.status === 401) { logout(); return; }
       const data = await res.json();
 
-      // Unified banner: approval status takes priority, then subscription status
       const bannerEl = document.getElementById('subBanner');
-      
       if (data.approvalStatus === 'pending') {
-        bannerEl.style.display = 'flex';
-        bannerEl.className = 'sub-banner';
-        bannerEl.innerHTML = '<div><div class="sub-banner-text" style="color:#eab308">🟡 Waiting for Activation</div><div class="sub-banner-sub">Your account is pending approval. You will be notified once your AI assistant is activated.</div></div>' +
-          '<a href="/shop-subscription.html">View Status</a>';
-        document.querySelector('.nav-link[href="/shop-ai-settings.html"]')?.style.setProperty('opacity', '0.4');
-        document.querySelector('.nav-link[href="/shop-ai-settings.html"]')?.style.setProperty('pointer-events', 'none');
+        bannerEl.style.display = 'flex'; bannerEl.className = 'sub-banner';
+        bannerEl.innerHTML = '<div><div class="sub-banner-text" style="color:#eab308">🟡 Waiting for Activation</div><div class="sub-banner-sub">Your account is pending approval.</div></div><a href="/shop-subscription.html">View Status</a>';
+        document.querySelector('.nav-link[href="/shop-ai-settings.html"]')?.style.setProperty('opacity','0.4');
+        document.querySelector('.nav-link[href="/shop-ai-settings.html"]')?.style.setProperty('pointer-events','none');
       } else if (data.approvalStatus === 'rejected') {
-        bannerEl.style.display = 'flex';
-        bannerEl.className = 'sub-banner inactive';
-        bannerEl.innerHTML = '<div><div class="sub-banner-text" style="color:#ef4444">❌ Account Rejected</div><div class="sub-banner-sub">' + (data.rejectionReason || 'Your account was not approved. Please contact support for details.') + '</div></div>' +
-          '<a href="/contact.html">Contact Support</a>';
+        bannerEl.style.display = 'flex'; bannerEl.className = 'sub-banner inactive';
+        bannerEl.innerHTML = '<div><div class="sub-banner-text" style="color:#ef4444">❌ Account Rejected</div><div class="sub-banner-sub">'+(data.rejectionReason||'Contact support.')+'</div></div><a href="/contact.html">Contact Support</a>';
       } else if (data.subscriptionRequired) {
-        // Subscription status banner (only for approved/none shops)
-          const st = data.subscriptionStatus;
-          const isExpired = st === 'expired';
-          bannerEl.className = 'sub-banner' + (isExpired || st === 'inactive' ? ' inactive' : '');
-          bannerEl.style.display = 'flex';
-          const msg = isExpired ? 'Your subscription has expired. Renew now to continue using all features.'
-            : st === 'inactive' ? 'Your subscription is not active. Subscribe to unlock all features.'
-            : 'Your subscription needs attention.';
-        bannerEl.innerHTML = `<div><div class="sub-banner-text">${msg}</div><div class="sub-banner-sub">Status: ${st.charAt(0).toUpperCase() + st.slice(1)}</div></div><a href="/shop-subscription.html">Subscribe Now →</a>`;
+        const st = data.subscriptionStatus;
+        bannerEl.className = 'sub-banner' + (st==='expired'||st==='inactive'?' inactive':'');
+        bannerEl.style.display = 'flex';
+        bannerEl.innerHTML = `<div><div class="sub-banner-text">${st==='expired'?'Expired — Renew now':st==='inactive'?'Not active — Subscribe':'Needs attention'}</div><div class="sub-banner-sub">Status: ${st.charAt(0).toUpperCase()+st.slice(1)}</div></div><a href="/shop-subscription.html">Subscribe Now →</a>`;
       } else { bannerEl.style.display = 'none'; }
 
-      // Update stats
       if (data.counts) {
         document.getElementById('count-open').textContent = data.counts.open || 0;
         document.getElementById('count-accepted').textContent = data.counts.accepted || 0;
@@ -303,19 +304,13 @@
         document.getElementById('count-today').textContent = data.stats.todayBookings || 0;
         document.getElementById('count-month').textContent = data.stats.monthBookings || 0;
         document.getElementById('count-pending').textContent = data.stats.pendingJobs || 0;
-        document.getElementById('count-revenue').textContent = (data.stats.totalRevenue || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+        document.getElementById('count-revenue').textContent = isDemo ? fmt(data.stats.totalRevenue) : '$' + Number(data.stats.totalRevenue || 0).toFixed(2);
       }
 
-      // Revenue chart
       renderRevenueChart(data.revenueChart || []);
-
-      // Activity feed
       renderActivityFeed(data.activityFeed || []);
-
-      // Customer history
       renderCustomerHistory(data.customerHistory || []);
 
-      // Bookings
       allBookings = data.bookings || [];
       const total = data.pagination?.total || allBookings.length;
       document.getElementById('totalBadge').textContent = total;
@@ -323,11 +318,8 @@
       document.getElementById('prevBtn').disabled = (data.pagination?.page || 1) <= 1;
       document.getElementById('nextBtn').disabled = (data.pagination?.page || 1) >= (data.pagination?.totalPages || 1);
       renderBookings();
-
-      // Notification count
       loadNotificationCount();
 
-      // Update shop info
       if (data.shop) {
         document.getElementById('shopName').textContent = data.shop.shop_name || '';
         localStorage.setItem('cc_shop', JSON.stringify({ shopName: data.shop.shop_name }));
@@ -341,11 +333,11 @@
   function renderRevenueChart(chart) {
     const el = document.getElementById('revenueChart');
     const labels = document.getElementById('chartLabels');
-    if (!chart.length) { el.innerHTML = '<div class="empty" style="width:100%">No revenue data yet</div>'; labels.innerHTML = ''; return; }
+    if (!chart || !chart.length) { el.innerHTML = '<div class="empty" style="width:100%">No revenue data yet</div>'; labels.innerHTML = ''; return; }
     const maxRev = Math.max(...chart.map(d => d.revenue), 1);
     el.innerHTML = chart.map(d => {
       const h = Math.max(4, (d.revenue / maxRev) * 110);
-      return `<div class="chart-bar${d.revenue > 0 ? ' has-value' : ''}" style="height:${h}px" title="${new Date(d.date).toLocaleDateString()}: $${d.revenue.toFixed(2)}"></div>`;
+      return `<div class="chart-bar${d.revenue > 0 ? ' has-value' : ''}" style="height:${h}px" title="${new Date(d.date).toLocaleDateString('en-IN')}: ${isDemo ? fmt(d.revenue) : '$' + d.revenue.toFixed(2)}"></div>`;
     }).join('');
     const first = chart[0]?.date ? new Date(chart[0].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
     const last = chart[chart.length - 1]?.date ? new Date(chart[chart.length - 1].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
@@ -371,7 +363,7 @@
     document.getElementById('custBadge').textContent = customers.length;
     if (!customers.length) { el.innerHTML = '<div class="empty">No customer data yet</div>'; return; }
     el.innerHTML = `<table><thead><tr><th>Customer</th><th>Phone</th><th>Visits</th><th>Total Spent</th><th>Last Visit</th></tr></thead><tbody>${
-      customers.map(c => `<tr><td>${esc(c.name || 'Unknown')}</td><td>${esc(c.phone)}</td><td>${c.visits}</td><td>$${c.totalSpent.toFixed(2)}</td><td>${new Date(c.lastVisit).toLocaleDateString()}</td></tr>`).join('')
+      customers.map(c => `<tr><td>${esc(c.name || 'Unknown')}</td><td>${esc(c.phone)}</td><td>${c.visits}</td><td>${isDemo ? fmt(c.totalSpent) : '$' + c.totalSpent.toFixed(2)}</td><td>${new Date(c.lastVisit).toLocaleDateString()}</td></tr>`).join('')
     }</tbody></table>`;
   }
 
@@ -417,17 +409,10 @@
   function openBooking(id) { window.location.href = `/shop-booking.html?id=${id}`; }
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  // ── Handle demo response errors ────────────────────────────────────────────
   async function apiCall(url, opts) {
     const res = await fetch(url, opts);
     if (res.status === 403) {
-      try {
-        const data = await res.json();
-        if (data.isDemo) {
-          showDemoToast();
-          return null;
-        }
-      } catch (e) {}
+      try { const data = await res.json(); if (data.isDemo) { showDemoToast(); return null; } } catch (e) {}
     }
     return res;
   }
@@ -444,6 +429,98 @@
     toast.style.opacity = '1';
     clearTimeout(toast._hide);
     toast._hide = setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+  }
+
+  // ── Guided Tour for Demo Mode ──────────────────────────────────────────────
+  const TOUR_STEPS = [
+    { title: '👋 Welcome to CoolCare AI', body: 'This is a simulated repair business using CoolCare. Everything you see is demo data — no real customers or businesses are shown here.', selector: null },
+    { title: '📊 Dashboard at a Glance', body: 'Here you can see today\'s jobs, pending bookings, completed services, and revenue. These cards give an instant overview of your business.', selector: '#stats' },
+    { title: '📅 Bookings Management', body: 'Every WhatsApp enquiry from your customers appears here as a booking. Accept, assign, and track each job through completion.', selector: '.tabs' },
+    { title: '🤖 AI Conversations', body: 'The AI assistant handles customer enquiries on WhatsApp 24/7. It answers questions, provides quotes, and books appointments automatically.', selector: null },
+    { title: '🔧 Technician Management', body: 'Assign jobs to your technicians with one click. Track their location, completion status, and customer ratings in real time.', selector: '.stat-card.assigned' },
+    { title: '📈 Reports & Analytics', body: 'Track revenue, booking trends, and technician performance. The chart shows your last 30 days of earnings.', selector: '#revenueChart' },
+    { title: '⚙️ Settings & AI Config', body: 'Connect WhatsApp, configure your AI assistant, set working hours, and manage your team from Settings.', selector: null },
+    { title: '🎉 You\'re All Set!', body: 'Ready to automate your own repair business? Click "Get Started" to create your own account and start accepting bookings from WhatsApp today!', selector: null, isLast: true },
+  ];
+
+  let tourStep = 0;
+  let tourActive = false;
+
+  function startTour() {
+    if (tourActive) return;
+    tourActive = true;
+    tourStep = 0;
+    renderTourStep();
+  }
+
+  function renderTourStep() {
+    const step = TOUR_STEPS[tourStep];
+    if (!step) { endTour(); return; }
+
+    let overlay = document.getElementById('tourOverlay');
+    let card = document.getElementById('tourCard');
+
+    if (!overlay) { overlay = document.createElement('div'); overlay.id = 'tourOverlay'; overlay.className = 'tour-overlay'; overlay.onclick = endTour; document.body.appendChild(overlay); }
+    if (!card) { card = document.createElement('div'); card.id = 'tourCard'; card.className = 'tour-card'; document.body.appendChild(card); }
+
+    overlay.classList.add('show');
+    card.classList.add('show');
+    document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
+
+    if (step.selector) {
+      const target = document.querySelector(step.selector);
+      if (target) {
+        target.classList.add('tour-highlight');
+        const rect = target.getBoundingClientRect();
+        const vh = window.innerHeight;
+        card.style.left = Math.max(16, (window.innerWidth - 420) / 2) + 'px';
+        card.style.top = (rect.top < vh * 0.4 ? Math.min(rect.bottom + 16, vh - 300) : Math.max(rect.top - 280, 16)) + 'px';
+        card.style.transform = 'none';
+      } else { centerCard(card); }
+    } else { centerCard(card); }
+
+    const dots = TOUR_STEPS.map((s, i) => `<div class="step-dot ${i === tourStep ? 'active' : ''} ${i < tourStep ? 'done' : ''}"></div>`).join('');
+    const isFirst = tourStep === 0;
+    const isLast = !!step.isLast;
+
+    let actionsHtml = '<div class="tour-actions">';
+    if (!isFirst) actionsHtml += `<button class="tour-prev" onclick="tourPrev()">← Back</button>`;
+    else actionsHtml += '<div></div>';
+    if (isLast) actionsHtml += `<button class="tour-next" onclick="endTour(true)">🚀 Get Started →</button>`;
+    else actionsHtml += `<button class="tour-next" onclick="tourNext()">Continue →</button>`;
+    actionsHtml += '</div>';
+
+    card.innerHTML = `<div class="step-indicator">${dots}</div><h3>${esc(step.title)}</h3><p>${esc(step.body)}</p>${actionsHtml}`;
+
+    let skipBtn = document.getElementById('tourSkip');
+    if (!skipBtn) {
+      skipBtn = document.createElement('button');
+      skipBtn.id = 'tourSkip';
+      skipBtn.textContent = 'Skip Tour ✕';
+      skipBtn.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;background:rgba(255,255,255,0.08);border:1px solid #333;color:#a3a3a3;font:600 12px Inter,sans-serif;padding:8px 16px;border-radius:8px;cursor:pointer;transition:all 0.2s';
+      skipBtn.onmouseover = () => { skipBtn.style.color = '#fff'; skipBtn.style.borderColor = '#555'; };
+      skipBtn.onmouseout = () => { skipBtn.style.color = '#a3a3a3'; skipBtn.style.borderColor = '#333'; };
+      skipBtn.onclick = endTour;
+      document.body.appendChild(skipBtn);
+    }
+    skipBtn.style.display = 'block';
+  }
+
+  function centerCard(card) { card.style.left = '50%'; card.style.top = '50%'; card.style.transform = 'translate(-50%,-50%)'; }
+  function tourNext() { if (tourStep < TOUR_STEPS.length - 1) { tourStep++; renderTourStep(); } }
+  function tourPrev() { if (tourStep > 0) { tourStep--; renderTourStep(); } }
+
+  function endTour(goToSignup) {
+    tourActive = false;
+    const overlay = document.getElementById('tourOverlay');
+    const card = document.getElementById('tourCard');
+    const skipBtn = document.getElementById('tourSkip');
+    if (overlay) overlay.classList.remove('show');
+    if (card) card.classList.remove('show');
+    if (skipBtn) skipBtn.style.display = 'none';
+    document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
+    localStorage.setItem('cc_tour_completed', 'true');
+    if (goToSignup) { window.location.href = '/shop-signup.html'; }
   }
 
   loadDashboard();

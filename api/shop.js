@@ -25,6 +25,7 @@ const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
 const { getGatewayList, invalidateCache } = require("./_lib/gateway");
+const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoSubscriptionResponse } = require("./_lib/demo-data");
 const { z } = require("zod");
 const bcrypt = require("bcryptjs");
 
@@ -79,7 +80,7 @@ module.exports = withErrorHandler(async (request, response) => {
     if (ADMIN_GET_ACTIONS.has(action)) return handleAdminGet(request, response, sql, auth, action);
     // Non-gated actions (view-only or shop config)
     if (action === "dashboard") return handleDashboard(request, response, sql, shopId, auth);
-    if (action === "booking") return handleBookingDetail(request, response, sql, shopId);
+    if (action === "booking") return handleBookingDetail(request, response, sql, shopId, auth);
     if (OPEN_GET_ACTIONS.has(action)) return handleShopGet(request, response, sql, shopId, auth, action);
     // Gated actions
     if (GATED_GET_ACTIONS.has(action)) {
@@ -134,6 +135,17 @@ async function handleDashboard(request, response, sql, shopId, auth) {
 
   const q = querySchema.safeParse(request.query || {});
   const params = q.success ? q.data : { page: 1, limit: 20, sortBy: "created_at", sortDir: "desc" };
+
+  // ── DEMO MODE: Serve from in-memory demo data ───────────────────────────
+  if (auth.isDemo) {
+    return response.status(200).json(buildDemoDashboardResponse({
+      page: params.page,
+      limit: params.limit,
+      status: params.status || "all",
+      search: params.search || "",
+    }));
+  }
+
   const offset = (params.page - 1) * params.limit;
 
   const conditions = [`b.repair_shop_id = ${shopId}`];
@@ -280,9 +292,16 @@ async function handleDashboard(request, response, sql, shopId, auth) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // BOOKING DETAIL
 // ═══════════════════════════════════════════════════════════════════════════════
-async function handleBookingDetail(request, response, sql, shopId) {
+async function handleBookingDetail(request, response, sql, shopId, auth) {
   const bookingId = parseInt(request.query?.id, 10);
   if (!bookingId || isNaN(bookingId)) return response.status(400).json({ error: "Invalid booking ID" });
+
+  // ── DEMO MODE: Serve from in-memory demo data ───────────────────────────
+  if (auth?.isDemo) {
+    const demoData = buildDemoBookingDetailResponse(bookingId);
+    if (!demoData) return response.status(404).json({ error: "Booking not found" });
+    return response.status(200).json(demoData);
+  }
 
   const bookings = await sql`
     SELECT b.*, rs.shop_name, t.name AS assigned_technician_name,
@@ -1362,6 +1381,19 @@ async function adminChangePlan(sql, response, body, actorType, actorId, ip) {
 // SHOP GET ROUTER (non-gated actions)
 // ═══════════════════════════════════════════════════════════════════════════════
 async function handleShopGet(request, response, sql, shopId, auth, action) {
+  // ── DEMO MODE: Serve from in-memory demo data ───────────────────────────
+  if (auth.isDemo) {
+    switch (action) {
+      case "referrals": return response.status(200).json(buildDemoReferralsResponse());
+      case "ai-settings": return response.status(200).json(buildDemoAiSettingsResponse());
+      case "whatsapp-status": return response.status(200).json(buildDemoWhatsAppStatusResponse());
+      case "whatsapp-logs": return response.status(200).json(buildDemoWhatsAppLogsResponse());
+      case "notifications": return response.status(200).json(buildDemoNotificationsResponse(parseInt(request.query?.limit || "50", 10)));
+      case "shop-settings": return response.status(200).json(buildDemoShopSettingsResponse());
+      default: return response.status(400).json({ error: "Unknown GET action" });
+    }
+  }
+
   switch (action) {
     case "referrals": return handleReferrals(request, response, sql, shopId);
     case "ai-settings": return handleGetAiSettings(request, response, sql, shopId);

@@ -276,8 +276,9 @@
     document.getElementById('serviceType').textContent  = booking.service_type || '—';
     document.getElementById('urgency').textContent      = booking.urgency || '—';
     document.getElementById('techName').textContent     = booking.technician_name || booking.assigned_technician_name || '—';
-    document.getElementById('estCost').textContent      = booking.estimated_cost ? Number(booking.estimated_cost).toLocaleString('en-US', { style:'currency', currency:'USD' }) : '—';
-    document.getElementById('finalCost').textContent    = booking.final_cost ? Number(booking.final_cost).toLocaleString('en-US', { style:'currency', currency:'USD' }) : '—';
+    const demoFmt = (val) => isDemo ? '₹' + Number(val).toLocaleString('en-IN') : Number(val).toLocaleString('en-US', { style:'currency', currency:'USD' });
+    document.getElementById('estCost').textContent      = booking.estimated_cost ? demoFmt(booking.estimated_cost) : '—';
+    document.getElementById('finalCost').textContent    = booking.final_cost ? demoFmt(booking.final_cost) : '—';
 
     if (booking.technician_notes) {
       document.getElementById('notesCard').style.display = 'block';
