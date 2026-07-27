@@ -4,7 +4,7 @@
  */
 
 /* ── PROMO CODE STATE ── */
-if (typeof P === 'undefined') { var P = {}; }
+if (typeof P === 'undefined') { window.P = {}; }
 P.promo = P.promo || 1;
 P.redemption = P.redemption || 1;
 
