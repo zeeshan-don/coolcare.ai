@@ -75,42 +75,50 @@ function hashToken(token) {
 }
 
 // ─── Check if promotion_codes table exists (handles missing table gracefully) ─
-// Uses PostgreSQL's search_path so works regardless of schema configuration.
+// Always filters by table_schema = 'public' to avoid false positives from
+// tables with the same name in other schemas. Logs DB identity on every
+// check for rapid incident diagnosis. Only caches successful (exists=true)
+// results for a short window to reduce cold-start query churn.
 const TABLE_CHECK_CACHE = { result: null, timestamp: 0 };
-const TABLE_CHECK_TTL_MS = 15_000; // Re-check every 15 seconds
+const TABLE_CHECK_TTL_MS = 3_000; // Re-check every 3 seconds (was 15s)
 
 async function ensurePromotionCodesTable(sql) {
   const now = Date.now();
-  if (TABLE_CHECK_CACHE.result !== null && (now - TABLE_CHECK_CACHE.timestamp) < TABLE_CHECK_TTL_MS) {
-    return TABLE_CHECK_CACHE.result;
+  if (TABLE_CHECK_CACHE.result === true && (now - TABLE_CHECK_CACHE.timestamp) < TABLE_CHECK_TTL_MS) {
+    return true; // Only serve from cache if we previously confirmed existence
   }
   try {
-    // Uses information_schema.tables without schema filter — relies on
-    // PostgreSQL's search_path resolution. On Neon, the default is 'public'
-    // unless explicitly changed.
+    // Log database identity on EVERY check (not just first failure)
+    const dbInfo = await sql`SELECT current_database() as db, current_schema() as schema, current_user as "user"`;
+    const db = dbInfo[0]?.db;
+    const schema = dbInfo[0]?.schema;
+    const user = dbInfo[0]?.user;
+    console.log("[promotions] Table check — DB:", db, "Schema:", schema, "User:", user);
+
     const rows = await sql`
       SELECT EXISTS (
         SELECT 1 FROM information_schema.tables
-        WHERE table_name = 'promotion_codes'
+        WHERE table_schema = 'public' AND table_name = 'promotion_codes'
       ) as exists
     `;
     const exists = rows[0]?.exists === true;
-    TABLE_CHECK_CACHE.result = exists;
-    TABLE_CHECK_CACHE.timestamp = now;
-    
-    if (!exists) {
-      // Log database identity for debugging on first detection
-      try {
-        const dbInfo = await sql`SELECT current_database() as db, current_schema() as schema, current_user as "user"`;
-        console.warn("[promotions] Table MISSING. DB:", dbInfo[0]?.db, "Schema:", dbInfo[0]?.schema, "User:", dbInfo[0]?.user);
-      } catch (_) {}
+
+    if (exists) {
+      TABLE_CHECK_CACHE.result = true;
+      TABLE_CHECK_CACHE.timestamp = now;
+    } else {
+      // Never cache a false result — always re-check on next request
+      TABLE_CHECK_CACHE.result = null;
+      TABLE_CHECK_CACHE.timestamp = 0;
+      console.warn("[promotions] Table MISSING — DB:", db, "Schema:", schema, "User:", user);
     }
-    
+
     return exists;
   } catch (e) {
-    console.warn("[promotions] Table check failed:", e.message);
-    TABLE_CHECK_CACHE.result = false;
-    TABLE_CHECK_CACHE.timestamp = now;
+    console.warn("[promotions] Table check query failed:", e.message);
+    // Never cache on error — retry on next request
+    TABLE_CHECK_CACHE.result = null;
+    TABLE_CHECK_CACHE.timestamp = 0;
     return false;
   }
 }

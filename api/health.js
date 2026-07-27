@@ -43,7 +43,7 @@ module.exports = async (request, response) => {
     const tableCheck = await sql`
       SELECT EXISTS (
         SELECT 1 FROM information_schema.tables
-        WHERE table_name = 'promotion_codes'
+        WHERE table_schema = 'public' AND table_name = 'promotion_codes'
       ) as exists
     `;
     const promoTableExists = tableCheck[0]?.exists === true;
@@ -65,7 +65,7 @@ module.exports = async (request, response) => {
         const rows = await sql`
           SELECT EXISTS (
             SELECT 1 FROM information_schema.tables
-            WHERE table_name = ${tableName}
+            WHERE table_schema = 'public' AND table_name = ${tableName}
           ) as exists
         `;
         diag.tables[tableName] = rows[0]?.exists === true;
