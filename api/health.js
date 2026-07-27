@@ -61,26 +61,6 @@ module.exports = async (request, response) => {
         "users",
       ];
 
-      //━━ Complete table list ───────────────────────────────────────
-      const allTables = await sql`
-        SELECT table_name, table_type
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-        ORDER BY table_name
-      `;
-      diag.allTables = allTables.map(t => ({
-        name: t.table_name,
-        type: t.table_type,
-      }));
-
-      console.log("[health/diagnostic] ALL TABLES IN public schema:");
-      for (const t of allTables) {
-        console.log(`  - ${t.table_name} (${t.table_type})`);
-      }
-
-      // Also log the count
-      console.log(`[health/diagnostic] Total tables: ${allTables.length}`);
-
       for (const tableName of criticalTables) {
         const rows = await sql`
           SELECT EXISTS (
