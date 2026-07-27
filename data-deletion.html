@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Data Deletion Request — CoolCare AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0a0a0a;--bg2:#111;--bg3:#1a1a1a;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--muted2:#525252;--green:#22c55e;--green-bg:rgba(34,197,94,.08);--red:#ef4444;--radius:12px}
+    *{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--ink);font:15px/1.7 'Inter',system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+    a{color:var(--ink2);text-decoration:none;transition:color .2s}
+    a:hover{color:#fff}
+    h1,h2,h3{font-weight:700;letter-spacing:-.3px;color:#fff}
+    ::selection{background:rgba(255,255,255,.12)}
+
+    /* ── Navigation ── */
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1100px;margin:auto;padding:0 24px;border-bottom:1px solid var(--border);background:rgba(10,10,10,.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
+    .brand{font-weight:700;letter-spacing:.5px;font-size:24px;text-transform:lowercase;color:#fff;display:flex;align-items:center}.brand b{color:#fff;font-weight:900}
+    .brand-by{font-weight:400;color:#9CA3AF;font-size:14px;opacity:.75;margin-left:8px;margin-right:12px}
+    .brand-signature{height:36px;width:auto;vertical-align:middle}
+    .nav-links{display:flex;gap:20px;font-size:13px;font-weight:500;color:var(--muted);align-items:center}
+    .nav-links a{color:var(--muted);transition:color .2s}
+    .nav-links a:hover{color:var(--ink)}
+    .btn-nav{font:500 13px 'Inter',sans-serif;color:var(--ink2);background:transparent;border:1px solid var(--border2);border-radius:10px;padding:9px 16px;cursor:pointer;transition:all .2s;letter-spacing:.3px;text-decoration:none}
+    .btn-nav:hover{border-color:#555;color:#fff}
+    .btn-nav-primary{font:600 13px 'Inter',sans-serif;color:#000;background:#fff;border:0;border-radius:10px;padding:10px 18px;cursor:pointer;transition:all .2s;letter-spacing:.3px;text-decoration:none}
+    .btn-nav-primary:hover{background:#e5e5e5;transform:translateY(-1px)}
+
+    /* ── Layout ── */
+    .wrap{max-width:820px;margin:0 auto;padding:60px 24px 80px}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:48px 44px}
+
+    /* ── Typography ── */
+    h1{font-size:32px;letter-spacing:-.7px;margin:0 0 6px}
+    .last-updated{color:var(--muted);font-size:13px;margin-bottom:36px;display:block}
+    h2{font-size:20px;margin:36px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+    h2:first-of-type{margin-top:0}
+    h3{font-size:16px;margin:24px 0 10px;font-weight:600}
+    p,li{color:var(--ink2);font-size:14px;line-height:1.8}
+    p{margin-bottom:14px}
+    ul,ol{padding-left:20px;margin-bottom:16px}
+    li{margin-bottom:6px}
+    strong{color:var(--ink);font-weight:600}
+    .badge{display:inline-block;font-size:11px;font-weight:600;background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,.2);border-radius:99px;padding:3px 10px;letter-spacing:.4px;margin-bottom:12px}
+    .divider{height:1px;background:var(--border);margin:28px 0}
+
+    /* ── Method Cards ── */
+    .method-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:24px 0}
+    .method-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:24px 22px;transition:all .2s}
+    .method-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+    .method-card .icon{font-size:32px;margin-bottom:12px;display:block}
+    .method-card h3{font-size:16px;margin-bottom:6px}
+    .method-card p{font-size:13px;color:var(--ink2);margin-bottom:8px;line-height:1.6}
+    .method-card .step-label{font-size:12px;font-weight:600;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+    .method-card .step{font-size:13px;color:var(--ink2);padding:4px 0;display:flex;gap:8px}
+    .method-card .step-num{color:var(--green);font-weight:700;flex-shrink:0}
+    .method-card .btn-card{display:inline-block;font:500 13px 'Inter',sans-serif;color:#000;background:#fff;border:0;border-radius:8px;padding:10px 18px;cursor:pointer;transition:all .2s;margin-top:12px;text-decoration:none}
+    .method-card .btn-card:hover{background:#e5e5e5;transform:translateY(-1px)}
+
+    /* ── Data Table ── */
+    .data-table{width:100%;border-collapse:collapse;margin:16px 0 24px;font-size:13px}
+    .data-table thead{background:var(--bg3);color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.4px;text-transform:uppercase}
+    .data-table th,.data-table td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--border)}
+    .data-table td{color:var(--ink2)}
+    .data-table tbody tr:hover{background:var(--bg3)}
+    .data-table .yes{color:var(--green);font-weight:600}
+    .data-table .partial{color:#eab308;font-weight:600}
+    .data-table .no{color:var(--muted2)}
+
+    /* ── Notice box ── */
+    .notice-box{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:20px 22px;margin:24px 0;border-left:3px solid var(--green)}
+    .notice-box .icon{font-size:18px;float:left;margin-right:12px;line-height:1.4}
+    .notice-box p{margin:0;font-size:13px;color:var(--ink2)}
+
+    /* ── Warning box ── */
+    .warning-box{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);padding:20px 22px;margin:24px 0;border-left:3px solid var(--red)}
+    .warning-box .icon{font-size:18px;float:left;margin-right:12px;line-height:1.4}
+    .warning-box p{margin:0;font-size:13px;color:var(--ink2)}
+
+    /* ── Contact Box ── */
+    .contact-box{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:24px 22px;margin:28px 0;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+    .contact-box .icon{font-size:28px;flex-shrink:0}
+    .contact-box h4{font-size:14px;font-weight:600;color:#fff;margin-bottom:2px}
+    .contact-box p{font-size:13px;color:var(--muted);margin:0}
+    .contact-box a{color:var(--green);font-weight:500}
+
+    /* ── Timeline ── */
+    .timeline{margin:24px 0;position:relative}
+    .timeline::before{content:'';position:absolute;left:10px;top:0;bottom:0;width:2px;background:var(--border2)}
+    .tl-item{position:relative;padding-left:36px;padding-bottom:24px}
+    .tl-item:last-child{padding-bottom:0}
+    .tl-dot{position:absolute;left:4px;top:3px;width:15px;height:15px;border-radius:50%;background:var(--bg3);border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--green)}
+    .tl-item.done .tl-dot{background:var(--green);border-color:var(--green)}
+    .tl-item.done .tl-dot::after{content:'✓';color:#000;font-weight:700;font-size:9px}
+    .tl-item h4{font-size:14px;font-weight:600;color:#fff;margin-bottom:2px}
+    .tl-item p{font-size:13px;color:var(--muted);margin:0}
+
+    /* ── FAQ ── */
+    .faq-item{border-bottom:1px solid var(--border);padding:16px 0}
+    .faq-q{font-size:15px;font-weight:600;color:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+    .faq-q::after{content:'+';color:var(--muted);font-size:20px;font-weight:300;transition:transform .2s}
+    .faq-item.open .faq-q::after{transform:rotate(45deg)}
+    .faq-a{color:var(--ink2);font-size:14px;line-height:1.8;max-height:0;overflow:hidden;transition:max-height .3s,padding .3s}
+    .faq-item.open .faq-a{max-height:300px;padding-top:10px}
+
+    /* ── Footer ── */
+    footer{max-width:1100px;margin:auto;padding:28px 24px 32px;color:var(--muted2);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;border-top:1px solid var(--border);font-size:12px;letter-spacing:.3px}
+    .footer-links{display:flex;gap:16px}
+    .footer-links a{color:var(--muted2);font-size:12px;transition:color .2s}
+    .footer-links a:hover{color:var(--ink2)}
+
+    /* ── Responsive ── */
+    @media(max-width:640px){
+      .card{padding:28px 20px}
+      h1{font-size:26px}
+      h2{font-size:18px}
+      .nav-links{display:none}
+      .wrap{padding:32px 16px 60px}
+      .method-grid{grid-template-columns:1fr}
+      .contact-box{flex-direction:column;text-align:center}
+      footer{flex-direction:column;text-align:center}
+      .brand-signature{height:26px}
+      .data-table{font-size:12px}
+      .data-table th,.data-table td{padding:8px 10px}
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="/">cool<b>care</b><span class="brand-by">by</span><img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="/contact.html">Contact</a>
+    <a href="/login.html" style="color:var(--ink2)">Log in</a>
+    <a href="/shop-signup.html"><span class="btn-nav-primary">Get started →</span></a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="card">
+    <span class="badge">Your Rights</span>
+    <h1>Data Deletion Request</h1>
+    <span class="last-updated">Last updated: July 27, 2026</span>
+
+    <p>
+      At <strong>CoolCare AI</strong>, we respect your right to control your personal data. This page explains exactly what data we hold, how you can request its deletion, and what happens after you make a request.
+    </p>
+
+    <div class="notice-box">
+      <span class="icon">🔑</span>
+      <p><strong>Quickest way:</strong> Log into your dashboard and go to <strong>Settings → Delete Account</strong>. You can complete the process in under a minute. Otherwise, use one of the methods below.</p>
+    </div>
+
+    <h2>Two Ways to Request Deletion</h2>
+
+    <div class="method-grid">
+      <div class="method-card">
+        <span class="icon">⚙️</span>
+        <h3>Method 1: From Your Dashboard</h3>
+        <p>Fastest option — delete your data directly from your shop settings.</p>
+        <div class="step-label">Steps</div>
+        <div class="step"><span class="step-num">1</span> Log in to your dashboard</div>
+        <div class="step"><span class="step-num">2</span> Navigate to <strong>Settings</strong></div>
+        <div class="step"><span class="step-num">3</span> Scroll to <strong>Delete Account</strong></div>
+        <div class="step"><span class="step-num">4</span> Confirm deletion</div>
+        <a href="/login.html" class="btn-card">Go to Dashboard →</a>
+      </div>
+      <div class="method-card">
+        <span class="icon">📧</span>
+        <h3>Method 2: Email Us</h3>
+        <p>Send a deletion request from your registered email address.</p>
+        <div class="step-label">Steps</div>
+        <div class="step"><span class="step-num">1</span> Compose an email to <a href="mailto:mazeeshan25104@gmail.com">mazeeshan25104@gmail.com</a></div>
+        <div class="step"><span class="step-num">2</span> Use subject: <strong>"Data Deletion Request"</strong></div>
+        <div class="step"><span class="step-num">3</span> Include your registered shop name and email</div>
+        <div class="step"><span class="step-num">4</span> We will verify and process within 15 business days</div>
+        <a href="mailto:mazeeshan25104@gmail.com?subject=Data%20Deletion%20Request" class="btn-card">Send Request →</a>
+      </div>
+    </div>
+
+    <h2>What Data Will Be Deleted</h2>
+    <p>
+      When you request account deletion, the following data will be permanently erased or anonymized:
+    </p>
+
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Data Category</th>
+          <th>Details</th>
+          <th>Deleted?</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Account Credentials</strong></td>
+          <td>Email, password hash, mobile number</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>Shop Profile</strong></td>
+          <td>Shop name, address, city, service areas, owner name</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>WhatsApp Connection</strong></td>
+          <td>Access tokens, WABA ID, phone number ID, webhook status</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>WhatsApp Messages</strong></td>
+          <td>Conversation history, customer messages, AI replies</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>Conversation State</strong></td>
+          <td>Active conversation context (customer_number, step, flow)</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>Booking Records</strong></td>
+          <td>Booking history, appointments, technician assignments</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>Customer Data</strong></td>
+          <td>Customer phone numbers, names, addresses shared via WhatsApp</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>Technician Roster</strong></td>
+          <td>Technician names, phone numbers, service types</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>Subscription History</strong></td>
+          <td>Plan type, billing cycle, payment history</td>
+          <td class="partial">● Anonymized</td>
+        </tr>
+        <tr>
+          <td><strong>Referral Data</strong></td>
+          <td>Referral codes, referral credits</td>
+          <td class="yes">✓ Yes</td>
+        </tr>
+        <tr>
+          <td><strong>Analytics (Personal)</strong></td>
+          <td>IP-based usage logs associated with your account</td>
+          <td class="partial">● Anonymized</td>
+        </tr>
+        <tr>
+          <td><strong>Financial Records</strong></td>
+          <td>Transaction invoices, payment gateway receipts</td>
+          <td class="no">Retained (legal)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="font-size:13px;color:var(--muted)">
+      <strong>Note:</strong> Financial transaction records are retained for 7 years as required by applicable tax and financial regulations. These records are anonymized (your personal information is removed, but the transaction record itself is kept).
+    </p>
+
+    <h2>Deletion Timeline</h2>
+    <p>Here's what happens after you submit a deletion request:</p>
+
+    <div class="timeline">
+      <div class="tl-item done">
+        <div class="tl-dot"></div>
+        <h4>Day 1–2</h4>
+        <p>We receive your request, verify your identity, and send a confirmation email.</p>
+      </div>
+      <div class="tl-item done">
+        <div class="tl-dot"></div>
+        <h4>Day 3–7</h4>
+        <p>Your account is deactivated. Dashboard access is revoked. WhatsApp bot stops responding.</p>
+      </div>
+      <div class="tl-item done">
+        <div class="tl-dot"></div>
+        <h4>Day 8–15</h4>
+        <p>All personal data is permanently deleted from our primary database and backups.</p>
+      </div>
+      <div class="tl-item done">
+        <div class="tl-dot"></div>
+        <h4>Day 90</h4>
+        <p>Anonymized financial records are the only remaining data. All caches and CDN copies purged.</p>
+      </div>
+    </div>
+
+    <div class="warning-box">
+      <span class="icon">⚠️</span>
+      <p><strong>Irreversible Action:</strong> Account deletion is permanent. All bookings, conversations, dashboard data, and WhatsApp connection settings will be lost. This action cannot be undone. If you're unsure, you can cancel your subscription instead — your data will remain available in view-only mode.</p>
+    </div>
+
+    <h2>Data Deletion for End Customers</h2>
+    <p>
+      If you are a customer who has interacted with a repair shop through CoolCare AI's WhatsApp assistant, and you would like your data deleted, please follow these steps:
+    </p>
+    <ul>
+      <li><strong>Contact the Shop Directly:</strong> Your data is primarily controlled by the repair shop you messaged. Contact them and request deletion.</li>
+      <li><strong>Contact CoolCare AI:</strong> If you're unable to reach the shop, email us at <a href="mailto:mazeeshan25104@gmail.com">mazeeshan25104@gmail.com</a> with your phone number and the shop's name. We will process your request within 15 business days.</li>
+      <li><strong>WhatsApp Opt-Out:</strong> Reply "STOP" to any message from the AI assistant to opt out of future messages. Your existing conversation data will still be retained until the shop deletes it or requests deletion.</li>
+    </ul>
+
+    <p>
+      <strong>What gets deleted:</strong> Your phone number, conversation history, and any personal details (name, address, appliance details) shared during the WhatsApp conversation.
+    </p>
+
+    <div class="divider"></div>
+
+    <h2>Frequently Asked Questions</h2>
+
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">How long does the deletion process take?</div>
+      <div class="faq-a">We process all deletion requests within 15 business days. Most requests are completed within 7 days. Financial records are retained in anonymized form for 7 years to comply with tax regulations.</div>
+    </div>
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">Will my WhatsApp Business Account be affected?</div>
+      <div class="faq-a">No. Your WhatsApp Business Account (WABA) is owned by you and managed through Meta. Deleting your CoolCare AI account only removes the connection tokens from our system. Your WABA remains active. If you want to fully disconnect, you can do so from Meta's Business Settings portal.</div>
+    </div>
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">Can I recover my data after requesting deletion?</div>
+      <div class="faq-a">Once the deletion process is complete (after 15 days), data cannot be recovered. If you change your mind within 48 hours of your request, contact us immediately and we may be able to cancel the deletion if processing has not yet completed.</div>
+    </div>
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">What if I just want to cancel my subscription?</div>
+      <div class="faq-a">You can cancel your subscription from the Subscription page in your dashboard. Your data remains available in view-only mode. You can resubscribe anytime to reactivate the full service. Deleting your account is separate from cancelling your subscription.</div>
+    </div>
+    <div class="faq-item" onclick="this.classList.toggle('open')">
+      <div class="faq-q">Does deletion also remove data from Meta's servers?</div>
+      <div class="faq-a">No. Deleting your data from CoolCare AI does not delete data from Meta (Facebook/WhatsApp) servers. Meta has its own data retention policies. You can manage your WhatsApp data through Meta's Privacy Settings. Please refer to <a href="https://www.facebook.com/privacy/policy/" target="_blank" rel="noopener">Meta's Privacy Policy</a> for details.</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <h2>Still Have Questions?</h2>
+    <p>
+      If you have any questions about data deletion or need help with the process, please reach out to us:
+    </p>
+
+    <div class="contact-box">
+      <span class="icon">📧</span>
+      <div>
+        <h4>Email</h4>
+        <p><a href="mailto:mazeeshan25104@gmail.com">mazeeshan25104@gmail.com</a></p>
+      </div>
+    </div>
+
+    <div class="contact-box" style="margin-top:0">
+      <span class="icon">🔒</span>
+      <div>
+        <h4>Data Protection</h4>
+        <p><strong>CoolCare AI</strong> — Data Deletion Requests<br>
+        <span style="font-size:12px;color:var(--muted)">We aim to respond to all requests within 48 hours.</span></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span class="brand" style="font-size:18px;text-transform:lowercase">cool<b>care</b></span>
+  <div class="footer-links">
+    <a href="/privacy.html">Privacy</a>
+    <a href="/terms.html">Terms</a>
+    <a href="/data-deletion.html">Data Deletion</a>
+    <a href="/contact.html">Contact</a>
+  </div>
+  <span>© 2026 CoolCare AI. All rights reserved.</span>
+</footer>
+
+<script>
+  // FAQ toggle (same pattern used across the site)
+  document.querySelectorAll('.faq-item').forEach(item => {
+    item.addEventListener('click', () => item.classList.toggle('open'));
+  });
+</script>
+
+</body>
+</html>

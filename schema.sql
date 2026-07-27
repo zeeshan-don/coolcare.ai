@@ -95,3 +95,47 @@ INSERT INTO technicians (name, phone, active, services) VALUES
   ('Amit Singh',   '+919876543211', true, ARRAY['Geyser repair', 'Geyser no hot water', 'Washing machine not spinning', 'Washing machine repair']),
   ('Vijay Sharma', '+919876543212', true, ARRAY['Microwave not heating', 'TV repair', 'RO not working', 'Fan repair'])
 ON CONFLICT DO NOTHING;
+
+-- =============================================================================
+-- PER-SHOP WHATSAPP CONNECTION
+-- Each repair shop can connect their OWN WhatsApp Business Account via
+-- Meta Embedded Signup. See migration-whatsapp-connection.sql for details.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS repair_shop_whatsapp (
+  id                   SERIAL PRIMARY KEY,
+  repair_shop_id       INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
+  phone_number_id      TEXT NOT NULL,
+  waba_id              TEXT NOT NULL,
+  business_id          TEXT,
+  phone_number         TEXT,
+  business_name        TEXT,
+  access_token_enc     TEXT NOT NULL,
+  token_expiry         TIMESTAMPTZ,
+  refresh_token_enc    TEXT,
+  webhook_status       TEXT NOT NULL DEFAULT 'pending'
+                       CHECK (webhook_status IN ('pending', 'subscribed', 'active', 'disconnected', 'expired')),
+  webhook_subscribed_at TIMESTAMPTZ,
+  whatsapp_connected_at TIMESTAMPTZ,
+  last_sync_at         TIMESTAMPTZ,
+  coexistence_mode     BOOLEAN NOT NULL DEFAULT false,
+  metadata             JSONB DEFAULT '{}',
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT unique_repair_shop_whatsapp UNIQUE (repair_shop_id),
+  CONSTRAINT unique_phone_number_id UNIQUE (phone_number_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rw_phone_number_id ON repair_shop_whatsapp(phone_number_id);
+CREATE INDEX IF NOT EXISTS idx_rw_token_expiry ON repair_shop_whatsapp(token_expiry) WHERE webhook_status IN ('active', 'subscribed');
+CREATE INDEX IF NOT EXISTS idx_rw_repair_shop_id ON repair_shop_whatsapp(repair_shop_id);
+
+-- Whitelisted phone numbers per shop (optional access control)
+CREATE TABLE IF NOT EXISTS whitelisted_phones (
+  id               SERIAL PRIMARY KEY,
+  repair_shop_id   INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
+  phone_number     TEXT NOT NULL,
+  label            TEXT,
+  is_active        BOOLEAN NOT NULL DEFAULT true,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(repair_shop_id, phone_number)
+);

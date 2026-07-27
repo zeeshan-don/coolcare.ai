@@ -7,6 +7,7 @@ const { neon } = require("@neondatabase/serverless");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { webhookLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
+const { decrypt } = require("./_lib/encrypt");
 
 // ─── i18n: Multi-language support ─────────────────────────────────────────────
 const I18N = {
@@ -553,6 +554,53 @@ async function handleMessage(customerNumber, userText) {
   return s.fallback;
 }
 
+// ─── Look up WhatsApp connection for a phone number ID ────────────────────
+// Each repair shop connects their own WhatsApp Business Account, so we need
+// to find which shop owns a given phone_number_id.
+// Falls back to global env vars if no per-shop connection is found.
+async function lookupConnection(phoneNumberId) {
+  const sql = neon(process.env.DATABASE_URL);
+
+  try {
+    const rows = await sql`
+      SELECT * FROM repair_shop_whatsapp WHERE phone_number_id = ${phoneNumberId} LIMIT 1
+    `;
+    if (rows.length > 0) {
+      const row = rows[0];
+      const accessToken = decrypt(row.access_token_enc);
+      if (accessToken) {
+        return {
+          accessToken,
+          phoneNumberId: row.phone_number_id,
+          apiVersion: process.env.META_API_VERSION || process.env.WHATSAPP_API_VERSION || "v19.0",
+          repairShopId: row.repair_shop_id,
+          wabaId: row.waba_id,
+        };
+      }
+    }
+  } catch (err) {
+    console.error("[WhatsApp] DB lookup error:", err.message);
+  }
+
+  // Fallback to global env vars (backward compatible)
+  const globalToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const globalPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  if (globalToken && globalPhoneId) {
+    // Only use global fallback if the incoming phone_number_id matches
+    if (!phoneNumberId || phoneNumberId === globalPhoneId) {
+      return {
+        accessToken: globalToken,
+        phoneNumberId: globalPhoneId,
+        apiVersion: process.env.META_API_VERSION || process.env.WHATSAPP_API_VERSION || "v19.0",
+        repairShopId: null,
+        wabaId: null,
+      };
+    }
+  }
+
+  return null;
+}
+
 // ─── Vercel serverless handler ────────────────────────────────────────────────
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -583,21 +631,48 @@ module.exports = withErrorHandler(async (request, response) => {
 
   const customerNumber = incomingMessage.from;
   const customerText = incomingMessage.text?.body?.trim() || "";
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const apiVersion = process.env.WHATSAPP_API_VERSION || "v19.0";
 
-  if (!accessToken || !apiVersion || !phoneNumberId) {
-    console.error("[WhatsApp] Missing env vars");
-    return response.status(500).json({ error: "WhatsApp not configured" });
+  // ── Per-shop: resolve which WhatsApp connection owns this phone_number_id ─
+  const connection = await lookupConnection(phoneNumberId);
+
+  if (!connection) {
+    console.error(
+      "[WhatsApp] No WhatsApp connection found for phone_number_id:",
+      phoneNumberId,
+      "— no per-shop connection and no global fallback configured"
+    );
+    // Respond 200 to acknowledge receipt (Meta requires 200 for delivery receipts)
+    return response.status(200).json({ received: true, warning: "No matching WhatsApp connection" });
   }
 
-  // Save inbound message
+  const { accessToken, apiVersion, repairShopId } = connection;
+
+  // Save inbound message with repair_shop_id context
   await saveMessage(customerNumber, "customer", customerText);
 
   // Send typing indicator (best-effort)
   await sendTypingIndicator(phoneNumberId, customerNumber, accessToken, apiVersion);
 
-  // Run state machine
+  // ── Set repair_shop_id on conversation state if available ───────────────
+  // This ensures the state machine creates bookings scoped to the correct shop.
+  if (repairShopId) {
+    try {
+      const sql = neon(process.env.DATABASE_URL);
+      const existing = await sql`
+        SELECT id FROM conversation_state WHERE customer_number = ${customerNumber} LIMIT 1
+      `;
+      if (existing.length > 0) {
+        await sql`
+          UPDATE conversation_state SET repair_shop_id = ${repairShopId}, updated_at = now()
+          WHERE customer_number = ${customerNumber} AND repair_shop_id IS NULL
+        `;
+      }
+    } catch (err) {
+      console.warn("[WhatsApp] Failed to set repair_shop_id:", err.message);
+    }
+  }
+
+  // Run state machine (unchanged logic)
   const reply = await handleMessage(customerNumber, customerText);
 
   // Save outbound reply

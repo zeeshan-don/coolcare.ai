@@ -25,7 +25,7 @@ const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
 const { getGatewayList, invalidateCache } = require("./_lib/gateway");
-const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoSubscriptionResponse } = require("./_lib/demo-data");
+const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse } = require("./_lib/demo-data");
 const { z } = require("zod");
 const bcrypt = require("bcryptjs");
 
@@ -62,7 +62,7 @@ const ADMIN_POST_ACTIONS = new Set([
 const GATED_POST_ACTIONS = new Set(["update"]);
 const GATED_GET_ACTIONS = new Set(["export"]);
 // Non-gated shop GET actions (view-only, always allowed)
-const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "notifications", "shop-settings"]);
+const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings"]);
 
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
