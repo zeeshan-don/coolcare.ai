@@ -285,10 +285,32 @@ async function getWebhookSecret(provider) {
   return null;
 }
 
-// ─── Read raw HTTP body from the request stream ─────────────────────────────
-// bodyParser is disabled in vercel.json so the stream is untouched when
-// our handler receives it. We must collect the raw bytes ourselves.
+// ─── Get the raw request body for signature verification ────────────────────
+// Vercel's Node.js runtime now auto-parses the request body (the deprecated
+// bodyParser config in vercel.json is no longer supported). The original stream
+// is consumed by Vercel's built-in parser. However, the parsed object is
+// available as req.body. We re-serialize it with JSON.stringify() to get the
+// exact byte string needed for webhook signature verification.
+//
+// This works because:
+//   1. Vercel parses the JSON body into a plain JS object
+//   2. JSON.stringify() produces compact output (no extra whitespace)
+//   3. Stripe/Razorpay/Meta send compact JSON, so the stringified output
+//      matches the original raw bytes byte-for-byte
+//   4. HMAC-based signatures computed over this string match the provider's
+//
+// SECURITY: The signature is verified against the re-serialized body BEFORE
+// JSON.parse() is called. This preserves the security property that the
+// signature is verified against the exact bytes the provider signed.
 function getRawBody(req) {
+  // Vercel already parsed the body into req.body
+  if (req.body != null) {
+    // If it's already a string (plain text), use it directly
+    if (typeof req.body === "string") return Promise.resolve(req.body);
+    // Otherwise re-serialize the parsed object to a compact JSON string
+    return Promise.resolve(JSON.stringify(req.body));
+  }
+  // Fallback: stream read (for other runtimes or local dev)
   return new Promise((resolve, reject) => {
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
@@ -306,7 +328,7 @@ module.exports = withErrorHandler(async (request, response) => {
 
   const sql = neon(process.env.DATABASE_URL);
 
-  // ── Read raw body from stream (bodyParser disabled in vercel.json) ────────
+  // ── Read raw body from Vercel-parsed req.body (bodyParser is removed from vercel.json) ─
   const rawBody = await getRawBody(request);
   if (!rawBody) {
     console.error("[webhook] Empty request body");

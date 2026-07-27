@@ -2,14 +2,6 @@
   "regions": ["bom1"],
   "cleanUrls": true,
   "trailingSlash": false,
-  "functions": {
-    "api/whatsapp.js": {
-      "bodyParser": false
-    },
-    "api/payments/webhook.js": {
-      "bodyParser": false
-    }
-  },
   "headers": [
     {
       "source": "/api/(.*)",
