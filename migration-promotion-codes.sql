@@ -4,6 +4,14 @@
 --           Support Token, Lifetime Access
 -- Security: support tokens stored hashed, idempotency via UNIQUE constraint
 --           on (code_type, code_hash) for support tokens
+--
+-- SAFE TO RE-RUN: All operations use IF NOT EXISTS / IF EXISTS guards.
+-- SELF-CONTAINED: Creates promotion_codes WITHOUT inline FK dependencies.
+--   FKs to subscription_plans, users, payments, subscriptions are added
+--   separately via ALTER TABLE inside safety-wrapped DO blocks.
+--   This prevents the ENTIRE migration from rolling back when those
+--   dependent tables don't exist yet (common when migration order is
+--   undefined across 19+ migration files).
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- 1. PROMOTION CODES
@@ -25,7 +33,11 @@ CREATE TABLE IF NOT EXISTS promotion_codes (
   discount_amount      NUMERIC(12,2),                    -- For fixed_discount
   discount_currency    TEXT DEFAULT 'INR',               -- Currency for fixed discount
   free_trial_days      INTEGER,                          -- For free_trial
-  plan_id              INTEGER REFERENCES subscription_plans(id) ON DELETE SET NULL,  -- Specific plan or null = all
+
+  -- NOTE: plan_id FK is added via ALTER TABLE below (Section 5) to avoid
+  -- dependency on subscription_plans table which may not exist yet.
+  plan_id              INTEGER,
+
   billing_cycles       TEXT[] DEFAULT '{}',               -- Which billing cycles apply: monthly, quarterly, halfyearly, yearly
                                                           -- Empty array = all billing cycles
 
@@ -51,8 +63,10 @@ CREATE TABLE IF NOT EXISTS promotion_codes (
 
   -- Internal
   internal_notes       TEXT DEFAULT '',
-  created_by           INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  updated_by           INTEGER REFERENCES users(id) ON DELETE SET NULL,
+
+  -- NOTE: created_by and updated_by FKs are added via ALTER TABLE below (Section 5)
+  created_by           INTEGER,
+  updated_by           INTEGER,
 
   -- Timestamps
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -89,8 +103,11 @@ CREATE INDEX IF NOT EXISTS idx_promotion_codes_auto_apply ON promotion_codes(aut
 CREATE TABLE IF NOT EXISTS promo_code_redemptions (
   id                   SERIAL PRIMARY KEY,
   promotion_code_id    INTEGER NOT NULL REFERENCES promotion_codes(id) ON DELETE CASCADE,
-  repair_shop_id       INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
-  user_id              INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  repair_shop_id       INTEGER NOT NULL,
+
+  -- NOTE: user_id FK is added via ALTER TABLE below (Section 5)
+  user_id              INTEGER,
+
   email                TEXT,                              -- Customer/owner email at time of redemption
   ip_address           TEXT,                              -- Redeemer's IP address
   user_agent           TEXT,                              -- Browser user agent
@@ -103,9 +120,9 @@ CREATE TABLE IF NOT EXISTS promo_code_redemptions (
   final_amount         NUMERIC(12,2) NOT NULL DEFAULT 0,  -- Price after discount
   currency             TEXT NOT NULL DEFAULT 'INR',
 
-  -- Reference to payment/subscription
-  payment_id           INTEGER REFERENCES payments(id) ON DELETE SET NULL,
-  subscription_id      INTEGER REFERENCES subscriptions(id) ON DELETE SET NULL,
+  -- Reference to payment/subscription (FKs added via ALTER TABLE below)
+  payment_id           INTEGER,
+  subscription_id      INTEGER,
 
   -- Status tracking
   status               TEXT NOT NULL DEFAULT 'active' CHECK (status IN (
@@ -133,45 +150,191 @@ CREATE INDEX IF NOT EXISTS idx_promo_redemptions_status ON promo_code_redemption
 CREATE INDEX IF NOT EXISTS idx_promo_redemptions_created ON promo_code_redemptions(created_at DESC);
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- 3. ADD promo_code_id to payments table (optional FK for tracking)
+-- 3. SAFELY ADD FK TO repair_shops (if repair_shops table exists)
 -- ═══════════════════════════════════════════════════════════════════════════════
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'payments' AND column_name = 'promotion_code_id'
-  ) THEN
-    ALTER TABLE payments ADD COLUMN promotion_code_id INTEGER REFERENCES promotion_codes(id) ON DELETE SET NULL;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'repair_shops') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_promo_redemptions_repair_shop'
+        AND table_name = 'promo_code_redemptions'
+        AND constraint_type = 'FOREIGN KEY'
+    ) THEN
+      ALTER TABLE promo_code_redemptions
+        ADD CONSTRAINT fk_promo_redemptions_repair_shop
+        FOREIGN KEY (repair_shop_id) REFERENCES repair_shops(id) ON DELETE CASCADE;
+    END IF;
   END IF;
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- 4. ADD promo code columns to subscriptions table (track how subscription started)
+-- 4. ADD FKs TO TABLES THAT MAY EXIST (safe to skip)
+--    Uses DO blocks with IF EXISTS checks so the migration never fails
+--    even if dependent tables haven't been created yet.
 -- ═══════════════════════════════════════════════════════════════════════════════
+
+-- plan_id → subscription_plans
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'subscriptions' AND column_name = 'promotion_code_id'
-  ) THEN
-    ALTER TABLE subscriptions ADD COLUMN promotion_code_id INTEGER REFERENCES promotion_codes(id) ON DELETE SET NULL;
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'subscription_plans') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_promo_codes_plan'
+        AND table_name = 'promotion_codes'
+        AND constraint_type = 'FOREIGN KEY'
+    ) THEN
+      ALTER TABLE promotion_codes
+        ADD CONSTRAINT fk_promo_codes_plan
+        FOREIGN KEY (plan_id) REFERENCES subscription_plans(id) ON DELETE SET NULL;
+    END IF;
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'subscriptions' AND column_name = 'is_lifetime'
-  ) THEN
-    ALTER TABLE subscriptions ADD COLUMN is_lifetime BOOLEAN NOT NULL DEFAULT false;
+END $$;
+
+-- created_by → users
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_promo_codes_created_by'
+        AND table_name = 'promotion_codes'
+        AND constraint_type = 'FOREIGN KEY'
+    ) THEN
+      ALTER TABLE promotion_codes
+        ADD CONSTRAINT fk_promo_codes_created_by
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+    END IF;
   END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'subscriptions' AND column_name = 'is_support_token'
-  ) THEN
-    ALTER TABLE subscriptions ADD COLUMN is_support_token BOOLEAN NOT NULL DEFAULT false;
+END $$;
+
+-- updated_by → users
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE table_name = 'promotion_codes'
+        AND constraint_name = 'fk_promo_codes_updated_by'
+        AND constraint_type = 'FOREIGN KEY'
+    ) THEN
+      ALTER TABLE promotion_codes
+        ADD CONSTRAINT fk_promo_codes_updated_by
+        FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL;
+    END IF;
+  END IF;
+END $$;
+
+-- user_id in promo_code_redemptions → users
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'users') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_promo_redemptions_user'
+        AND table_name = 'promo_code_redemptions'
+        AND constraint_type = 'FOREIGN KEY'
+    ) THEN
+      ALTER TABLE promo_code_redemptions
+        ADD CONSTRAINT fk_promo_redemptions_user
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+    END IF;
+  END IF;
+END $$;
+
+-- payment_id in promo_code_redemptions → payments
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'payments') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_promo_redemptions_payment'
+        AND table_name = 'promo_code_redemptions'
+        AND constraint_type = 'FOREIGN KEY'
+    ) THEN
+      ALTER TABLE promo_code_redemptions
+        ADD CONSTRAINT fk_promo_redemptions_payment
+        FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL;
+    END IF;
+  END IF;
+END $$;
+
+-- subscription_id in promo_code_redemptions → subscriptions
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'subscriptions') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.table_constraints
+      WHERE constraint_name = 'fk_promo_redemptions_subscription'
+        AND table_name = 'promo_code_redemptions'
+        AND constraint_type = 'FOREIGN KEY'
+    ) THEN
+      ALTER TABLE promo_code_redemptions
+        ADD CONSTRAINT fk_promo_redemptions_subscription
+        FOREIGN KEY (subscription_id) REFERENCES subscriptions(id) ON DELETE SET NULL;
+    END IF;
   END IF;
 END $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
--- 5. Supported billing cycles constraint check
+-- 5. ADD promo_code_id to payments table (optional FK for tracking)
+--    Safe — only adds if both payments table AND the column don't exist yet
 -- ═══════════════════════════════════════════════════════════════════════════════
--- The billing_cycles column uses a Postgres array, so no CHECK constraint needed.
--- Validation happens at the application layer.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'payments') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'payments' AND column_name = 'promotion_code_id'
+    ) THEN
+      ALTER TABLE payments ADD COLUMN promotion_code_id INTEGER REFERENCES promotion_codes(id) ON DELETE SET NULL;
+    END IF;
+  END IF;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 6. ADD promo code columns to subscriptions table (track how subscription started)
+--    Safe — only adds if subscriptions table exists
+-- ═══════════════════════════════════════════════════════════════════════════════
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'subscriptions') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'subscriptions' AND column_name = 'promotion_code_id'
+    ) THEN
+      ALTER TABLE subscriptions ADD COLUMN promotion_code_id INTEGER REFERENCES promotion_codes(id) ON DELETE SET NULL;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'subscriptions' AND column_name = 'is_lifetime'
+    ) THEN
+      ALTER TABLE subscriptions ADD COLUMN is_lifetime BOOLEAN NOT NULL DEFAULT false;
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'subscriptions' AND column_name = 'is_support_token'
+    ) THEN
+      ALTER TABLE subscriptions ADD COLUMN is_support_token BOOLEAN NOT NULL DEFAULT false;
+    END IF;
+  END IF;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- 7. DIAGNOSTIC: Log table creation result to PostgreSQL logs
+-- ═══════════════════════════════════════════════════════════════════════════════
+DO $$
+DECLARE
+  table_exists BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'promotion_codes'
+  ) INTO table_exists;
+
+  IF table_exists THEN
+    RAISE NOTICE '✅ migration-promotion-codes: promotion_codes table exists and is ready';
+  ELSE
+    RAISE WARNING '❌ migration-promotion-codes: promotion_codes table was NOT created — investigate!';
+  END IF;
+END $$;

@@ -74,6 +74,47 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+// ─── Check if promotion_codes table exists (handles missing table gracefully) ─
+// Uses PostgreSQL's search_path so works regardless of schema configuration.
+const TABLE_CHECK_CACHE = { result: null, timestamp: 0 };
+const TABLE_CHECK_TTL_MS = 15_000; // Re-check every 15 seconds
+
+async function ensurePromotionCodesTable(sql) {
+  const now = Date.now();
+  if (TABLE_CHECK_CACHE.result !== null && (now - TABLE_CHECK_CACHE.timestamp) < TABLE_CHECK_TTL_MS) {
+    return TABLE_CHECK_CACHE.result;
+  }
+  try {
+    // Uses information_schema.tables without schema filter — relies on
+    // PostgreSQL's search_path resolution. On Neon, the default is 'public'
+    // unless explicitly changed.
+    const rows = await sql`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_name = 'promotion_codes'
+      ) as exists
+    `;
+    const exists = rows[0]?.exists === true;
+    TABLE_CHECK_CACHE.result = exists;
+    TABLE_CHECK_CACHE.timestamp = now;
+    
+    if (!exists) {
+      // Log database identity for debugging on first detection
+      try {
+        const dbInfo = await sql`SELECT current_database() as db, current_schema() as schema, current_user as "user"`;
+        console.warn("[promotions] Table MISSING. DB:", dbInfo[0]?.db, "Schema:", dbInfo[0]?.schema, "User:", dbInfo[0]?.user);
+      } catch (_) {}
+    }
+    
+    return exists;
+  } catch (e) {
+    console.warn("[promotions] Table check failed:", e.message);
+    TABLE_CHECK_CACHE.result = false;
+    TABLE_CHECK_CACHE.timestamp = now;
+    return false;
+  }
+}
+
 // ─── Main handler ────────────────────────────────────────────────────────────
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -83,6 +124,22 @@ module.exports = withErrorHandler(async (request, response) => {
   if (!auth) return;
 
   const sql = neon(process.env.DATABASE_URL);
+
+  // Early check: verify promotion_codes table exists
+  const tableExists = await ensurePromotionCodesTable(sql);
+  if (!tableExists) {
+    console.error("[promotions] FATAL: promotion_codes table does not exist. Migration likely not run or rolled back.");
+    // Log database identity for debugging
+    try {
+      const dbInfo = await sql`SELECT current_database() as db, current_schema() as schema, current_user as user`;
+      console.error("[promotions] DB Info:", JSON.stringify(dbInfo[0]));
+    } catch (_) {}
+    return response.status(503).json({
+      error: "Promotions system is not available. The required database table 'promotion_codes' has not been created.",
+      code: "TABLE_NOT_FOUND",
+      detail: "Run the migration: node scripts/run-migration.js migration-promotion-codes.sql",
+    });
+  }
 
   if (request.method !== "POST") {
     return response.status(405).json({ error: "Method not allowed" });
@@ -146,6 +203,8 @@ async function adminCreate(request, response, sql, body, actorType, actorId, ip)
   }
 
   // Check code uniqueness
+  // Note: Table existence is already checked at the handler level,
+  // so this query is guaranteed to work if we reach here.
   const existingCode = await sql`SELECT id FROM promotion_codes WHERE code = ${v.code} LIMIT 1`;
   if (existingCode.length > 0) {
     return response.status(409).json({ error: "A code with this name already exists" });
