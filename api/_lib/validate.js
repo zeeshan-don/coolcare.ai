@@ -97,6 +97,8 @@ const signupSchema = z.object({
   currency: z.string().min(1).max(10).optional(),
   // Country detection and selection
   selectedCountry: z.string().min(2).max(5).optional(),
+  // Promo code (optional)
+  promoCode: z.string().max(50).trim().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match",
   path: ["confirmPassword"],

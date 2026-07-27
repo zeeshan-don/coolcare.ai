@@ -171,7 +171,7 @@
   <div class="section" id="renewSection" style="display:none">
     <div class="renew-section">
       <h2>🚀 Choose your renewal plan</h2>
-      <p>Select billing cycle and currency to renew your CoolCare Pro subscription.</p>
+      <p>Select billing cycle and currency to renew your CoolCare Pro subscription. Have a promo code? Enter it below.</p>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
         <button class="btn btn-primary" data-cycle="monthly" onclick="selectCycle('monthly')">Monthly</button>
         <button class="btn" data-cycle="quarterly" onclick="selectCycle('quarterly')">Quarterly <span style="color:var(--green);font-size:10px">-10%</span></button>
@@ -186,6 +186,19 @@
           <option value="AED">🇦🇪 AED (د.إ)</option>
         </select>
         <span style="color:var(--muted);font-size:13px" id="priceDisplay">$20.00 / month</span>
+      </div>
+      <!-- Promo Code -->
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;justify-content:center">
+        <input id="promoCode" type="text" placeholder="Enter promo code" style="background:var(--bg3);color:var(--ink2);border:1px solid var(--border2);border-radius:8px;padding:9px 14px;font:400 14px/1 'Inter',sans-serif;width:200px;text-transform:uppercase" onkeydown="if(event.key==='Enter')applyPromoCode()">
+        <button class="btn" onclick="applyPromoCode()" id="applyPromoBtn">Apply</button>
+      </div>
+      <div id="promoResult" style="margin-bottom:16px;display:none"></div>
+      <div id="priceBreakdown" style="margin-bottom:16px;display:none">
+        <div style="display:flex;justify-content:center;gap:16px;font-size:13px">
+          <span style="color:var(--muted)">Original: <span id="origPrice"></span></span>
+          <span style="color:var(--red)">Discount: -<span id="discountPrice"></span></span>
+          <span style="color:var(--green);font-weight:700">Final: <span id="finalPrice"></span></span>
+        </div>
       </div>
       <button class="btn btn-primary btn-lg" id="renewBtn" onclick="renewSubscription()">Renew Now</button>
     </div>
@@ -532,6 +545,157 @@ async function loadSubHistory() {
     tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No subscription activity yet</td></tr>';
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Activity log not available</td></tr>';
+  }
+}
+
+/* ── PROMO CODE FUNCTIONS ── */
+let appliedPromoData = null;
+
+async function applyPromoCode() {
+  const input = document.getElementById('promoCode');
+  const btn = document.getElementById('applyPromoBtn');
+  const resultDiv = document.getElementById('promoResult');
+  const breakdown = document.getElementById('priceBreakdown');
+  const code = input.value.trim().toUpperCase();
+  
+  if (!code) {
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<span style="color:var(--red);font-size:13px">Please enter a promo code</span>';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'Validating…';
+  resultDiv.style.display = 'none';
+  breakdown.style.display = 'none';
+  appliedPromoData = null;
+  
+  // Get selected plan pricing
+  const prices = PLAN_PRICING[selectedCurrency] || PLAN_PRICING.USD;
+  const amount = prices[selectedCycle] || prices.monthly;
+  
+  try {
+    const res = await fetch('/api/promotions', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + TOKEN,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'validate',
+        code: code,
+        billingCycle: selectedCycle,
+        amount: amount,
+        currency: selectedCurrency,
+      }),
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok || !data.valid) {
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<span style="color:var(--red);font-size:13px">' + esc(data.error || 'Invalid promo code') + '</span>';
+      btn.disabled = false;
+      btn.textContent = 'Apply';
+      return;
+    }
+    
+    // Valid code
+    appliedPromoData = data;
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<span style="color:var(--green);font-size:13px">✅ ' + esc(data.code.name || 'Promo code applied!') + '</span>';
+    
+    // Show price breakdown
+    if (data.calculation) {
+      breakdown.style.display = 'block';
+      document.getElementById('origPrice').textContent = fmtCurrency(selectedCurrency, data.calculation.originalAmount);
+      document.getElementById('discountPrice').textContent = fmtCurrency(selectedCurrency, data.calculation.discountAmount);
+      document.getElementById('finalPrice').textContent = fmtCurrency(selectedCurrency, data.calculation.finalAmount);
+    }
+    
+    // For support token / free trial / lifetime, show special message
+    if (data.isSupportToken) {
+      resultDiv.innerHTML += '<br><span style="color:var(--green);font-size:12px">🔑 Support token — no payment required!</span>';
+    } else if (data.isFreeTrial) {
+      resultDiv.innerHTML += '<br><span style="color:var(--green);font-size:12px">🎁 ' + (data.freeTrialDays || 14) + ' day free trial!</span>';
+    } else if (data.isLifetime) {
+      resultDiv.innerHTML += '<br><span style="color:var(--green);font-size:12px">♾️ Lifetime access!</span>';
+    }
+  } catch (err) {
+    resultDiv.style.display = 'block';
+    resultDiv.innerHTML = '<span style="color:var(--red);font-size:13px">Network error. Please try again.</span>';
+  }
+  
+  btn.disabled = false;
+  btn.textContent = 'Apply';
+}
+
+// Modify renewSubscription to pass promo code
+const originalRenew = renewSubscription;
+async function renewSubscription() {
+  const btn = document.getElementById('renewBtn');
+  btn.disabled = true;
+  btn.textContent = 'Processing…';
+  
+  if (appliedPromoData && (appliedPromoData.isSupportToken || appliedPromoData.isFreeTrial || appliedPromoData.isLifetime)) {
+    // Support token / free trial / lifetime — redeem via promotions API
+    try {
+      const prices = PLAN_PRICING[selectedCurrency] || PLAN_PRICING.USD;
+      const amount = prices[selectedCycle] || prices.monthly;
+      
+      const res = await fetch('/api/promotions', {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer ' + TOKEN,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'redeem',
+          code: document.getElementById('promoCode').value.trim().toUpperCase(),
+          billingCycle: selectedCycle,
+          amount: amount,
+          currency: selectedCurrency,
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        toast(data.error || 'Failed to redeem code');
+        btn.disabled = false;
+        btn.textContent = 'Renew Now';
+        return;
+      }
+      
+      toast(data.message || 'Activation successful!');
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (err) {
+      toast('Network error');
+      btn.disabled = false;
+      btn.textContent = 'Renew Now';
+    }
+    return;
+  }
+  
+  // Normal checkout flow
+  try {
+    await CoolCareCheckout.start({
+      billingCycle: selectedCycle,
+      currency: selectedCurrency,
+      couponCode: appliedPromoData ? document.getElementById('promoCode').value.trim().toUpperCase() : undefined,
+      onError: function(msg) {
+        toast(msg);
+        btn.disabled = false;
+        btn.textContent = 'Renew Now';
+      },
+      onStart: function() {
+        btn.textContent = 'Opening checkout…';
+      }
+    });
+  } catch(e) {
+    toast('Failed to start checkout');
+    btn.disabled = false;
+    btn.textContent = 'Renew Now';
   }
 }
 

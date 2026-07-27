@@ -202,6 +202,10 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
     Payment Logs
   </div>
+  <div class="sidebar-item" data-tab="promotions" onclick="switchTab('promotions',this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+    Promotion Codes
+  </div>
   <div class="sidebar-item" data-tab="settings" onclick="switchTab('settings',this)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
     Settings
@@ -360,6 +364,51 @@
   <div class="pager"><button id="logPrev" onclick="loadPaymentLogs(P.log-1)" disabled>← Prev</button><span id="logPageInfo">Page 1</span><button id="logNext" onclick="loadPaymentLogs(P.log+1)">Next →</button></div>
 </div>
 
+<!-- ═══ PROMOTION CODES ═══ -->
+<div class="tab-panel" id="panel-promotions">
+  <div class="section-head"><h1>Promotion Codes</h1><button class="btn btn-primary" onclick="openPromoCodeModal()">+ Create Code</button></div>
+  <div class="stats-grid" id="promoStats">
+    <div class="stat-card"><div class="stat-label">Total Codes</div><div class="stat-value" id="ps_total">—</div></div>
+    <div class="stat-card"><div class="stat-label">Active</div><div class="stat-value" id="ps_active" style="color:var(--green)">—</div></div>
+    <div class="stat-card"><div class="stat-label">Expired</div><div class="stat-value" id="ps_expired" style="color:var(--muted)">—</div></div>
+    <div class="stat-card"><div class="stat-label">Used</div><div class="stat-value" id="ps_used">—</div></div>
+    <div class="stat-card"><div class="stat-label">Redeemed</div><div class="stat-value" id="ps_redemptions">—</div></div>
+    <div class="stat-card"><div class="stat-label">Discount Given</div><div class="stat-value" id="ps_discountAmount">—</div></div>
+    <div class="stat-card"><div class="stat-label">Conversion</div><div class="stat-value" id="ps_conversion">—</div></div>
+  </div>
+  <div class="search-row">
+    <input class="search-input" id="promoSearch" type="text" placeholder="Search by name, code, description..." onkeydown="if(event.key==='Enter')loadPromoCodes(1)">
+    <select id="promoTypeFilter" class="currency-select" style="background:var(--bg3);color:var(--ink2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 13px 'Inter',sans-serif" onchange="loadPromoCodes(1)">
+      <option value="">All Types</option>
+      <option value="percentage_discount">Percentage</option>
+      <option value="fixed_discount">Fixed</option>
+      <option value="free_trial">Free Trial</option>
+      <option value="support_token">Support Token</option>
+      <option value="lifetime_access">Lifetime</option>
+    </select>
+    <select id="promoStatusFilter" style="background:var(--bg3);color:var(--ink2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 13px 'Inter',sans-serif" onchange="loadPromoCodes(1)">
+      <option value="">All Status</option>
+      <option value="active">Active</option>
+      <option value="inactive">Inactive</option>
+      <option value="expired">Expired</option>
+    </select>
+    <button class="btn btn-primary" onclick="loadPromoCodes(1)">Search</button>
+  </div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Name</th><th>Code</th><th>Type</th><th>Discount</th><th>Uses</th><th>Expires</th><th>Status</th><th>Redeemed</th><th>Actions</th></tr></thead>
+      <tbody id="promoBody"><tr><td colspan="9" class="empty-state">Loading…</td></tr></tbody></table>
+  </div>
+  <div class="pager"><button id="promoPrev" onclick="loadPromoCodes(P.promo-1)" disabled>← Prev</button><span id="promoPageInfo">Page 1</span><button id="promoNext" onclick="loadPromoCodes(P.promo+1)">Next →</button></div>
+  
+  <!-- Redemption History -->
+  <div class="section-head" style="margin-top:32px"><h2>Redemption History</h2></div>
+  <div class="table-wrap">
+    <table><thead><tr><th>Code</th><th>Shop</th><th>Email</th><th>Plan</th><th>Original</th><th>Discount</th><th>Final</th><th>IP</th><th>Date</th><th>Status</th></tr></thead>
+      <tbody id="promoRedemptionsBody"><tr><td colspan="10" class="empty-state">No redemptions yet</td></tr></tbody></table>
+  </div>
+  <div class="pager"><button id="redemptionPrev" onclick="loadRedemptions(P.redemption-1)" disabled>← Prev</button><span id="redemptionPageInfo">Page 1</span><button id="redemptionNext" onclick="loadRedemptions(P.redemption+1)">Next →</button></div>
+</div>
+
 <!-- ═══ SETTINGS ═══ -->
 <div class="tab-panel" id="panel-settings">
   <div class="section-head"><h1>Platform Settings</h1></div>
@@ -464,6 +513,100 @@
   </div>
 </div>
 
+<!-- ═══ PROMO CODE MODAL ═══ -->
+<div class="modal-backdrop" id="promoModal" onclick="if(event.target===this)closeModal('promoModal')">
+  <div class="modal" style="width:min(620px,92vw)">
+    <h2 id="promoModalTitle">Create Promotion Code</h2>
+    <input type="hidden" id="editPromoId">
+    <div class="field"><label>Code Name (Internal Label)</label><input id="pc_name" type="text" placeholder="Summer Sale 2026"></div>
+    <div class="field"><label>Actual Promo Code</label><input id="pc_code" type="text" placeholder="SUMMER50" style="text-transform:uppercase"></div>
+    <div class="field"><label>Description</label><textarea id="pc_desc" placeholder="What this code offers..."></textarea></div>
+    <div class="field"><label>Type</label>
+      <select id="pc_type" onchange="onPromoTypeChange(this.value)">
+        <option value="percentage_discount">Percentage Discount</option>
+        <option value="fixed_discount">Fixed Amount Discount</option>
+        <option value="free_trial">Free Trial</option>
+        <option value="support_token">Support Token</option>
+        <option value="lifetime_access">Lifetime Access</option>
+      </select>
+    </div>
+    <!-- Percentage Discount -->
+    <div id="pc_percent_section" class="promo-type-section">
+      <div class="field"><label>Discount Percentage</label><input id="pc_percent" type="number" min="0" max="100" step="0.01" placeholder="e.g. 25"></div>
+    </div>
+    <!-- Fixed Discount -->
+    <div id="pc_fixed_section" class="promo-type-section" style="display:none">
+      <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Amount</label><input id="pc_fixed_amount" type="number" min="0" step="0.01" placeholder="e.g. 500"></div>
+        <div class="field"><label>Currency</label>
+          <select id="pc_fixed_currency"><option value="INR">INR (₹)</option><option value="USD">USD ($)</option><option value="AED">AED</option><option value="KWD">KWD</option></select>
+        </div>
+      </div>
+    </div>
+    <!-- Free Trial -->
+    <div id="pc_trial_section" class="promo-type-section" style="display:none">
+      <div class="field"><label>Trial Duration (Days)</label><input id="pc_trial_days" type="number" min="1" max="365" placeholder="e.g. 14"></div>
+    </div>
+    <!-- Support Token / Lifetime common fields -->
+    <div id="pc_token_section" class="promo-type-section" style="display:none">
+      <div class="field"><label>Plan</label><select id="pc_plan_id"><option value="">All Plans</option></select></div>
+      <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Max Uses</label><input id="pc_max_uses" type="number" min="1" placeholder="Unlimited"></div>
+        <div class="field"><label>Per User Limit</label><input id="pc_per_user" type="number" min="1" value="1"></div>
+      </div>
+      <div class="field"><label>Expiry Date</label><input id="pc_valid_until" type="datetime-local"></div>
+    </div>
+    <!-- Advanced Options (toggle) -->
+    <div style="margin-top:16px">
+      <button class="btn" type="button" onclick="toggleAdvanced()" style="width:100%;text-align:center;justify-content:center">
+        <span id="advancedToggleText">▼ Advanced Options</span>
+      </button>
+    </div>
+    <div id="advancedSection" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Valid From</label><input id="pc_valid_from" type="datetime-local"></div>
+        <div class="field"><label>Valid Until</label><input id="pc_valid_until2" type="datetime-local"></div>
+      </div>
+      <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="field"><label>Min Purchase Amount</label><input id="pc_min_purchase" type="number" min="0" step="0.01" value="0" placeholder="0 = no minimum"></div>
+        <div class="field"><label>Max Discount Cap</label><input id="pc_max_discount" type="number" min="0" step="0.01" placeholder="No cap"></div>
+      </div>
+      <div class="field"><label>Allowed Billing Cycles</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--ink2);cursor:pointer"><input type="checkbox" value="monthly" checked> Monthly</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--ink2);cursor:pointer"><input type="checkbox" value="quarterly" checked> Quarterly</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--ink2);cursor:pointer"><input type="checkbox" value="halfyearly" checked> Half-Yearly</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--ink2);cursor:pointer"><input type="checkbox" value="yearly" checked> Yearly</label>
+        </div>
+      </div>
+      <div class="row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="field"><label>Stackable</label>
+          <select id="pc_stackable"><option value="false">No</option><option value="true">Yes</option></select>
+        </div>
+        <div class="field"><label>Auto Apply</label>
+          <select id="pc_auto_apply"><option value="false">No</option><option value="true">Yes</option></select>
+        </div>
+        <div class="field"><label>Active</label>
+          <select id="pc_is_active"><option value="true">Yes</option><option value="false">No</option></select>
+        </div>
+      </div>
+      <div class="field"><label>Internal Notes</label>
+        <textarea id="pc_notes" placeholder="Only visible to admins..."></textarea>
+      </div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('promoModal')">Cancel</button><button class="btn btn-primary" onclick="savePromoCode()">Save Code</button></div>
+  </div>
+</div>
+
+<!-- Redemption Detail Modal -->
+<div class="modal-backdrop" id="redemptionModal" onclick="if(event.target===this)closeModal('redemptionModal')">
+  <div class="modal">
+    <h2>Redemption Details</h2>
+    <div id="redemptionDetailContent"></div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal('redemptionModal')">Close</button></div>
+  </div>
+</div>
+
 <!-- Gateway Configuration Modal -->
 <div class="modal-backdrop" id="gatewayModal" onclick="if(event.target===this)closeModal('gatewayModal')">
   <div class="modal">
@@ -497,6 +640,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/js/promotions-admin.js"></script>
 <script>
 /* ── AUTH GUARD ── */
 const TOKEN = localStorage.getItem('cc_token');
@@ -507,7 +651,7 @@ document.getElementById('navUser').textContent = userData.name || userData.email
 document.getElementById('navRole').textContent = (userData.role || '').replace(/_/g, ' ');
 
 /* ── STATE ── */
-const P = { dash: 1, all: 1, user: 1, pay: 1, sub: 1, inv: 1, log: 1 };
+const P = { dash: 1, all: 1, user: 1, pay: 1, sub: 1, inv: 1, log: 1, promo: 1, redemption: 1 };
 let loadedTabs = new Set(['dashboard']);
 let plansCache = [];
 let pricingCache = [];
@@ -558,6 +702,7 @@ function switchTab(name, el) {
     subscriptions: () => loadSubscriptions(1),
     invoices: () => loadInvoices(1),
     'payment-logs': () => loadPaymentLogs(1),
+    promotions: () => loadPromoCodes(1),
     settings: loadSettings
   };
   if (loaders[name] && !loadedTabs.has(name)) {

@@ -3,11 +3,19 @@
 // POST /api/payments/webhook
 // Supports: Stripe, Razorpay webhooks.
 // NEVER trust frontend payment responses — always verify via webhook.
+//
+// SECURITY:
+//   - bodyParser is DISABLED in vercel.json for this endpoint.
+//   - Raw body bytes are read from the request stream.
+//   - Signature verified against EXACT raw body (never JSON.stringify).
+//   - JSON parsed ONLY after successful signature verification.
+//   - Idempotency uses atomic INSERT ... ON CONFLICT DO NOTHING (no TOCTOU).
+//   - Razorpay webhook secret NEVER falls back to API key secret.
 
 const { neon } = require("@neondatabase/serverless");
 const { withErrorHandler, allowMethods } = require("../_lib/errors");
 const { webhookLimiter, applyLimit } = require("../_lib/rate-limit");
-const { verifyWebhookSignature } = require("../_lib/security");
+const { verifyWebhookSignature, htmlEscape } = require("../_lib/security");
 const { notifyAdmin, sendEmail } = require("../_lib/notify");
 const { getGateway, invalidateCache } = require("../_lib/gateway");
 
@@ -28,7 +36,9 @@ async function logPayment(sql, paymentId, shopId, gateway, eventType, severity, 
       INSERT INTO payment_logs (payment_id, repair_shop_id, gateway, event_type, severity, message, error_message)
       VALUES (${paymentId || null}, ${shopId || null}, ${gateway}, ${eventType}, ${severity}, ${message}, ${error || null})
     `;
-  } catch (e) { /* table may not exist */ }
+  } catch (e) {
+    console.error("[webhook] logPayment failed:", e.message);
+  }
 }
 
 async function logSubHistory(sql, subId, shopId, action, oldStatus, newStatus, amount, currency, billingCycle, gateway, actorType) {
@@ -39,25 +49,31 @@ async function logSubHistory(sql, subId, shopId, action, oldStatus, newStatus, a
       VALUES (${subId || null}, ${shopId}, ${action}, ${oldStatus || null}, ${newStatus || null},
         ${amount || null}, ${currency || null}, ${billingCycle || null}, ${gateway || null}, ${actorType || 'webhook'})
     `;
-  } catch (e) { /* table may not exist */ }
+  } catch (e) {
+    console.error("[webhook] logSubHistory failed:", e.message);
+  }
 }
 
-// ─── Idempotency: check if webhook already processed ────────────────────────
-async function isDuplicateWebhook(sql, idempotencyKey) {
+// ─── Atomic idempotency via INSERT ... ON CONFLICT DO NOTHING ───────────────
+// Requires a UNIQUE constraint on payment_logs(idempotency_key).
+// This eliminates the TOCTOU race between a separate SELECT + INSERT.
+// If the key already exists, returns false (duplicate).
+// If the insert succeeds, returns true (first claim).
+async function tryClaimIdempotencyKey(sql, idempotencyKey, paymentId, shopId, gateway, eventType) {
   if (!idempotencyKey) return false;
   try {
-    const rows = await sql`SELECT id FROM payment_logs WHERE idempotency_key = ${idempotencyKey} LIMIT 1`;
-    return rows.length > 0;
-  } catch (e) { return false; }
-}
-
-async function markIdempotencyKey(sql, idempotencyKey, paymentId, shopId, gateway, eventType) {
-  try {
-    await sql`
+    const result = await sql`
       INSERT INTO payment_logs (payment_id, repair_shop_id, gateway, event_type, severity, message, idempotency_key)
       VALUES (${paymentId || null}, ${shopId || null}, ${gateway}, ${eventType}, 'info', 'Webhook processed', ${idempotencyKey})
+      ON CONFLICT (idempotency_key) DO NOTHING
+      RETURNING id
     `;
-  } catch (e) { /* ok */ }
+    return result.length > 0; // true = first claim, false = already exists
+  } catch (e) {
+    console.error("[webhook] Idempotency claim failed:", e.message);
+    // If we can't verify, assume duplicate (safe side for idempotency)
+    return false;
+  }
 }
 
 // ─── Generate invoice on successful payment ─────────────────────────────────
@@ -77,7 +93,9 @@ async function generateInvoice(sql, { shopId, paymentId, subscriptionId, planNam
         businessGst = ps.business_gst || "";
         taxRate = parseFloat(ps.tax_rate) || 0;
       }
-    } catch (e) { /* ok */ }
+    } catch (e) {
+      console.warn("[webhook] Payment settings lookup failed:", e.message);
+    }
 
     const taxAmount = Math.round(amount * taxRate / 100 * 100) / 100;
     const total = Math.round((amount + taxAmount) * 100) / 100;
@@ -101,17 +119,23 @@ async function sendPaymentConfirmation(sql, shopId, { planName, billingCycle, cu
     const shop = await sql`SELECT email, owner_name, shop_name FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
     if (!shop[0]?.email) return;
 
-    const subject = `CoolCare — Payment Confirmed (${invoiceNumber})`;
+    const safeOwnerName = htmlEscape(shop[0].owner_name);
+    const safeBillingCycle = htmlEscape(billingCycle);
+    const safeCurrency = htmlEscape(currency);
+    const safeAmount = htmlEscape(amount);
+    const safeInvoiceNumber = htmlEscape(invoiceNumber);
+
+    const subject = `CoolCare — Payment Confirmed (${safeInvoiceNumber})`;
     const html = `<div style="font-family:Inter,sans-serif;padding:24px;background:#0a0a0a;color:#ededed;">
       <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #222;border-radius:12px;padding:32px;">
         <h2 style="color:#fff;margin:0 0 16px;font-size:20px;">Payment Confirmed</h2>
-        <p style="color:#a3a3a3;line-height:1.6;">Hi ${shop[0].owner_name},</p>
+        <p style="color:#a3a3a3;line-height:1.6;">Hi ${safeOwnerName},</p>
         <p style="color:#a3a3a3;line-height:1.6;">Your CoolCare Pro subscription has been activated.</p>
         <table style="width:100%;margin:16px 0;border-collapse:collapse;">
           <tr><td style="padding:8px 0;color:#737373;font-size:13px;">Plan</td><td style="padding:8px 0;color:#fff;font-weight:600;text-align:right;">CoolCare Pro</td></tr>
-          <tr><td style="padding:8px 0;color:#737373;font-size:13px;">Billing</td><td style="padding:8px 0;color:#fff;text-align:right;">${billingCycle}</td></tr>
-          <tr><td style="padding:8px 0;color:#737373;font-size:13px;">Amount</td><td style="padding:8px 0;color:#22c55e;font-weight:600;text-align:right;">${currency} ${amount}</td></tr>
-          <tr><td style="padding:8px 0;color:#737373;font-size:13px;">Invoice</td><td style="padding:8px 0;color:#fff;text-align:right;">${invoiceNumber}</td></tr>
+          <tr><td style="padding:8px 0;color:#737373;font-size:13px;">Billing</td><td style="padding:8px 0;color:#fff;text-align:right;">${safeBillingCycle}</td></tr>
+          <tr><td style="padding:8px 0;color:#737373;font-size:13px;">Amount</td><td style="padding:8px 0;color:#22c55e;font-weight:600;text-align:right;">${safeCurrency} ${safeAmount}</td></tr>
+          <tr><td style="padding:8px 0;color:#737373;font-size:13px;">Invoice</td><td style="padding:8px 0;color:#fff;text-align:right;">${safeInvoiceNumber}</td></tr>
         </table>
         <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
         <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
@@ -189,11 +213,15 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
     // Also notify admin
     const shop = await sql`SELECT shop_name, owner_name FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
     if (shop[0]) {
+      const safeShopName = htmlEscape(shop[0].shop_name);
+      const safeOwnerName = htmlEscape(shop[0].owner_name);
       await notifyAdmin(shopId, 'New Payment — Pending Approval',
-        `Shop "${shop[0].shop_name}" (${shop[0].owner_name}) has paid and is awaiting activation.\n\n` +
+        `Shop "${safeShopName}" (${safeOwnerName}) has paid and is awaiting activation.\n\n` +
         `Approve or reject in the admin dashboard: Pending Activations tab.`);
     }
-  } catch (e) { /* ok */ }
+  } catch (e) {
+    console.error("[webhook] Approval notification failed:", e.message);
+  }
 
   // Log subscription history
   await logSubHistory(sql, subId, shopId, action, oldStatus, "pending_approval", amount, currency, billingCycle, gateway, "webhook");
@@ -206,7 +234,9 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
               'Your payment has been received. A super admin will review and activate your account shortly.',
               '/payment-success.html')
     `;
-  } catch (e) { /* table may not exist */ }
+  } catch (e) {
+    console.warn("[webhook] In-app notification insert failed:", e.message);
+  }
 
   // Process referral reward
   try {
@@ -230,7 +260,9 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
                     'A shop you referred has purchased a subscription. $10 credit has been added to your account.',
                     '/shop-referrals.html')
           `;
-        } catch (e) { /* ok */ }
+        } catch (e) {
+          console.warn("[webhook] Referral notification failed:", e.message);
+        }
       }
     }
   } catch (e) {
@@ -241,14 +273,28 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
 }
 
 // ─── Get webhook secret (DB first, then env) ────────────────────────────────
+// SECURITY: Razorpay NEVER falls back to the API key secret.
+// The webhook secret is a separate credential configured in the Razorpay dashboard.
 async function getWebhookSecret(provider) {
   // Try DB first
   const gw = await getGateway(provider, true); // includeDisabled=true to get config even if disabled
   if (gw?.webhookSecret) return gw.webhookSecret;
   // Fallback to env
   if (provider === "stripe") return process.env.STRIPE_WEBHOOK_SECRET;
-  if (provider === "razorpay") return process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET;
+  if (provider === "razorpay") return process.env.RAZORPAY_WEBHOOK_SECRET;
   return null;
+}
+
+// ─── Read raw HTTP body from the request stream ─────────────────────────────
+// bodyParser is disabled in vercel.json so the stream is untouched when
+// our handler receives it. We must collect the raw bytes ourselves.
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -259,7 +305,13 @@ module.exports = withErrorHandler(async (request, response) => {
   if (!applyLimit(request, response, webhookLimiter)) return;
 
   const sql = neon(process.env.DATABASE_URL);
-  const rawBody = request.body;
+
+  // ── Read raw body from stream (bodyParser disabled in vercel.json) ────────
+  const rawBody = await getRawBody(request);
+  if (!rawBody) {
+    console.error("[webhook] Empty request body");
+    return response.status(400).json({ error: "Empty request body" });
+  }
 
   // ─── Stripe Webhook ───────────────────────────────────────────────────────
   const stripeSig = request.headers["stripe-signature"];
@@ -267,20 +319,32 @@ module.exports = withErrorHandler(async (request, response) => {
     const secret = await getWebhookSecret("stripe");
     if (!secret) return response.status(500).json({ error: "Stripe webhook not configured" });
 
-    const isValid = await verifyWebhookSignature(JSON.stringify(rawBody), stripeSig, secret);
+    // Verify signature against RAW body — never JSON.stringify
+    const isValid = await verifyWebhookSignature(rawBody, stripeSig, secret);
     if (!isValid) {
       await logPayment(sql, null, null, "stripe", "signature_invalid", "error", "Invalid Stripe webhook signature");
-      return response.status(400).json({ error: "Invalid signature" });
+      return response.status(403).json({ error: "Invalid signature" });
     }
 
-    const event = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
+    // Parse JSON only AFTER successful signature verification
+    let event;
+    try {
+      event = JSON.parse(rawBody);
+    } catch (err) {
+      console.error("[webhook] Failed to parse Stripe event JSON:", err.message);
+      return response.status(400).json({ error: "Invalid JSON body" });
+    }
+
     const eventType = event?.type;
     const session = event?.data?.object;
-    const idempotencyKey = `stripe_${event?.id || Date.now()}`;
+    const idempotencyKey = `stripe_${event?.id || ""}`;
 
-    // Check idempotency
-    if (await isDuplicateWebhook(sql, idempotencyKey)) {
-      return response.status(200).json({ received: true, duplicate: true });
+    // Atomic idempotency claim — no TOCTOU race
+    if (idempotencyKey) {
+      const claimed = await tryClaimIdempotencyKey(sql, idempotencyKey, null, null, "stripe", "webhook_received");
+      if (!claimed) {
+        return response.status(200).json({ received: true, duplicate: true });
+      }
     }
 
     if (eventType === "checkout.session.completed" && session) {
@@ -308,7 +372,6 @@ module.exports = withErrorHandler(async (request, response) => {
       // Send confirmation email
       await sendPaymentConfirmation(sql, shopId, { planName, billingCycle, currency, amount, invoiceNumber });
 
-      await markIdempotencyKey(sql, idempotencyKey, paymentDbId, shopId, "stripe", "checkout_completed");
       await logPayment(sql, paymentDbId, shopId, "stripe", "payment_completed", "info", `Stripe payment completed: ${currency} ${amount}`);
 
       console.log("[webhook] Stripe checkout completed for shop:", shopId);
@@ -324,13 +387,22 @@ module.exports = withErrorHandler(async (request, response) => {
     const secret = await getWebhookSecret("razorpay");
     if (!secret) return response.status(500).json({ error: "Razorpay webhook not configured" });
 
-    const isValid = await verifyWebhookSignature(JSON.stringify(rawBody), razorpaySig, secret);
+    // Verify signature against RAW body — never JSON.stringify
+    const isValid = await verifyWebhookSignature(rawBody, razorpaySig, secret);
     if (!isValid) {
       await logPayment(sql, null, null, "razorpay", "signature_invalid", "error", "Invalid Razorpay webhook signature");
-      return response.status(400).json({ error: "Invalid signature" });
+      return response.status(403).json({ error: "Invalid signature" });
     }
 
-    const event = typeof rawBody === "string" ? JSON.parse(rawBody) : rawBody;
+    // Parse JSON only AFTER successful signature verification
+    let event;
+    try {
+      event = JSON.parse(rawBody);
+    } catch (err) {
+      console.error("[webhook] Failed to parse Razorpay event JSON:", err.message);
+      return response.status(400).json({ error: "Invalid JSON body" });
+    }
+
     const eventName = event?.event;
 
     // Handle payment.captured
@@ -344,11 +416,14 @@ module.exports = withErrorHandler(async (request, response) => {
       const invoiceNumber = notes.invoice || payment?.receipt;
       const currency = (payment?.currency || "INR").toUpperCase();
       const amount = (payment?.amount || 0) / 100;
-      const idempotencyKey = `razorpay_${payment?.id || Date.now()}`;
+      const idempotencyKey = `razorpay_${payment?.id || ""}`;
 
-      // Check idempotency
-      if (await isDuplicateWebhook(sql, idempotencyKey)) {
-        return response.status(200).json({ received: true, duplicate: true });
+      // Atomic idempotency claim — no TOCTOU race
+      if (idempotencyKey) {
+        const claimed = await tryClaimIdempotencyKey(sql, idempotencyKey, null, null, "razorpay", "webhook_received");
+        if (!claimed) {
+          return response.status(200).json({ received: true, duplicate: true });
+        }
       }
 
       // Mark payment as completed
@@ -363,7 +438,9 @@ module.exports = withErrorHandler(async (request, response) => {
       // Update repair_shops with selected currency info
       try {
         await sql`UPDATE repair_shops SET selected_currency = ${currency} WHERE id = ${shopId}`;
-      } catch (e) { /* ok */ }
+      } catch (e) {
+        console.warn("[webhook] Failed to update shop currency:", e.message);
+      }
 
       const subId = await activateSubscription(sql, shopId, planName, billingCycle, "razorpay", payment?.id || null, amount, currency);
 
@@ -373,7 +450,6 @@ module.exports = withErrorHandler(async (request, response) => {
       // Send confirmation email
       await sendPaymentConfirmation(sql, shopId, { planName, billingCycle, currency, amount, invoiceNumber });
 
-      await markIdempotencyKey(sql, idempotencyKey, paymentDbId, shopId, "razorpay", "payment_captured");
       await logPayment(sql, paymentDbId, shopId, "razorpay", "payment_completed", "info", `Razorpay payment captured: ${currency} ${amount}`);
 
       console.log("[webhook] Razorpay payment captured for shop:", shopId);
@@ -402,7 +478,9 @@ module.exports = withErrorHandler(async (request, response) => {
                     'Your payment could not be processed. Please try again.',
                     '/index.html#pricing')
           `;
-        } catch (e) { /* ok */ }
+        } catch (e) {
+          console.warn("[webhook] Payment failure notification failed:", e.message);
+        }
       }
 
       console.log("[webhook] Razorpay payment failed for shop:", shopId, "Reason:", failureReason);

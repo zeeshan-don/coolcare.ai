@@ -186,26 +186,34 @@ async function handleCheckout(request, response, sql, shopId, body) {
   // NEVER trust any amount from the frontend
   const { amount: baseAmount } = await calculateAmount(sql, currency, billingCycle, planId);
 
-  // Apply coupon if provided
+  // Apply promo code if provided
   let discount = 0;
-  let couponId = null;
+  let promoCodeId = null;
   if (data.couponCode) {
     try {
-      const coupons = await sql`
-        SELECT * FROM coupons WHERE code = ${data.couponCode.toUpperCase()} AND is_active = true
-          AND used_count < COALESCE(max_uses, 999999) AND valid_from <= now()
-          AND (valid_until IS NULL OR valid_until >= now())
+      const codeHash = require('crypto').createHash('sha256').update(data.couponCode.toUpperCase()).digest('hex');
+      const codes = await sql`
+        SELECT * FROM promotion_codes
+        WHERE (code = ${data.couponCode.toUpperCase()} OR code_hash = ${codeHash})
+          AND is_active = true AND (valid_until IS NULL OR valid_until >= now())
+          AND (max_uses IS NULL OR used_count < max_uses)
         LIMIT 1
       `;
-      if (coupons.length > 0) {
-        const coupon = coupons[0];
-        couponId = coupon.id;
-        discount = coupon.discount_type === "percent"
-          ? baseAmount * (parseFloat(coupon.discount_value) / 100)
-          : parseFloat(coupon.discount_value);
-        await sql`UPDATE coupons SET used_count = used_count + 1 WHERE id = ${coupon.id}`;
+      if (codes.length > 0) {
+        const promo = codes[0];
+        promoCodeId = promo.id;
+        if (promo.type === 'percentage_discount' && promo.discount_percent !== null) {
+          discount = Math.round((baseAmount * promo.discount_percent / 100) * 100) / 100;
+        } else if (promo.type === 'fixed_discount' && promo.discount_amount !== null) {
+          discount = promo.discount_amount;
+        }
+        if (promo.max_discount_amount !== null && discount > promo.max_discount_amount) {
+          discount = promo.max_discount_amount;
+        }
       }
-    } catch (e) { /* coupons table may not exist */ }
+    } catch (e) {
+      console.warn('[payments] Promo code validation failed:', e.message);
+    }
   }
 
   const finalAmount = Math.max(0, Math.round((baseAmount - discount) * 100) / 100);
@@ -235,7 +243,7 @@ async function handleCheckout(request, response, sql, shopId, body) {
     INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description, metadata)
     VALUES (${shopId}, 'pending', ${currency}, ${finalAmount}, 'pending', ${invoiceNumber},
             ${`CoolCare Pro — ${billingCycle}`},
-            ${JSON.stringify({ billingCycle, planName, couponId, discount })}::jsonb)
+            ${JSON.stringify({ billingCycle, planName, promoCodeId, discount })}::jsonb)
     RETURNING id
   `;
 

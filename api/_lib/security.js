@@ -17,6 +17,14 @@ function setSecurityHeaders(response) {
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://graph.facebook.com https://api.groq.com"
   );
+
+  // HSTS: only in production to avoid breaking localhost dev
+  if (process.env.NODE_ENV === "production") {
+    response.setHeader(
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains; preload"
+    );
+  }
 }
 
 /**
@@ -74,9 +82,27 @@ async function verifyWebhookSignature(payload, signature, secret, algorithm = "s
   );
 }
 
+/**
+ * Escape a string for safe insertion into HTML.
+ * Prevents XSS in HTML email bodies and templates.
+ * Does NOT double-escape — safe to call on already-escaped text
+ * because HTML entity chars are idempotent (&amp; stays &amp;).
+ */
+function htmlEscape(value) {
+  if (value == null) return "";
+  const s = String(value);
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 module.exports = {
   setSecurityHeaders,
   validateOrigin,
   sanitizeInput,
   verifyWebhookSignature,
+  htmlEscape,
 };

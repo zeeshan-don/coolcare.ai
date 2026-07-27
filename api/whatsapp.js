@@ -6,7 +6,7 @@
 const { neon } = require("@neondatabase/serverless");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { webhookLimiter, applyLimit } = require("./_lib/rate-limit");
-const { setSecurityHeaders } = require("./_lib/security");
+const { setSecurityHeaders, verifyWebhookSignature } = require("./_lib/security");
 const { decrypt } = require("./_lib/encrypt");
 
 // ─── i18n: Multi-language support ─────────────────────────────────────────────
@@ -601,6 +601,18 @@ async function lookupConnection(phoneNumberId) {
   return null;
 }
 
+// ─── Read raw HTTP body from the request stream ──────────────────────────────
+// bodyParser is disabled in vercel.json so the stream is untouched when
+// our handler receives it. We must collect the raw bytes ourselves.
+function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+}
+
 // ─── Vercel serverless handler ────────────────────────────────────────────────
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -621,7 +633,44 @@ module.exports = withErrorHandler(async (request, response) => {
   if (!allowMethods(request, response, "POST")) return;
   if (!applyLimit(request, response, webhookLimiter)) return;
 
-  const change = request.body?.entry?.[0]?.changes?.[0]?.value;
+  // ── Read raw body (bodyParser disabled in vercel.json) ──────────────────
+  const rawBody = await getRawBody(request);
+  if (!rawBody) {
+    console.error("[WhatsApp] Empty request body");
+    return response.status(400).json({ error: "Empty request body" });
+  }
+
+  // ── Verify X-Hub-Signature-256 (Meta webhook signature) ─────────────────
+  // Meta signs every webhook POST with HMAC-SHA256 using the App Secret.
+  // The signature MUST be computed over the exact raw request body bytes.
+  const appSecret = process.env.META_APP_SECRET;
+  const metaSignature = request.headers["x-hub-signature-256"];
+
+  if (appSecret) {
+    if (!metaSignature) {
+      console.error("[WhatsApp] Missing X-Hub-Signature-256 header");
+      return response.status(403).json({ error: "Missing webhook signature" });
+    }
+    const isValid = await verifyWebhookSignature(rawBody, metaSignature, appSecret);
+    if (!isValid) {
+      console.error("[WhatsApp] Invalid X-Hub-Signature-256");
+      return response.status(403).json({ error: "Invalid webhook signature" });
+    }
+  } else {
+    // Development mode — log warning but allow through
+    console.warn("[WhatsApp] META_APP_SECRET not set — skipping webhook signature verification");
+  }
+
+  // ── Parse body JSON only AFTER signature verification ──────────────────
+  let body;
+  try {
+    body = JSON.parse(rawBody);
+  } catch (err) {
+    console.error("[WhatsApp] Failed to parse request body JSON:", err.message);
+    return response.status(400).json({ error: "Invalid JSON body" });
+  }
+
+  const change = body?.entry?.[0]?.changes?.[0]?.value;
   const incomingMessage = change?.messages?.[0];
   const phoneNumberId = change?.metadata?.phone_number_id;
 

@@ -4,6 +4,7 @@
 // Recipients: customer, admin, technician.
 
 const { neon } = require("@neondatabase/serverless");
+const { htmlEscape } = require("./security");
 
 // ─── WhatsApp Message Templates ─────────────────────────────────────────────
 const STATUS_MESSAGES = {
@@ -149,10 +150,11 @@ async function notifyStatusChange(booking, newStatus) {
   // Send email if customer email available
   if (booking.customer_email) {
     const subject = `CoolCare Booking #${booking.id} — ${newStatus.replace(/_/g, " ").toUpperCase()}`;
+    const safeBody = htmlEscape(body).replace(/\n/g, "<br>");
     const htmlBody = `<div style="font-family:Inter,sans-serif;padding:24px;background:#0a0a0a;color:#ededed;">
       <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #222;border-radius:12px;padding:32px;">
       <h2 style="color:#fff;margin:0 0 16px;font-size:20px;">CoolCare Booking Update</h2>
-      <p style="color:#a3a3a3;line-height:1.6;">${body.replace(/\*/g, "").replace(/\n/g, "<br>")}</p>
+      <p style="color:#a3a3a3;line-height:1.6;">${safeBody}</p>
       <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
       <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
       </div></div>`;
@@ -173,10 +175,11 @@ async function notifyAdmin(shopId, subject, message) {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (!adminEmail) return;
 
+  const safeMessage = htmlEscape(message).replace(/\n/g, "<br>");
   const htmlBody = `<div style="font-family:Inter,sans-serif;padding:24px;background:#0a0a0a;color:#ededed;">
     <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #222;border-radius:12px;padding:32px;">
     <h2 style="color:#fff;margin:0 0 16px;font-size:20px;">CoolCare Admin Alert</h2>
-    <p style="color:#a3a3a3;line-height:1.6;">${message.replace(/\n/g, "<br>")}</p>
+    <p style="color:#a3a3a3;line-height:1.6;">${safeMessage}</p>
     </div></div>`;
 
   const result = await sendEmail(adminEmail, subject, htmlBody);

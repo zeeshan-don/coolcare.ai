@@ -16,10 +16,13 @@ async function main() {
   }
 
   const sql = neon(databaseUrl);
-  const migrationPath = path.join(__dirname, "..", "migration-create-missing-tables.sql");
+  // Accept migration filename as argument, default to promotion codes
+  const args = process.argv.slice(2);
+  const migrationFile = args[0] || "migration-promotion-codes.sql";
+  const migrationPath = path.join(__dirname, "..", migrationFile);
   const migrationSql = fs.readFileSync(migrationPath, "utf-8");
 
-  console.log("🚀 Running migration: migration-create-missing-tables.sql");
+  console.log(`🚀 Running migration: ${migrationFile}`);
   console.log(`📄 SQL size: ${(migrationSql.length / 1024).toFixed(1)} KB`);
   console.log("⏳ Executing...");
 

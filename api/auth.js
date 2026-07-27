@@ -11,7 +11,7 @@ const { signToken, makeJti, requireAuth } = require("./_lib/auth");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { validate, loginSchema, signupSchema, bootstrapSchema, forgotPasswordSchema, resetPasswordTokenSchema } = require("./_lib/validate");
 const { loginLimiter, signupLimiter, apiLimiter, applyLimit } = require("./_lib/rate-limit");
-const { setSecurityHeaders } = require("./_lib/security");
+const { setSecurityHeaders, htmlEscape } = require("./_lib/security");
 const { sendEmail } = require("./_lib/notify");
 const { createOrder, calculateAmount } = require("./_lib/gateway");
 const { detectCountry, getCountryCurrency, getCountryName, CURRENCIES } = require("./_lib/currency");
@@ -268,7 +268,231 @@ async function handleSignup(request, response, body) {
     } catch (e) { console.warn("[auth/signup] Referral record creation failed:", e.message); }
   }
 
-  // ── Create Razorpay order (paid plan only, no free trial) ────────────────
+  // ── Check for promo code (support token, discount, free trial, lifetime) ─
+  const promoCode = body.promoCode || data.promoCode || null;
+  let appliedPromo = null;
+  
+  if (promoCode) {
+    const codeHash = crypto.createHash('sha256').update(promoCode.toUpperCase()).digest('hex');
+    try {
+      const promos = await sql`
+        SELECT * FROM promotion_codes
+        WHERE (code = ${promoCode.toUpperCase()} OR code_hash = ${codeHash})
+          AND is_active = true
+          AND (valid_until IS NULL OR valid_until >= now())
+          AND (max_uses IS NULL OR used_count < max_uses)
+        LIMIT 1
+      `;
+      if (promos.length > 0) {
+        appliedPromo = promos[0];
+      }
+    } catch (e) { /* table may not exist */ }
+  }
+
+  // ── SUPPORT TOKEN FLOW: Skip Razorpay, activate immediately ────────────
+  if (appliedPromo && appliedPromo.type === 'support_token') {
+    try {
+      await sql`BEGIN`;
+      
+      // Update shop to active
+      await sql`
+        UPDATE repair_shops
+        SET subscription_status = 'active', approval_status = 'approved',
+            is_active = true, updated_at = now()
+        WHERE id = ${shop.id}
+      `;
+      
+      // Create subscription (10 years)
+      const planId = 1;
+      const subEnd = new Date();
+      subEnd.setFullYear(subEnd.getFullYear() + 10);
+      
+      const sub = await sql`
+        INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+          amount_paid, currency, is_support_token, promotion_code_id,
+          current_period_start, current_period_end, created_at)
+        VALUES (${shop.id}, ${planId}, 'active', ${billingCycle || 'yearly'}, 'promo_code',
+          0, ${currency}, true, ${appliedPromo.id},
+          now(), ${subEnd.toISOString()}, now())
+        RETURNING id
+      `;
+      
+      // Increment used count
+      await sql`UPDATE promotion_codes SET used_count = used_count + 1, updated_at = now() WHERE id = ${appliedPromo.id}`;
+      
+      // Record redemption
+      await sql`
+        INSERT INTO promo_code_redemptions (promotion_code_id, repair_shop_id, email, ip_address, user_agent,
+          plan_name, billing_cycle, original_amount, discount_amount, final_amount, currency,
+          subscription_id, status)
+        VALUES (${appliedPromo.id}, ${shop.id}, ${shop.email},
+          ${request.headers['x-forwarded-for']?.split(',')[0] || request.headers['x-real-ip'] || null},
+          ${request.headers['user-agent'] || null},
+          ${planName}, ${billingCycle}, 0, 0, 0, ${currency},
+          ${sub[0].id}, 'active')
+      `;
+      
+      await sql`COMMIT`;
+      
+      // Issue JWT token (user can log in immediately)
+      const jti = makeJti();
+      const token = signToken({
+        sub: shop.id,
+        role: 'owner',
+        user_type: 'shop',
+        repair_shop_id: shop.id,
+      }, jti);
+      
+      console.log('[auth/signup] Support token activated for shop #' + shop.id);
+      return response.status(201).json({
+        token,
+        user: {
+          id: shop.id, name: shop.owner_name, shopName: shop.shop_name,
+          email: shop.email, mobile: shop.mobile,
+          role: 'owner', userType: 'shop', repairShopId: shop.id,
+        },
+        activationType: 'support_token',
+        message: 'Support token activated! Your subscription is active.',
+        subscriptionRequired: false,
+      });
+    } catch (err) {
+      await sql`ROLLBACK`.catch(() => {});
+      console.error('[auth/signup] Support token activation failed:', err.message);
+      return response.status(201).json({
+        shopId: shop.id,
+        checkoutRequired: false,
+        checkoutError: 'Support token activation failed: ' + err.message,
+      });
+    }
+  }
+
+  // ── FREE TRIAL FLOW ────────────────────────────────────────────────────
+  if (appliedPromo && appliedPromo.type === 'free_trial') {
+    try {
+      await sql`BEGIN`;
+      
+      const trialDays = appliedPromo.free_trial_days || 14;
+      const trialEnd = new Date();
+      trialEnd.setDate(trialEnd.getDate() + trialDays);
+      const planId = 1;
+      
+      await sql`
+        UPDATE repair_shops
+        SET subscription_status = 'trial', updated_at = now()
+        WHERE id = ${shop.id}
+      `;
+      
+      const sub = await sql`
+        INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+          amount_paid, currency, promotion_code_id,
+          current_period_start, current_period_end, trial_end, created_at)
+        VALUES (${shop.id}, ${planId}, 'trial', ${billingCycle || 'monthly'}, 'promo_code',
+          0, ${currency}, ${appliedPromo.id},
+          now(), ${trialEnd.toISOString()}, ${trialEnd.toISOString()}, now())
+        RETURNING id
+      `;
+      
+      await sql`UPDATE promotion_codes SET used_count = used_count + 1 WHERE id = ${appliedPromo.id}`;
+      await sql`
+        INSERT INTO promo_code_redemptions (promotion_code_id, repair_shop_id, email, ip_address, user_agent,
+          plan_name, billing_cycle, original_amount, discount_amount, final_amount, currency,
+          subscription_id, status)
+        VALUES (${appliedPromo.id}, ${shop.id}, ${shop.email},
+          ${request.headers['x-forwarded-for']?.split(',')[0] || request.headers['x-real-ip'] || null},
+          ${request.headers['user-agent'] || null},
+          ${planName}, ${billingCycle}, 0, 0, 0, ${currency},
+          ${sub[0].id}, 'active')
+      `;
+      
+      await sql`COMMIT`;
+      
+      const jti = makeJti();
+      const token = signToken({
+        sub: shop.id, role: 'owner', user_type: 'shop', repair_shop_id: shop.id,
+      }, jti);
+      
+      console.log('[auth/signup] Free trial activated for shop #' + shop.id);
+      return response.status(201).json({
+        token,
+        user: {
+          id: shop.id, name: shop.owner_name, shopName: shop.shop_name,
+          email: shop.email, mobile: shop.mobile,
+          role: 'owner', userType: 'shop', repairShopId: shop.id,
+        },
+        activationType: 'free_trial',
+        freeTrialDays: trialDays,
+        message: 'Free trial activated! You have ' + trialDays + ' days to try CoolCare Pro.',
+        subscriptionRequired: false,
+      });
+    } catch (err) {
+      await sql`ROLLBACK`.catch(() => {});
+      console.error('[auth/signup] Free trial activation failed:', err.message);
+    }
+  }
+
+  // ── LIFETIME ACCESS FLOW ───────────────────────────────────────────────
+  if (appliedPromo && appliedPromo.type === 'lifetime_access') {
+    try {
+      await sql`BEGIN`;
+      
+      const planId = 1;
+      const farFuture = new Date('2099-12-31');
+      
+      await sql`
+        UPDATE repair_shops
+        SET subscription_status = 'active', approval_status = 'approved',
+            is_active = true, updated_at = now()
+        WHERE id = ${shop.id}
+      `;
+      
+      const sub = await sql`
+        INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+          amount_paid, currency, is_lifetime, promotion_code_id,
+          current_period_start, current_period_end, created_at)
+        VALUES (${shop.id}, ${planId}, 'active', 'lifetime', 'promo_code',
+          0, ${currency}, true, ${appliedPromo.id},
+          now(), ${farFuture.toISOString()}, now())
+        RETURNING id
+      `;
+      
+      await sql`UPDATE promotion_codes SET used_count = used_count + 1 WHERE id = ${appliedPromo.id}`;
+      await sql`
+        INSERT INTO promo_code_redemptions (promotion_code_id, repair_shop_id, email, ip_address, user_agent,
+          plan_name, billing_cycle, original_amount, discount_amount, final_amount, currency,
+          subscription_id, status)
+        VALUES (${appliedPromo.id}, ${shop.id}, ${shop.email},
+          ${request.headers['x-forwarded-for']?.split(',')[0] || request.headers['x-real-ip'] || null},
+          ${request.headers['user-agent'] || null},
+          ${planName}, 'lifetime', 0, 0, 0, ${currency},
+          ${sub[0].id}, 'active')
+      `;
+      
+      await sql`COMMIT`;
+      
+      const jti = makeJti();
+      const token = signToken({
+        sub: shop.id, role: 'owner', user_type: 'shop', repair_shop_id: shop.id,
+      }, jti);
+      
+      console.log('[auth/signup] Lifetime access activated for shop #' + shop.id);
+      return response.status(201).json({
+        token,
+        user: {
+          id: shop.id, name: shop.owner_name, shopName: shop.shop_name,
+          email: shop.email, mobile: shop.mobile,
+          role: 'owner', userType: 'shop', repairShopId: shop.id,
+        },
+        activationType: 'lifetime',
+        message: 'Lifetime access activated! Your subscription will never expire.',
+        subscriptionRequired: false,
+      });
+    } catch (err) {
+      await sql`ROLLBACK`.catch(() => {});
+      console.error('[auth/signup] Lifetime access activation failed:', err.message);
+    }
+  }
+
+  // ── Create Razorpay order (paid plan / discount codes) ─────────────────
   // IMPORTANT: No JWT token is generated here. For paid plans, the user must
   // complete payment AND get admin approval before receiving an authenticated session.
   console.log("[auth/signup] Creating payment order for shop #" + shop.id);
@@ -276,8 +500,23 @@ async function handleSignup(request, response, body) {
   try {
     // Calculate the amount from DB (authoritative source, don't trust frontend)
     const planId = 1; // 'pro' plan
-    const { amount } = await calculateAmount(sql, currency, billingCycle, planId);
-    console.log("[auth/signup] Amount calculated from DB:", { amount, currency, billingCycle, planId });
+    let { amount } = await calculateAmount(sql, currency, billingCycle, planId);
+    
+    // Apply discount from promo code
+    let discountAmount = 0;
+    if (appliedPromo) {
+      if (appliedPromo.type === 'percentage_discount' && appliedPromo.discount_percent !== null) {
+        discountAmount = Math.round((amount * appliedPromo.discount_percent / 100) * 100) / 100;
+      } else if (appliedPromo.type === 'fixed_discount' && appliedPromo.discount_amount !== null) {
+        discountAmount = appliedPromo.discount_amount;
+      }
+      if (appliedPromo.max_discount_amount !== null && discountAmount > appliedPromo.max_discount_amount) {
+        discountAmount = appliedPromo.max_discount_amount;
+      }
+      amount = Math.max(0, Math.round((amount - discountAmount) * 100) / 100);
+    }
+    
+    console.log("[auth/signup] Amount calculated from DB:", { amount, currency, billingCycle, planId, discountAmount });
 
     const invoiceNumber = `INV-${Date.now()}-${shop.id}`;
 
@@ -1161,8 +1400,7 @@ function buildResetEmail(userName, resetUrl) {
 <tr><td style="text-align:center;padding-bottom:24px;">
   <h1 style="font-size:22px;font-weight:700;color:#fff;margin:0;letter-spacing:-0.3px;">coolcare</h1>
 </td></tr>
-<tr><td style="padding:0 8px;">
-  <p style="color:#a3a3a3;font-size:14px;margin:0 0 16px;">Hi ${userName || "there"},</p>
+<tr><td style="padding:0 8px;">    <p style="color:#a3a3a3;font-size:14px;margin:0 0 16px;">Hi ${htmlEscape(userName) || "there"},</p>
   <p style="color:#e5e5e5;font-size:15px;line-height:1.6;margin:0 0 24px;">
     We received a request to reset your CoolCare AI password. Click the button below to set a new password.
   </p>
