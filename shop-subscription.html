@@ -677,7 +677,7 @@ async function renewSubscription() {
     return;
   }
   
-  // Normal checkout flow
+  // Normal checkout flow (handles partial discount + zero-amount discount)
   try {
     await CoolCareCheckout.start({
       billingCycle: selectedCycle,
@@ -690,6 +690,10 @@ async function renewSubscription() {
       },
       onStart: function() {
         btn.textContent = 'Opening checkout…';
+      },
+      onSuccess: function(msg) {
+        toast(msg || 'Subscription activated!');
+        setTimeout(() => window.location.reload(), 1500);
       }
     });
   } catch(e) {

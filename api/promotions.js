@@ -128,6 +128,33 @@ module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
   if (!applyLimit(request, response, apiLimiter)) return;
 
+  if (request.method !== "POST") {
+    return response.status(405).json({ error: "Method not allowed" });
+  }
+
+  const body = request.body || {};
+  const action = body.action;
+
+  // ── VALIDATE action: public (auth optional) ──
+  // Used on signup page where user is NOT yet authenticated.
+  // Only returns code validity & pricing info — no side effects.
+  if (action === "validate") {
+    const sql = neon(process.env.DATABASE_URL);
+    
+    // Early check: verify promotion_codes table exists
+    const tableExists = await ensurePromotionCodesTable(sql);
+    if (!tableExists) {
+      console.error("[promotions] FATAL: promotion_codes table does not exist.");
+      return response.status(503).json({
+        error: "Promotions system is not available.",
+        code: "TABLE_NOT_FOUND",
+      });
+    }
+    
+    return handleValidatePublic(request, response, sql, body);
+  }
+
+  // ── All other actions: require authentication ──
   const auth = await requireAuth(request, response);
   if (!auth) return;
 
@@ -149,13 +176,6 @@ module.exports = withErrorHandler(async (request, response) => {
     });
   }
 
-  if (request.method !== "POST") {
-    return response.status(405).json({ error: "Method not allowed" });
-  }
-
-  const body = request.body || {};
-  const action = body.action;
-
   // Admin-only actions
   if (["create", "update", "delete", "list", "stats", "redemptions", "duplicate", "toggle"].includes(action)) {
     const admin = await requirePlatformAdmin(auth, sql, response);
@@ -164,7 +184,6 @@ module.exports = withErrorHandler(async (request, response) => {
   }
 
   // Shop actions (require auth but not admin)
-  if (action === "validate") return handleValidate(request, response, sql, auth, body);
   if (action === "redeem") return handleRedeem(request, response, sql, auth, body);
 
   return response.status(400).json({ error: "Invalid action" });
@@ -551,7 +570,122 @@ async function adminToggle(request, response, sql, body, actorType, actorId, ip)
 // SHOP ACTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── VALIDATE ────────────────────────────────────────────────────────────────
+// ─── VALIDATE (PUBLIC — no auth required) ───────────────────────────────────-
+async function handleValidatePublic(request, response, sql, body) {
+  const data = validateSchema.safeParse(body);
+  if (!data.success) {
+    return response.status(400).json({ error: "Validation failed", errors: data.error.flatten().fieldErrors });
+  }
+  const v = data.data;
+  const codeHash = hashToken(v.code);
+
+  // Look up the promo code (by exact code or hash for support tokens)
+  const promoRows = await sql`
+    SELECT * FROM promotion_codes
+    WHERE (code = ${v.code} OR code_hash = ${codeHash})
+      AND is_active = true
+    LIMIT 1
+  `;
+
+  if (promoRows.length === 0) {
+    return response.status(404).json({ valid: false, error: "Invalid promo code" });
+  }
+
+  const code = promoRows[0];
+
+  // Check if expired
+  if (code.valid_until && new Date(code.valid_until) < new Date()) {
+    return response.status(400).json({ valid: false, error: "This promo code has expired" });
+  }
+
+  // Check if valid_from is in the future
+  if (new Date(code.valid_from) > new Date()) {
+    return response.status(400).json({ valid: false, error: "This promo code is not yet active" });
+  }
+
+  // Check max uses
+  if (code.max_uses !== null && code.used_count >= code.max_uses) {
+    return response.status(400).json({ valid: false, error: "This promo code has reached its maximum usage limit" });
+  }
+
+  // Check billing cycles
+  if (code.billing_cycles && code.billing_cycles.length > 0) {
+    if (!code.billing_cycles.includes(v.billingCycle)) {
+      return response.status(400).json({ valid: false, error: `This promo code is not valid for ${v.billingCycle} billing` });
+    }
+  }
+
+  // Calculate discount
+  let discountAmount = 0;
+  const originalAmount = v.amount || 0;
+
+  if (code.type === "percentage_discount" && code.discount_percent !== null) {
+    discountAmount = Math.round((originalAmount * code.discount_percent / 100) * 100) / 100;
+  } else if (code.type === "fixed_discount" && code.discount_amount !== null) {
+    discountAmount = code.discount_amount;
+  }
+
+  // Apply max discount cap
+  if (code.max_discount_amount !== null && discountAmount > code.max_discount_amount) {
+    discountAmount = code.max_discount_amount;
+  }
+
+  // Check min purchase
+  if (code.min_purchase_amount > 0 && originalAmount < code.min_purchase_amount) {
+    return response.status(400).json({
+      valid: false,
+      error: `Minimum purchase amount of ${code.discount_currency} ${code.min_purchase_amount} required`,
+    });
+  }
+
+  const finalAmount = Math.max(0, Math.round((originalAmount - discountAmount) * 100) / 100);
+
+  // Build description based on promo type
+  let description = "";
+  if (code.description) {
+    description = code.description;
+  } else if (code.type === "percentage_discount") {
+    description = `${code.discount_percent}% off your subscription`;
+  } else if (code.type === "fixed_discount") {
+    description = `${code.discount_currency} ${code.discount_amount} off your subscription`;
+  } else if (code.type === "free_trial") {
+    description = `${code.free_trial_days || 14} day free trial`;
+  } else if (code.type === "support_token") {
+    description = "Support token — free subscription";
+  } else if (code.type === "lifetime_access") {
+    description = "Lifetime access — never pay again!";
+  }
+
+  return response.status(200).json({
+    valid: true,
+    code: {
+      id: code.id,
+      name: code.name,
+      type: code.type,
+      description: code.description || description,
+      discountPercent: code.discount_percent,
+      discountAmount: code.discount_amount,
+      discountCurrency: code.discount_currency,
+      freeTrialDays: code.free_trial_days,
+      stackable: code.stackable,
+      autoApply: code.auto_apply,
+    },
+    calculation: {
+      originalAmount,
+      discountAmount,
+      finalAmount,
+      currency: v.currency,
+      description,
+    },
+    // For special types, indicate no payment needed
+    isSupportToken: code.type === "support_token",
+    isFreeTrial: code.type === "free_trial",
+    isLifetime: code.type === "lifetime_access",
+    freeTrialDays: code.free_trial_days,
+  });
+}
+
+// ─── VALIDATE (AUTH required — includes per-user checks) ─────────────────────
 async function handleValidate(request, response, sql, auth, body) {
   const data = validateSchema.safeParse(body);
   if (!data.success) {
@@ -564,7 +698,6 @@ async function handleValidate(request, response, sql, auth, body) {
   let promoCode;
   const codeHash = hashToken(v.code);
 
-  // For support tokens, look up by hash
   promoCode = await sql`
     SELECT * FROM promotion_codes
     WHERE (code = ${v.code} OR code_hash = ${codeHash})

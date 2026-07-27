@@ -238,6 +238,61 @@ async function handleCheckout(request, response, sql, shopId, body) {
     }
   } catch (e) { /* ok */ }
 
+  // ── ZERO AMOUNT (100% Discount): Skip Razorpay, activate subscription directly ──
+  if (finalAmount === 0 && promoCodeId) {
+    try {
+      const shopRows = await sql`SELECT email FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+      const shopEmail = shopRows.length > 0 ? shopRows[0].email : 'unknown@shop.com';
+
+      await sql`BEGIN`;
+      
+      await sql`
+        UPDATE repair_shops SET subscription_status = 'active', approval_status = 'approved',
+          is_active = true, updated_at = now()
+        WHERE id = ${shopId}
+      `;
+      
+      const subEnd = new Date();
+      subEnd.setFullYear(subEnd.getFullYear() + 10);
+      
+      const sub = await sql`
+        INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+          amount_paid, currency, promotion_code_id,
+          current_period_start, current_period_end, created_at)
+        VALUES (${shopId}, ${planId}, 'active', ${billingCycle}, 'promo_code',
+          0, ${currency}, ${promoCodeId},
+          now(), ${subEnd.toISOString()}, now())
+        RETURNING id
+      `;
+      
+      await sql`UPDATE promotion_codes SET used_count = used_count + 1, updated_at = now() WHERE id = ${promoCodeId}`;
+      await sql`
+        INSERT INTO promo_code_redemptions (promotion_code_id, repair_shop_id, email, ip_address, user_agent,
+          plan_name, billing_cycle, original_amount, discount_amount, final_amount, currency,
+          subscription_id, status)
+        VALUES (${promoCodeId}, ${shopId}, ${shopEmail},
+          ${request.headers['x-forwarded-for']?.split(',')[0] || request.headers['x-real-ip'] || null},
+          ${request.headers['user-agent'] || null},
+          ${planName}, ${billingCycle}, ${baseAmount}, ${discount}, 0, ${currency},
+          ${sub[0].id}, 'active')
+      `;
+      
+      await sql`COMMIT`;
+      
+      console.log('[payments] Zero-amount checkout activated for shop #' + shopId);
+      return response.status(200).json({
+        message: 'Promo code applied! Subscription activated with 100% discount.',
+        activationType: 'promo_discount',
+        subscriptionId: sub[0].id,
+        subscriptionRequired: false,
+      });
+    } catch (err) {
+      await sql`ROLLBACK`.catch(() => {});
+      console.error('[payments] Zero-amount checkout activation failed:', err.message);
+      return response.status(500).json({ error: 'Discount activation failed: ' + err.message });
+    }
+  }
+
   // Create payment record
   const payment = await sql`
     INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description, metadata)

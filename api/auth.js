@@ -495,12 +495,14 @@ async function handleSignup(request, response, body) {
   // ── Create Razorpay order (paid plan / discount codes) ─────────────────
   // IMPORTANT: No JWT token is generated here. For paid plans, the user must
   // complete payment AND get admin approval before receiving an authenticated session.
+  // EXCEPTION: If discount results in $0 amount, activate immediately (no payment needed).
   console.log("[auth/signup] Creating payment order for shop #" + shop.id);
 
   try {
     // Calculate the amount from DB (authoritative source, don't trust frontend)
     const planId = 1; // 'pro' plan
     let { amount } = await calculateAmount(sql, currency, billingCycle, planId);
+    let fullAmount = amount;
     
     // Apply discount from promo code
     let discountAmount = 0;
@@ -518,6 +520,73 @@ async function handleSignup(request, response, body) {
     
     console.log("[auth/signup] Amount calculated from DB:", { amount, currency, billingCycle, planId, discountAmount });
 
+    // ── ZERO AMOUNT (100% Discount): Skip Razorpay, activate immediately ──
+    if (amount === 0 && appliedPromo && (appliedPromo.type === 'percentage_discount' || appliedPromo.type === 'fixed_discount')) {
+      try {
+        await sql`BEGIN`;
+        
+        await sql`
+          UPDATE repair_shops
+          SET subscription_status = 'active', approval_status = 'approved',
+              is_active = true, updated_at = now()
+          WHERE id = ${shop.id}
+        `;
+        
+        const subEnd = new Date();
+        subEnd.setFullYear(subEnd.getFullYear() + 10);
+        
+        const sub = await sql`
+          INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
+            amount_paid, currency, promotion_code_id,
+            current_period_start, current_period_end, created_at)
+          VALUES (${shop.id}, ${planId}, 'active', ${billingCycle}, 'promo_code',
+            0, ${currency}, ${appliedPromo.id},
+            now(), ${subEnd.toISOString()}, now())
+          RETURNING id
+        `;
+        
+        await sql`UPDATE promotion_codes SET used_count = used_count + 1, updated_at = now() WHERE id = ${appliedPromo.id}`;
+        await sql`
+          INSERT INTO promo_code_redemptions (promotion_code_id, repair_shop_id, email, ip_address, user_agent,
+            plan_name, billing_cycle, original_amount, discount_amount, final_amount, currency,
+            subscription_id, status)
+          VALUES (${appliedPromo.id}, ${shop.id}, ${shop.email},
+            ${request.headers['x-forwarded-for']?.split(',')[0] || request.headers['x-real-ip'] || null},
+            ${request.headers['user-agent'] || null},
+            ${planName}, ${billingCycle}, ${fullAmount}, ${discountAmount}, 0, ${currency},
+            ${sub[0].id}, 'active')
+        `;
+        
+        await sql`COMMIT`;
+        
+        const jti = makeJti();
+        const token = signToken({
+          sub: shop.id, role: 'owner', user_type: 'shop', repair_shop_id: shop.id,
+        }, jti);
+        
+        console.log('[auth/signup] 100% discount activated for shop #' + shop.id);
+        return response.status(201).json({
+          token,
+          user: {
+            id: shop.id, name: shop.owner_name, shopName: shop.shop_name,
+            email: shop.email, mobile: shop.mobile,
+            role: 'owner', userType: 'shop', repairShopId: shop.id,
+          },
+          activationType: 'promo_discount',
+          message: 'Your promo code has been applied! Subscription activated with 100% discount.',
+          subscriptionRequired: false,
+        });
+      } catch (err) {
+        await sql`ROLLBACK`.catch(() => {});
+        console.error('[auth/signup] Zero-amount activation failed:', err.message);
+        return response.status(201).json({
+          shopId: shop.id,
+          checkoutRequired: false,
+          checkoutError: 'Discount activation failed: ' + err.message,
+        });
+      }
+    }
+
     const invoiceNumber = `INV-${Date.now()}-${shop.id}`;
 
     // Create payment record
@@ -525,7 +594,7 @@ async function handleSignup(request, response, body) {
       INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description, metadata)
       VALUES (${shop.id}, 'pending', ${currency}, ${amount}, 'pending', ${invoiceNumber},
               ${`CoolCare Pro — ${billingCycle}`},
-              ${JSON.stringify({ billingCycle, planName, source: 'signup' })}::jsonb)
+              ${JSON.stringify({ billingCycle, planName, source: 'signup', discountAmount, promoCodeId: appliedPromo?.id || null })}::jsonb)
       RETURNING id
     `;
 

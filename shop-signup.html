@@ -151,6 +151,33 @@
         </div>
       </div>
 
+      <!-- Promo Code Section -->
+      <div class="section-label">Have a Promo Code?</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+        <input id="promoCode" type="text" placeholder="Enter promo code" style="flex:1;border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font:inherit;background:var(--bg);color:var(--ink);text-transform:uppercase;transition:border-color 0.2s" onkeydown="if(event.key==='Enter')applyPromoCode()">
+        <button type="button" class="btn" id="applyPromoBtn" style="width:auto;padding:12px 20px;margin-top:0" onclick="applyPromoCode()">Apply</button>
+      </div>
+      <div id="promoResult" style="margin-bottom:12px;display:none"></div>
+      <div id="priceBreakdown" style="margin-bottom:16px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--bg3);display:none">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+          <span style="color:var(--muted)">Plan</span>
+          <span style="color:var(--ink2)" id="promoPlanName">CoolCare Pro</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+          <span style="color:var(--muted)">Original Price</span>
+          <span id="promoOrigPrice"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+          <span style="color:var(--muted)">Discount</span>
+          <span style="color:var(--red)" id="promoDiscountPrice"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;padding-top:8px;border-top:1px solid var(--border)">
+          <span style="color:var(--ink)">Final Price</span>
+          <span style="color:var(--green)" id="promoFinalPrice"></span>
+        </div>
+        <div id="promoDescription" style="margin-top:8px;font-size:12px;color:var(--ink2);font-style:italic"></div>
+      </div>
+
       <button type="submit" class="btn" id="submitBtn">Create Account →</button>
     </form>
     <p class="login-link">Already have an account? <a href="/login.html">Log in here</a></p>
@@ -176,6 +203,14 @@
   const form    = document.getElementById('signupForm');
   const submitBtn = document.getElementById('submitBtn');
   const alert   = document.getElementById('alert');
+
+  // Plan pricing for promo code display (frontend calculates for display only)
+  const PLAN_PRICING = {
+    USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
+    INR: { monthly: 1299, quarterly: 3156, halfyearly: 6625, yearly: 12470 },
+    AED: { monthly: 75, quarterly: 202.5, halfyearly: 382.5, yearly: 720 },
+    KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
+  };
 
   function showAlert(msg, type) {
     alert.textContent = msg;
@@ -334,6 +369,95 @@
     rzp.open();
   }
 
+  /* ── PROMO CODE FUNCTIONS ── */
+  let appliedPromoData = null;
+  
+  async function applyPromoCode() {
+    const input = document.getElementById('promoCode');
+    const btn = document.getElementById('applyPromoBtn');
+    const resultDiv = document.getElementById('promoResult');
+    const breakdown = document.getElementById('priceBreakdown');
+    const code = input.value.trim().toUpperCase();
+    
+    if (!code) {
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<span style="color:var(--red);font-size:13px">Please enter a promo code</span>';
+      return;
+    }
+    
+    btn.disabled = true;
+    btn.textContent = 'Validating…';
+    resultDiv.style.display = 'none';
+    breakdown.style.display = 'none';
+    appliedPromoData = null;
+    
+    // Get the display price for this billing cycle
+    const prices = PLAN_PRICING[detectedCurrency || 'USD'] || PLAN_PRICING.USD;
+    const amount = prices[urlBilling] || prices.monthly;
+    
+    try {
+      const res = await fetch('/api/promotions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'validate',
+          code: code,
+          billingCycle: urlBilling,
+          amount: amount,
+          currency: detectedCurrency || urlCurrency,
+        }),
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok || !data.valid) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = '<span style="color:var(--red);font-size:13px">' + esc(data.error || 'Invalid promo code') + '</span>';
+        btn.disabled = false;
+        btn.textContent = 'Apply';
+        return;
+      }
+      
+      // Valid code
+      appliedPromoData = data;
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<span style="color:var(--green);font-size:13px">✅ ' + esc(data.code.name || 'Promo code applied!') + '</span>';
+      
+      // Show price breakdown with description
+      if (data.calculation) {
+        breakdown.style.display = 'block';
+        document.getElementById('promoOrigPrice').textContent = fmtCurrency(detectedCurrency || urlCurrency, data.calculation.originalAmount);
+        document.getElementById('promoDiscountPrice').textContent = '- ' + fmtCurrency(detectedCurrency || urlCurrency, data.calculation.discountAmount);
+        document.getElementById('promoFinalPrice').textContent = fmtCurrency(detectedCurrency || urlCurrency, data.calculation.finalAmount);
+        document.getElementById('promoDescription').textContent = data.calculation.description || data.code.description || '';
+      }
+      
+      // Handle special types
+      if (data.isSupportToken) {
+        resultDiv.innerHTML += '<br><span style="color:var(--green);font-size:12px">🔑 Support token — no payment required!</span>';
+      } else if (data.isFreeTrial) {
+        resultDiv.innerHTML += '<br><span style="color:var(--green);font-size:12px">🎁 ' + (data.freeTrialDays || 14) + ' day free trial!</span>';
+      } else if (data.isLifetime) {
+        resultDiv.innerHTML += '<br><span style="color:var(--green);font-size:12px">♾️ Lifetime access!</span>';
+      } else if (data.calculation && data.calculation.finalAmount <= 0) {
+        resultDiv.innerHTML += '<br><span style="color:var(--green);font-size:12px">🎉 100% discount — no payment required!</span>';
+      }
+    } catch (err) {
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<span style="color:var(--red);font-size:13px">Network error. Please try again.</span>';
+    }
+    
+    btn.disabled = false;
+    btn.textContent = 'Apply';
+  }
+
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmtCurrency(currency, amount) {
+    const symbols = { USD: '$', INR: '₹', AED: 'د.إ ', KWD: 'KD ' };
+    const n = (parseFloat(amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return (symbols[currency] || currency + ' ') + n;
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearErrors();
@@ -350,9 +474,9 @@
     const serviceAreas   = serviceAreasRaw.split(',').map(s => s.trim()).filter(Boolean);
     const referralCode   = document.getElementById('referralCode').value.trim().toUpperCase();
     const servicesOffered = [...document.querySelectorAll('#servicesGrid input:checked')].map(c => c.value);
+    const promoCodeInput = document.getElementById('promoCode').value.trim().toUpperCase();
 
     // Determine plan from URL or default to 'pro' (paid)
-    // If user came from pricing page, they selected a paid plan (always 'pro' in this version)
     const planName     = 'pro';
     const billingCycle = urlBilling;
     const currency     = detectedCurrency || urlCurrency;
@@ -400,6 +524,8 @@
         billingCycle,
         currency,
         selectedCountry: selectedCountry || undefined,
+        // Promo code
+        promoCode: promoCodeInput || undefined,
       };
       console.log('[signup] Request payload:', { ...signupPayload, password: '***', confirmPassword: '***' });
 
@@ -423,26 +549,48 @@
         return;
       }
 
-      // For paid plans: do NOT save any auth token. User must complete payment
-      // and receive admin approval before they can log in.
-      // Only save the shop info temporarily for the checkout flow.
+      // ── HANDLE ACTIVATION WITHOUT PAYMENT ──
+      // Support token, free trial, lifetime, or 100% discount
+      if (data.token) {
+        localStorage.setItem('cc_token', data.token);
+        localStorage.setItem('cc_shop', JSON.stringify(data.user || {}));
+        localStorage.setItem('cc_user', JSON.stringify(data.user || {}));
+        if (data.activationType === 'free_trial') {
+          showAlert('🎉 ' + (data.message || 'Free trial activated!'), 'success');
+          setTimeout(() => { window.location.href = '/shop-dashboard.html'; }, 1500);
+        } else {
+          showAlert('🎉 ' + (data.message || 'Account activated!'), 'success');
+          setTimeout(() => { window.location.href = '/shop-dashboard.html'; }, 1500);
+        }
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create Account →';
+        return;
+      }
+
+      // ── HANDLE PAYMENT REQUIRED ──
       const shopData = { shopId: data.shopId, email: email, owner_name: ownerName, mobile: mobile };
       sessionStorage.setItem('cc_checkout_shop', JSON.stringify(shopData));
 
-      // Always require checkout for paid plans (no free trial)
       if (data.checkoutRequired && data.orderId && data.keyId) {
         console.log('[signup] Opening Razorpay checkout');
         showAlert('Account created! Opening payment...', 'success');
         await loadRazorpayScript();
         openRazorpayCheckout(data, shopData);
       } else if (data.checkoutError) {
-        // Gateway failed — show error, don't redirect to dashboard
         console.error('[signup] Checkout error:', data.checkoutError);
         showAlert('Account created but payment setup failed: ' + data.checkoutError + '. Please contact support.', 'error');
         submitBtn.disabled = false;
         submitBtn.textContent = 'Create Account →';
+      } else if (data.message) {
+        // Activation message (e.g. zero-amount discount)
+        showAlert('🎉 ' + data.message, 'success');
+        if (data.token) {
+          localStorage.setItem('cc_token', data.token);
+          localStorage.setItem('cc_shop', JSON.stringify(data.user || {}));
+          localStorage.setItem('cc_user', JSON.stringify(data.user || {}));
+          setTimeout(() => { window.location.href = '/shop-dashboard.html'; }, 1500);
+        }
       } else {
-        // No checkout payload — something went wrong
         console.error('[signup] No checkout payload returned');
         showAlert('Account created but payment could not be initiated. Please contact support.', 'error');
         submitBtn.disabled = false;

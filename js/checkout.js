@@ -83,6 +83,8 @@
     var country = opts.country || localStorage.getItem('cc_country') || null;
     var onError = opts.onError || function (msg) { alert(msg); };
     var onStart = opts.onStart || function () {};
+    var onSuccess = opts.onSuccess || null;
+    var couponCode = opts.couponCode || null;
 
     var token = getToken();
     if (!token) {
@@ -106,6 +108,10 @@
       if (country) {
         body.selectedCountry = country;
       }
+      // Pass coupon/promo code if provided
+      if (couponCode) {
+        body.couponCode = couponCode;
+      }
       
       var res = await fetch('/api/payments', {
         method: 'POST',
@@ -119,6 +125,14 @@
       var data = await res.json();
       if (!res.ok) {
         onError(data.error || 'Checkout failed. Please try again.');
+        return;
+      }
+
+      // ── Handle zero-amount (100% discount) activation ──
+      if (data.activationType === 'promo_discount' || (data.message && !data.gateway && !data.orderId)) {
+        if (onSuccess) {
+          onSuccess(data.message || 'Promo code applied! Subscription activated.');
+        }
         return;
       }
 
