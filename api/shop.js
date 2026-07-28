@@ -62,7 +62,7 @@ const ADMIN_POST_ACTIONS = new Set([
 const GATED_POST_ACTIONS = new Set(["update"]);
 const GATED_GET_ACTIONS = new Set(["export"]);
 // Non-gated shop GET actions (view-only, always allowed)
-const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings"]);
+const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close"]);
 
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -121,6 +121,8 @@ module.exports = withErrorHandler(async (request, response) => {
     if (action === "save-shop-settings") return handleSaveShopSettings(request, response, sql, shopId, body);
     if (action === "mark-notification-read") return handleMarkNotificationRead(request, response, sql, shopId, body);
     if (action === "send-test-whatsapp") return handleSendTestWhatsApp(request, response, sql, shopId);
+    if (action === "close-human-handoff") return handleCloseHumanHandoff(request, response, sql, shopId, body);
+    if (action === "save-ai-settings-extended") return handleSaveAiSettingsExtended(request, response, sql, shopId, body);
     return response.status(400).json({ error: "Invalid POST action" });
   }
 
@@ -1390,6 +1392,21 @@ async function handleShopGet(request, response, sql, shopId, auth, action) {
       case "whatsapp-logs": return response.status(200).json(buildDemoWhatsAppLogsResponse());
       case "notifications": return response.status(200).json(buildDemoNotificationsResponse(parseInt(request.query?.limit || "50", 10)));
       case "shop-settings": return response.status(200).json(buildDemoShopSettingsResponse());
+      case "conversation-transcript": return response.status(200).json({
+        messages: [], state: null, booking: null,
+        isDemo: true,
+        note: "In production, this shows real conversation transcripts, images, files, and sentiment data.",
+      });
+      case "conversation-analytics": return response.status(200).json({
+        daily: [], summary: {
+          totalConversations: 42, totalBookings: 28, totalHandoffs: 3,
+          completionRate: 67, handoffRate: 7, avgResponseTimeMs: 1200,
+          mostCommonAppliance: "AC", mostCommonIssue: "Not cooling",
+          dropOffStage: "COLLECTING_ADDRESS",
+          bookingCompletionPercent: 67, humanHandoffPercent: 7,
+        },
+        isDemo: true,
+      });
       default: return response.status(400).json({ error: "Unknown GET action" });
     }
   }
@@ -1401,6 +1418,8 @@ async function handleShopGet(request, response, sql, shopId, auth, action) {
     case "whatsapp-logs": return handleWhatsAppLogs(request, response, sql, shopId);
     case "notifications": return handleGetNotifications(request, response, sql, shopId);
     case "shop-settings": return handleGetShopSettings(request, response, sql, shopId);
+    case "conversation-transcript": return handleConversationTranscript(request, response, sql, shopId);
+    case "conversation-analytics": return handleConversationAnalytics(request, response, sql, shopId);
     default: return response.status(400).json({ error: "Unknown GET action" });
   }
 }
@@ -1820,4 +1839,195 @@ async function adminListPaymentLogs(request, response, sql, auth) {
     const cnt = await sql(`SELECT COUNT(*) as total FROM payment_logs pl ${whereClause}`, qp);
     return response.status(200).json({ logs, pagination: { page, limit, total: parseInt(cnt[0]?.total || "0", 10) } });
   } catch (e) { return response.status(200).json({ logs: [], pagination: { page, limit, total: 0 } }); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONVERSATION TRANSCRIPT — full chat history for a customer
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleConversationTranscript(request, response, sql, shopId) {
+  const customerNumber = request.query?.customer;
+  if (!customerNumber) return response.status(400).json({ error: "customer query param required" });
+
+  try {
+    const messages = await sql`
+      SELECT id, role, message, created_at
+      FROM conversations
+      WHERE customer_number = ${customerNumber}
+      ORDER BY created_at ASC LIMIT 100
+    `;
+
+    const state = await sql`
+      SELECT * FROM conversation_state WHERE customer_number = ${customerNumber} LIMIT 1
+    `;
+
+    const booking = await sql`
+      SELECT id, image_urls, file_urls, conversation_summary, customer_sentiment, human_takeover_history
+      FROM bookings WHERE customer_number = ${customerNumber} AND repair_shop_id = ${shopId}
+      ORDER BY created_at DESC LIMIT 1
+    `;
+
+    return response.status(200).json({
+      messages,
+      state: state[0] || null,
+      booking: booking[0] || null,
+    });
+  } catch (e) {
+    console.error("[shop/conversation-transcript] Error:", e.message);
+    return response.status(500).json({ error: "Failed to fetch conversation" });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONVERSATION ANALYTICS — bot performance metrics
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleConversationAnalytics(request, response, sql, shopId) {
+  try {
+    const daily = await sql`
+      SELECT * FROM conversation_analytics
+      WHERE repair_shop_id = ${shopId}
+      ORDER BY date DESC LIMIT 30
+    `;
+
+    // Aggregate stats
+    let totalConversations = 0;
+    let totalBookings = 0;
+    let totalHandoffs = 0;
+    const applianceCounts = {};
+    const issueCounts = {};
+    let totalResponseTime = 0;
+    let responseTimeCount = 0;
+
+    daily.forEach(r => {
+      totalConversations += parseInt(r.total_conversations || 0, 10);
+      totalBookings += parseInt(r.booking_completed || 0, 10);
+      totalHandoffs += parseInt(r.human_handoff || 0, 10);
+      if (r.avg_response_time_ms) {
+        totalResponseTime += parseInt(r.avg_response_time_ms, 10);
+        responseTimeCount++;
+      }
+    });
+
+    // Get most common appliances and issues from bookings
+    const bookings = await sql`
+      SELECT service_type FROM bookings
+      WHERE repair_shop_id = ${shopId}
+      ORDER BY created_at DESC LIMIT 100
+    `;
+    bookings.forEach(b => {
+      const parts = (b.service_type || '').split(' — ');
+      const appliance = parts[0] || 'Unknown';
+      const issue = parts[1] || 'General';
+      applianceCounts[appliance] = (applianceCounts[appliance] || 0) + 1;
+      issueCounts[issue] = (issueCounts[issue] || 0) + 1;
+    });
+
+    // Drop-off: find which conversation_state statuses are most common (pre-booking)
+    const dropOffs = await sql`
+      SELECT status, COUNT(*) as count FROM conversation_state
+      WHERE repair_shop_id = ${shopId}
+        AND status NOT IN ('BOOKED', 'CANCELLED', 'HUMAN_HANDOFF')
+      GROUP BY status ORDER BY count DESC LIMIT 1
+    `;
+
+    const completionRate = totalConversations > 0 ? Math.round((totalBookings / totalConversations) * 100) : 0;
+    const handoffRate = totalConversations > 0 ? Math.round((totalHandoffs / totalConversations) * 100) : 0;
+
+    return response.status(200).json({
+      daily,
+      summary: {
+        totalConversations,
+        totalBookings,
+        totalHandoffs,
+        completionRate,
+        handoffRate,
+        avgResponseTimeMs: responseTimeCount > 0 ? Math.round(totalResponseTime / responseTimeCount) : 0,
+        mostCommonAppliance: Object.entries(applianceCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
+        mostCommonIssue: Object.entries(issueCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null,
+        dropOffStage: dropOffs[0]?.status || null,
+        bookingCompletionPercent: completionRate,
+        humanHandoffPercent: handoffRate,
+      },
+    });
+  } catch (e) {
+    console.error("[shop/conversation-analytics] Error:", e.message);
+    return response.status(200).json({ daily: [], summary: {
+      totalConversations: 0, totalBookings: 0, totalHandoffs: 0,
+      completionRate: 0, handoffRate: 0, avgResponseTimeMs: 0,
+      mostCommonAppliance: null, mostCommonIssue: null, dropOffStage: null,
+      bookingCompletionPercent: 0, humanHandoffPercent: 0,
+    }});
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLOSE HUMAN HANDOFF — shop marks human interaction as complete
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleCloseHumanHandoff(request, response, sql, shopId, body) {
+  const { customerNumber } = body;
+  if (!customerNumber) return response.status(400).json({ error: "customerNumber required" });
+
+  try {
+    await sql`
+      UPDATE conversation_state SET
+        human_handoff = false,
+        handoff_closed_at = now(),
+        updated_at = now()
+      WHERE customer_number = ${customerNumber} AND repair_shop_id = ${shopId}
+    `;
+
+    // Record the takeover event in booking
+    const bookingRows = await sql`
+      SELECT id, human_takeover_history FROM bookings
+      WHERE customer_number = ${customerNumber} AND repair_shop_id = ${shopId}
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    if (bookingRows.length > 0) {
+      const existing = bookingRows[0].human_takeover_history || [];
+      const history = Array.isArray(existing) ? existing : [];
+      history.push({
+        type: 'handoff_closed',
+        by: 'shop',
+        shopId: shopId,
+        timestamp: new Date().toISOString(),
+      });
+      await sql`
+        UPDATE bookings SET human_takeover_history = ${JSON.stringify(history)}::jsonb
+        WHERE id = ${bookingRows[0].id}
+      `;
+    }
+
+    return response.status(200).json({ message: "Human handoff closed", handoffClosed: true });
+  } catch (e) {
+    console.error("[shop/close-human-handoff] Error:", e.message);
+    return response.status(500).json({ error: "Failed to close handoff" });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SAVE EXTENDED AI SETTINGS — shop knowledge base config
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSaveAiSettingsExtended(request, response, sql, shopId, body) {
+  const { serviceLocations, brandsRepaired, warrantyPolicy, inspectionPolicy,
+    visitingCharges, emergencyAvailability, holidayTimings,
+    acceptedPaymentMethods, languagesSpoken } = body;
+
+  try {
+    await sql`
+      UPDATE ai_settings SET
+        service_locations = COALESCE(${serviceLocations || []}, service_locations),
+        brands_repaired = COALESCE(${brandsRepaired || []}, brands_repaired),
+        warranty_policy = COALESCE(${warrantyPolicy || ''}, warranty_policy),
+        inspection_policy = COALESCE(${inspectionPolicy || ''}, inspection_policy),
+        visiting_charges = COALESCE(${visitingCharges != null ? visitingCharges : null}::numeric, visiting_charges),
+        emergency_availability = COALESCE(${!!emergencyAvailability}, emergency_availability),
+        holiday_timings = COALESCE(${JSON.stringify(holidayTimings || {})}::jsonb, holiday_timings),
+        accepted_payment_methods = COALESCE(${acceptedPaymentMethods || []}, accepted_payment_methods),
+        languages_spoken = COALESCE(${languagesSpoken || []}, languages_spoken),
+        updated_at = now()
+      WHERE repair_shop_id = ${shopId}
+    `;
+    return response.status(200).json({ message: "Extended AI settings saved" });
+  } catch (e) {
+    console.error("[shop/save-ai-settings-extended] Error:", e.message);
+    return response.status(500).json({ error: "Failed to save extended AI settings" });
+  }
 }

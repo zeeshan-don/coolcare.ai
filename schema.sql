@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS conversation_state (
   -- Possible statuses:
   --   COLLECTING_APPLIANCE, COLLECTING_ISSUE, COLLECTING_NAME,
   --   COLLECTING_ADDRESS, COLLECTING_LOCALITY, COLLECTING_DATE,
-  --   CONFIRMATION_PENDING, BOOKED, CANCELLED
+  --   CONFIRMATION_PENDING, BOOKED, CANCELLED, HUMAN_HANDOFF
   appliance     TEXT,   -- e.g. "Geyser", "Refrigerator", "AC"
   issue         TEXT,   -- e.g. "No hot water", "Not cooling"
   customer_name TEXT,
@@ -34,6 +34,13 @@ CREATE TABLE IF NOT EXISTS conversation_state (
   booking_id    TEXT,   -- FK to bookings.id once confirmed
   repair_shop_id INTEGER, -- FK to repair_shops.id for multi-tenancy
   language      TEXT NOT NULL DEFAULT 'en', -- language preference: en, hi, ta, ar
+  -- NEW COLUMNS for Phase 7 improvements
+  image_urls    TEXT[] DEFAULT '{}',      -- WhatsApp images attached to conversation
+  file_urls     TEXT[] DEFAULT '{}',      -- PDFs, invoices, warranty cards attached
+  human_handoff BOOLEAN NOT NULL DEFAULT false, -- true when human takeover requested
+  handoff_closed_at TIMESTAMPTZ,         -- when human closed the handoff
+  ai_memory     JSONB DEFAULT '{}'::jsonb, -- persistent AI memory across messages
+  selected_slot TIMESTAMPTZ,             -- reserved appointment slot
   created_at    TIMESTAMPTZ DEFAULT now(),
   updated_at    TIMESTAMPTZ DEFAULT now()
 );
@@ -57,6 +64,20 @@ CREATE TABLE IF NOT EXISTS bookings (
   urgency TEXT,
   status TEXT DEFAULT 'open' CHECK (status IN ('open', 'assigned', 'completed', 'cancelled')),
   technician_id INTEGER,
+  -- NEW COLUMNS for Phase 7
+  image_urls TEXT[] DEFAULT '{}',        -- Customer-submitted images
+  file_urls  TEXT[] DEFAULT '{}',        -- PDF invoices, warranty cards, bills
+  conversation_summary TEXT,             -- AI-generated summary of conversation
+  customer_sentiment TEXT DEFAULT 'neutral', -- positive, neutral, negative, frustrated
+  human_takeover_history JSONB DEFAULT '[]'::jsonb, -- array of human takeover events
+  technician_name TEXT,
+  technician_notes TEXT,
+  estimated_cost NUMERIC(10,2),
+  final_cost NUMERIC(10,2),
+  priority TEXT DEFAULT 'normal',
+  customer_notes TEXT,
+  invoice_number TEXT,
+  repair_shop_id INTEGER,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
@@ -78,12 +99,22 @@ CREATE TABLE IF NOT EXISTS ai_settings (
   id               SERIAL PRIMARY KEY,
   repair_shop_id   INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
   greeting_message TEXT DEFAULT '',
-  business_hours   JSONB DEFAULT '{}',
+  business_hours   JSONB DEFAULT '{}',        -- e.g. {"mon":{"open":"09:00","close":"18:00"}, ...}
   working_days     TEXT[] DEFAULT ARRAY['mon','tue','wed','thu','fri','sat'],
   supported_services TEXT[] DEFAULT '{}',
-  knowledge_base   TEXT DEFAULT '',
+  knowledge_base   TEXT DEFAULT '',             -- General knowledge about the shop
   fallback_response TEXT DEFAULT 'I apologize, but I am unable to help with that right now. A team member will get back to you shortly.',
   transfer_to_human BOOLEAN NOT NULL DEFAULT true,
+  -- NEW COLUMNS for Phase 7: Shop Knowledge Base
+  service_locations TEXT[] DEFAULT '{}',        -- Areas/localities served
+  brands_repaired  TEXT[] DEFAULT '{}',         -- "Samsung, LG, Whirlpool, ..."
+  warranty_policy  TEXT DEFAULT '',             -- e.g. "30-day warranty on all repairs"
+  inspection_policy TEXT DEFAULT '',            -- e.g. "Free inspection, ₹299 visit charge"
+  visiting_charges NUMERIC(10,2) DEFAULT 0,    -- Visit/diagnosis charge
+  emergency_availability BOOLEAN NOT NULL DEFAULT false,
+  holiday_timings  JSONB DEFAULT '{}',         -- Special holiday hours
+  accepted_payment_methods TEXT[] DEFAULT '{}', -- "Cash, UPI, Card, Net Banking"
+  languages_spoken TEXT[] DEFAULT '{}',         -- "English, Hindi, Kannada, Tamil"
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(repair_shop_id)
@@ -101,6 +132,24 @@ ON CONFLICT DO NOTHING;
 -- Each repair shop can connect their OWN WhatsApp Business Account via
 -- Meta Embedded Signup. See migration-whatsapp-connection.sql for details.
 -- =============================================================================
+-- Conversation analytics: track bot performance metrics
+CREATE TABLE IF NOT EXISTS conversation_analytics (
+  id                SERIAL PRIMARY KEY,
+  repair_shop_id    INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
+  date              DATE NOT NULL DEFAULT CURRENT_DATE,
+  total_conversations INTEGER NOT NULL DEFAULT 0,
+  booking_completed  INTEGER NOT NULL DEFAULT 0,
+  human_handoff      INTEGER NOT NULL DEFAULT 0,
+  drop_off_stage     TEXT,                     -- Stage where users most frequently drop off
+  most_common_appliance TEXT,
+  most_common_issue    TEXT,
+  avg_response_time_ms INTEGER DEFAULT 0,
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(repair_shop_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_analytics_shop ON conversation_analytics(repair_shop_id, date);
+
 CREATE TABLE IF NOT EXISTS repair_shop_whatsapp (
   id                   SERIAL PRIMARY KEY,
   repair_shop_id       INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,

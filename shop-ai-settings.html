@@ -111,6 +111,42 @@
     </div>
   </div>
 
+  <div class="card" id="extendedCard" style="display:none">
+    <h2>📍 Service Locations</h2>
+    <p style="color:var(--ink2);font-size:13px;margin:-8px 0 16px">Areas or localities you serve. The AI uses this to verify service availability.</p>
+    <div class="field"><label>Service Locations (comma separated)</label><input type="text" id="serviceLocations" placeholder="e.g. Indiranagar, Koramangala, Whitefield, JP Nagar"></div>
+
+    <div style="border-top:1px solid var(--border);margin:16px 0"></div>
+    <h2>🔧 Brands Repaired</h2>
+    <p style="color:var(--ink2);font-size:13px;margin:-8px 0 16px">Appliance brands your shop services. The AI answers brand-specific questions.</p>
+    <div class="field"><label>Brands (comma separated)</label><input type="text" id="brandsRepaired" placeholder="e.g. Samsung, LG, Whirlpool, Voltas, Daikin, Godrej"></div>
+
+    <div style="border-top:1px solid var(--border);margin:16px 0"></div>
+    <h2>📋 Policies</h2>
+    <p style="color:var(--ink2);font-size:13px;margin:-8px 0 16px">Share your warranty, inspection, and fee policies so the AI can answer accurately.</p>
+    <div class="field"><label>Warranty Policy</label><textarea id="warrantyPolicy" rows="2" placeholder="e.g. 30-day warranty on all repairs, 90-day warranty on spare parts"></textarea></div>
+    <div class="field"><label>Inspection Policy</label><textarea id="inspectionPolicy" rows="2" placeholder="e.g. Free inspection included with every service visit"></textarea></div>
+    <div class="field">
+      <label>Visiting / Diagnosis Charge (₹)</label>
+      <input type="number" id="visitingCharges" min="0" step="50" placeholder="e.g. 299" style="max-width:200px">
+    </div>
+
+    <div style="border-top:1px solid var(--border);margin:16px 0"></div>
+    <h2>🚨 Emergency & Holidays</h2>
+    <p style="color:var(--ink2);font-size:13px;margin:-8px 0 16px">Configure emergency availability and special holiday hours.</p>
+    <div class="toggle">
+      <div class="toggle-switch" id="emergencyToggle" onclick="toggleEmergency()"></div>
+      <div style="font-weight:600;font-size:14px;color:#fff">Emergency service available</div>
+    </div>
+    <div class="field" style="margin-top:12px"><label>Holiday Timings (JSON)</label><textarea id="holidayTimings" rows="3" placeholder='e.g. {"2025-12-25":{"open":"10:00","close":"14:00"},"2026-01-01":{"open":"10:00","close":"14:00"}}'></textarea></div>
+
+    <div style="border-top:1px solid var(--border);margin:16px 0"></div>
+    <h2>💳 Payment & Languages</h2>
+    <p style="color:var(--ink2);font-size:13px;margin:-8px 0 16px">Accepted payment methods and languages your staff speaks.</p>
+    <div class="field"><label>Accepted Payment Methods (comma separated)</label><input type="text" id="paymentMethods" placeholder="e.g. Cash, UPI, Credit Card, Net Banking"></div>
+    <div class="field"><label>Languages Spoken (comma separated)</label><input type="text" id="languagesSpoken" placeholder="e.g. English, Hindi, Kannada, Tamil"></div>
+  </div>
+
   <div class="card">
     <h2>Transfer to Human</h2>
     <div class="toggle">
@@ -132,10 +168,11 @@ if (!token) window.location.href = '/login.html';
 const isDemo = localStorage.getItem('cc_is_demo') === 'true';
 if (isDemo) {
   document.getElementById('demoBanner').classList.add('show');
-  // Disable save button for demo
   document.getElementById('saveBtn').disabled = true;
   document.getElementById('saveBtn').style.opacity = '0.5';
   document.getElementById('saveBtn').style.cursor = 'not-allowed';
+  // Also disable extended card for demo
+  document.querySelectorAll('#extendedCard input, #extendedCard textarea').forEach(el => el.disabled = true);
 }
 
 function toggleMobileMenu() {
@@ -160,6 +197,7 @@ function logout() {
 
 let settings = {};
 let transferToHuman = true;
+let emergencyAvailable = false;
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -167,7 +205,17 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// ── Demo-safe save ────────────────────────────────────────────────────────────
+function parseCsv(value) {
+  if (!value || typeof value !== 'string') return [];
+  return value.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function joinCsv(arr) {
+  if (!arr || !Array.isArray(arr)) return '';
+  return arr.join(', ');
+}
+
+// ── Save both basic and extended settings ───────────────────────────────────
 async function saveSettings() {
   if (isDemo) {
     showToast('🔒 This is a demo account. Changes are not saved.');
@@ -180,7 +228,19 @@ async function saveSettings() {
   days.forEach(d => { businessHours[d] = { open: document.getElementById(`open_${d}`)?.value || '09:00', close: document.getElementById(`close_${d}`)?.value || '18:00' }; });
   const workingDays = [...document.querySelectorAll('.day-check input:checked')].map(cb => cb.value);
 
+  // Parse holiday timings safely
+  let holidayTimings = {};
   try {
+    const ht = document.getElementById('holidayTimings').value.trim();
+    if (ht) holidayTimings = JSON.parse(ht);
+  } catch (e) {
+    showToast('⚠️ Invalid holiday timings JSON. Please fix and try again.');
+    btn.disabled = false; btn.textContent = 'Save Settings';
+    return;
+  }
+
+  try {
+    // Save basic settings
     const res = await fetch('/api/shop', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -194,12 +254,32 @@ async function saveSettings() {
         transferToHuman,
       }),
     });
-    if (res.status === 403) {
-      const data = await res.json();
-      if (data.isDemo) { showToast('🔒 This is a demo account. Changes are not saved.'); }
-      else { showToast('Failed to save settings'); }
-    } else if (res.ok) showToast('Settings saved successfully!');
-    else showToast('Failed to save settings');
+    if (!res.ok && res.status !== 403) {
+      showToast('Failed to save basic settings');
+      btn.disabled = false; btn.textContent = 'Save Settings';
+      return;
+    }
+
+    // Save extended settings
+    const extRes = await fetch('/api/shop', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'save-ai-settings-extended',
+        serviceLocations: parseCsv(document.getElementById('serviceLocations').value),
+        brandsRepaired: parseCsv(document.getElementById('brandsRepaired').value),
+        warrantyPolicy: document.getElementById('warrantyPolicy').value,
+        inspectionPolicy: document.getElementById('inspectionPolicy').value,
+        visitingCharges: parseFloat(document.getElementById('visitingCharges').value) || 0,
+        emergencyAvailability: emergencyAvailable,
+        holidayTimings,
+        acceptedPaymentMethods: parseCsv(document.getElementById('paymentMethods').value),
+        languagesSpoken: parseCsv(document.getElementById('languagesSpoken').value),
+      }),
+    });
+
+    if (extRes.ok) showToast('✅ All AI settings saved successfully!');
+    else showToast('⚠️ Basic settings saved, but extended settings failed');
   } catch (err) { showToast('Network error'); }
   btn.disabled = false; btn.textContent = 'Save Settings';
 }
@@ -208,6 +288,12 @@ function toggleTransfer() {
   if (isDemo) { showToast('🔒 This is a demo account. Changes are not saved.'); return; }
   transferToHuman = !transferToHuman;
   document.getElementById('transferToggle').classList.toggle('on', transferToHuman);
+}
+
+function toggleEmergency() {
+  if (isDemo) { showToast('🔒 This is a demo account. Changes are not saved.'); return; }
+  emergencyAvailable = !emergencyAvailable;
+  document.getElementById('emergencyToggle').classList.toggle('on', emergencyAvailable);
 }
 
 function renderHours(hours) {
@@ -231,6 +317,8 @@ async function loadSettings() {
     if (res.status === 401) { window.location.href = '/login.html'; return; }
     const data = await res.json();
     settings = data.settings || {};
+
+    // Basic settings
     document.getElementById('greeting').value = settings.greeting_message || '';
     document.getElementById('fallback').value = settings.fallback_response || '';
     document.getElementById('knowledge').value = settings.knowledge_base || '';
@@ -242,6 +330,31 @@ async function loadSettings() {
       cb.closest('.day-check').classList.toggle('checked', cb.checked);
     });
     renderHours(settings.business_hours || {});
+
+    // Extended settings — populate if available
+    document.getElementById('extendedCard').style.display = 'block';
+    document.getElementById('serviceLocations').value = joinCsv(settings.service_locations);
+    document.getElementById('brandsRepaired').value = joinCsv(settings.brands_repaired);
+    document.getElementById('warrantyPolicy').value = settings.warranty_policy || '';
+    document.getElementById('inspectionPolicy').value = settings.inspection_policy || '';
+    document.getElementById('visitingCharges').value = settings.visiting_charges || '';
+    emergencyAvailable = !!settings.emergency_availability;
+    document.getElementById('emergencyToggle').classList.toggle('on', emergencyAvailable);
+
+    // Holiday timings — pretty-print JSON or leave blank
+    if (settings.holiday_timings && Object.keys(settings.holiday_timings).length > 0) {
+      try {
+        const ht = typeof settings.holiday_timings === 'string'
+          ? JSON.parse(settings.holiday_timings)
+          : settings.holiday_timings;
+        document.getElementById('holidayTimings').value = JSON.stringify(ht, null, 2);
+      } catch (e) {
+        document.getElementById('holidayTimings').value = '';
+      }
+    }
+
+    document.getElementById('paymentMethods').value = joinCsv(settings.accepted_payment_methods);
+    document.getElementById('languagesSpoken').value = joinCsv(settings.languages_spoken);
   } catch (err) {
     renderHours({});
   }

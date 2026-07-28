@@ -23,6 +23,8 @@ const bookServiceSchema = z.object({
   slot: z.string().min(1, "Time slot is required").max(100),
   address: z.string().optional().default(""),
   urgency: z.string().optional().default(""),
+  imageUrls: z.array(z.string()).optional().default([]),
+  fileUrls: z.array(z.string()).optional().default([]),
 });
 
 module.exports = withErrorHandler(async (request, response) => {
@@ -65,13 +67,16 @@ async function handleBookService(request, response, sql, shopId, body) {
   const data = validate({ ...request, body }, response, bookServiceSchema);
   if (!data) return;
 
-  const { customerNumber, customerName, serviceType, area, slot, address, urgency } = data;
+  const { customerNumber, customerName, serviceType, area, slot, address, urgency, imageUrls, fileUrls } = data;
 
   const inserted = await sql`
     INSERT INTO bookings
-      (customer_number, customer_name, address, service_type, area, urgency, status, repair_shop_id)
+      (customer_number, customer_name, address, service_type, area, urgency, status, repair_shop_id,
+       image_urls, file_urls)
     VALUES
-      (${customerNumber}, ${customerName}, ${address}, ${serviceType}, ${area}, ${urgency || slot}, 'open', ${shopId})
+      (${customerNumber}, ${customerName}, ${address}, ${serviceType}, ${area}, ${urgency || slot}, 'open', ${shopId},
+       ${imageUrls && imageUrls.length > 0 ? imageUrls : []},
+       ${fileUrls && fileUrls.length > 0 ? fileUrls : []})
     RETURNING id
   `;
 

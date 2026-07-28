@@ -1571,8 +1571,83 @@ ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS suspension_reason TEXT;
 
 
 -- =============================================================================
+-- SECTION 21: PHASE 7 ENTERPRISE ENHANCEMENTS (migration-phase-7-enterprise.sql)
+-- =============================================================================
+-- Adds columns for: Image/File support, Human handoff, Smart scheduling,
+-- Better AI memory, Conversation analytics, Extended knowledge base.
+-- All operations use IF NOT EXISTS guards — safe to re-run.
+-- =============================================================================
+
+-- 21a. CONVERSATION STATE — add Phase 7 columns
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS image_urls TEXT[] DEFAULT '{}';
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS file_urls TEXT[] DEFAULT '{}';
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS human_handoff BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS handoff_closed_at TIMESTAMPTZ;
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS ai_memory JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS selected_slot TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_conv_state_handoff ON conversation_state(repair_shop_id, human_handoff)
+  WHERE human_handoff = true;
+
+-- 21b. BOOKINGS — add AI/analytics/review columns
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS image_urls TEXT[] DEFAULT '{}';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS file_urls TEXT[] DEFAULT '{}';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS conversation_summary TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_sentiment TEXT DEFAULT 'neutral';
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS human_takeover_history JSONB DEFAULT '[]'::jsonb;
+
+-- Sentiment check constraint
+DO $$
+BEGIN
+  ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_sentiment_check;
+  ALTER TABLE bookings ADD CONSTRAINT bookings_sentiment_check
+    CHECK (customer_sentiment IN ('positive','neutral','negative','frustrated'));
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- 21c. AI SETTINGS — add extended knowledge base columns
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS service_locations TEXT[] DEFAULT '{}';
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS brands_repaired TEXT[] DEFAULT '{}';
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS warranty_policy TEXT DEFAULT '';
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS inspection_policy TEXT DEFAULT '';
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS visiting_charges NUMERIC(10,2) DEFAULT 0;
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS emergency_availability BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS holiday_timings JSONB DEFAULT '{}';
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS accepted_payment_methods TEXT[] DEFAULT '{}';
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS languages_spoken TEXT[] DEFAULT '{}';
+
+-- 21d. CONVERSATION ANALYTICS TABLE
+CREATE TABLE IF NOT EXISTS conversation_analytics (
+  id                SERIAL PRIMARY KEY,
+  repair_shop_id    INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
+  date              DATE NOT NULL DEFAULT CURRENT_DATE,
+  total_conversations INTEGER NOT NULL DEFAULT 0,
+  booking_completed  INTEGER NOT NULL DEFAULT 0,
+  human_handoff      INTEGER NOT NULL DEFAULT 0,
+  drop_off_stage     TEXT,
+  most_common_appliance TEXT,
+  most_common_issue    TEXT,
+  avg_response_time_ms INTEGER DEFAULT 0,
+  created_at        TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(repair_shop_id, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_analytics_shop ON conversation_analytics(repair_shop_id, date);
+
+-- 21e. Ensure existing data has default values
+UPDATE conversation_state SET image_urls = '{}' WHERE image_urls IS NULL;
+UPDATE conversation_state SET file_urls = '{}' WHERE file_urls IS NULL;
+UPDATE conversation_state SET human_handoff = false WHERE human_handoff IS NULL;
+UPDATE conversation_state SET ai_memory = '{}'::jsonb WHERE ai_memory IS NULL;
+UPDATE bookings SET image_urls = '{}' WHERE image_urls IS NULL;
+UPDATE bookings SET file_urls = '{}' WHERE file_urls IS NULL;
+UPDATE bookings SET customer_sentiment = 'neutral' WHERE customer_sentiment IS NULL;
+UPDATE bookings SET human_takeover_history = '[]'::jsonb WHERE human_takeover_history IS NULL;
+
+
+-- =============================================================================
 -- MIGRATION COMPLETE
 -- =============================================================================
--- All 19 individual migration files + schema.sql have been merged into this
+-- All 21 migration files + schema.sql have been merged into this
 -- single file. All operations are idempotent (safe to re-run).
 -- =============================================================================
