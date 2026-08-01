@@ -25,7 +25,7 @@ const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
 const { getGatewayList, invalidateCache } = require("./_lib/gateway");
-const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse } = require("./_lib/demo-data");
+const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse, buildDemoWidgetSettingsResponse } = require("./_lib/demo-data");
 const { buildRealCommandCenter } = require("./_lib/command-center");
 const { z } = require("zod");
 const bcrypt = require("bcryptjs");
@@ -63,7 +63,7 @@ const ADMIN_POST_ACTIONS = new Set([
 const GATED_POST_ACTIONS = new Set(["update"]);
 const GATED_GET_ACTIONS = new Set(["export"]);
 // Non-gated shop GET actions (view-only, always allowed)
-const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close"]);
+const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close", "widget-settings"]);
 
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -124,6 +124,7 @@ module.exports = withErrorHandler(async (request, response) => {
     if (action === "send-test-whatsapp") return handleSendTestWhatsApp(request, response, sql, shopId);
     if (action === "close-human-handoff") return handleCloseHumanHandoff(request, response, sql, shopId, body);
     if (action === "save-ai-settings-extended") return handleSaveAiSettingsExtended(request, response, sql, shopId, body);
+    if (action === "save-widget-settings") return handleSaveWidgetSettings(request, response, sql, shopId, body);
     return response.status(400).json({ error: "Invalid POST action" });
   }
 
@@ -165,6 +166,7 @@ async function handleDashboard(request, response, sql, shopId, auth) {
            b.urgency, b.status, b.technician_id, b.technician_name,
            b.technician_notes, b.estimated_cost, b.final_cost,
            b.priority, b.customer_notes, b.invoice_number,
+           COALESCE(b.source, 'whatsapp') AS source,
            b.created_at, b.updated_at,
            t.name AS assigned_technician_name, t.phone AS assigned_technician_phone
     FROM bookings b LEFT JOIN technicians t ON t.id = b.technician_id
@@ -1405,6 +1407,7 @@ async function handleShopGet(request, response, sql, shopId, auth, action) {
         isDemo: true,
         note: "In production, this shows real conversation transcripts, images, files, and sentiment data.",
       });
+      case "widget-settings": return response.status(200).json(buildDemoWidgetSettingsResponse());
       case "conversation-analytics": return response.status(200).json({
         daily: [], summary: {
           totalConversations: 42, totalBookings: 28, totalHandoffs: 3,
@@ -1428,6 +1431,7 @@ async function handleShopGet(request, response, sql, shopId, auth, action) {
     case "shop-settings": return handleGetShopSettings(request, response, sql, shopId);
     case "conversation-transcript": return handleConversationTranscript(request, response, sql, shopId);
     case "conversation-analytics": return handleConversationAnalytics(request, response, sql, shopId);
+    case "widget-settings": return handleGetWidgetSettings(request, response, sql, shopId);
     default: return response.status(400).json({ error: "Unknown GET action" });
   }
 }
@@ -1723,6 +1727,113 @@ async function handleSaveShopSettings(request, response, sql, shopId, body) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// WEBSITE CHAT WIDGET SETTINGS
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleGetWidgetSettings(request, response, sql, shopId) {
+  let settings = null;
+  try {
+    const rows = await sql`SELECT * FROM widget_settings WHERE repair_shop_id = ${shopId} LIMIT 1`;
+    settings = rows[0] || null;
+  } catch (e) {
+    console.warn("[shop/widget-settings] table may not exist:", e.message);
+  }
+
+  if (!settings) {
+    const shop = await sql`SELECT shop_name, logo_url FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    settings = {
+      enabled: false,
+      business_name: shop[0]?.shop_name || null,
+      welcome_message: "",
+      offline_message: "",
+      primary_color: "#22c55e",
+      widget_position: "bottom-right",
+      logo_url: shop[0]?.logo_url || "",
+      theme: "auto",
+      show_avatar: true,
+    };
+  }
+
+  // Compute the embed snippet for this shop
+  const appUrl = process.env.APP_URL || "https://coolcare.ai";
+  const embedCode = `<script src="${appUrl}/web-bot/widget.js" data-shop-id="${shopId}"></script>`;
+
+  return response.status(200).json({ settings, embedCode });
+}
+
+async function handleSaveWidgetSettings(request, response, sql, shopId, body) {
+  const { enabled, businessName, welcomeMessage, offlineMessage, primaryColor, widgetPosition, logoUrl, theme, showAvatar } = body;
+
+  const color = /^#[0-9a-fA-F]{6}$/.test(String(primaryColor || "")) ? primaryColor : "#22c55e";
+  const position = widgetPosition === "bottom-left" ? "bottom-left" : "bottom-right";
+  const themeVal = ["light", "dark", "auto"].includes(theme) ? theme : "auto";
+
+  try {
+    await sql`
+      INSERT INTO widget_settings
+        (repair_shop_id, enabled, business_name, welcome_message, offline_message,
+         primary_color, widget_position, logo_url, theme, show_avatar, updated_at)
+      VALUES
+        (${shopId}, ${!!enabled}, ${businessName || null}, ${welcomeMessage || ""}, ${offlineMessage || ""},
+         ${color}, ${position}, ${logoUrl || ""}, ${themeVal}, ${showAvatar !== false}, now())
+      ON CONFLICT (repair_shop_id) DO UPDATE SET
+        enabled = EXCLUDED.enabled,
+        business_name = EXCLUDED.business_name,
+        welcome_message = EXCLUDED.welcome_message,
+        offline_message = EXCLUDED.offline_message,
+        primary_color = EXCLUDED.primary_color,
+        widget_position = EXCLUDED.widget_position,
+        logo_url = EXCLUDED.logo_url,
+        theme = EXCLUDED.theme,
+        show_avatar = EXCLUDED.show_avatar,
+        updated_at = now()
+    `;
+    return response.status(200).json({ message: "Widget settings saved" });
+  } catch (e) {
+    // Auto-recovery: create the table if missing, then retry
+    if (e.code === '42P01' || e.message?.includes('does not exist')) {
+      try {
+        await sql`CREATE TABLE IF NOT EXISTS widget_settings (
+          id SERIAL PRIMARY KEY,
+          repair_shop_id INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
+          enabled BOOLEAN NOT NULL DEFAULT false,
+          business_name TEXT,
+          welcome_message TEXT DEFAULT '',
+          offline_message TEXT DEFAULT '',
+          primary_color TEXT NOT NULL DEFAULT '#22c55e',
+          widget_position TEXT NOT NULL DEFAULT 'bottom-right',
+          logo_url TEXT DEFAULT '',
+          theme TEXT NOT NULL DEFAULT 'auto',
+          show_avatar BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          CONSTRAINT unique_widget_settings_shop UNIQUE (repair_shop_id)
+        )`;
+        await sql`
+          INSERT INTO widget_settings
+            (repair_shop_id, enabled, business_name, welcome_message, offline_message,
+             primary_color, widget_position, logo_url, theme, show_avatar, updated_at)
+          VALUES
+            (${shopId}, ${!!enabled}, ${businessName || null}, ${welcomeMessage || ""}, ${offlineMessage || ""},
+             ${color}, ${position}, ${logoUrl || ""}, ${themeVal}, ${showAvatar !== false}, now())
+          ON CONFLICT (repair_shop_id) DO UPDATE SET
+            enabled = EXCLUDED.enabled, business_name = EXCLUDED.business_name,
+            welcome_message = EXCLUDED.welcome_message, offline_message = EXCLUDED.offline_message,
+            primary_color = EXCLUDED.primary_color, widget_position = EXCLUDED.widget_position,
+            logo_url = EXCLUDED.logo_url, theme = EXCLUDED.theme,
+            show_avatar = EXCLUDED.show_avatar, updated_at = now()
+        `;
+        return response.status(200).json({ message: "Widget settings saved (table auto-created)" });
+      } catch (createErr) {
+        console.error("[shop/widget-settings] Auto-recovery failed:", createErr.message);
+        return response.status(500).json({ error: "Failed to save widget settings" });
+      }
+    }
+    console.error("[shop/widget-settings] Save failed:", e.message);
+    return response.status(500).json({ error: "Failed to save widget settings" });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // GATEWAY MANAGEMENT (Super Admin only)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1861,7 +1972,7 @@ async function handleConversationTranscript(request, response, sql, shopId) {
 
   try {
     const messages = await sql`
-      SELECT id, role, message, created_at
+      SELECT id, role, message, channel, created_at
       FROM conversations
       WHERE customer_number = ${customerNumber}
       ORDER BY created_at ASC LIMIT 100

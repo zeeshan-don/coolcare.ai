@@ -18,6 +18,9 @@
     { "source": "/api/cron/subscriptions", "destination": "/api/cron?job=subscriptions" },
     { "source": "/api/health", "destination": "/api/dashboard?route=health" },
     { "source": "/api/currency", "destination": "/api/dashboard?route=currency" },
-    { "source": "/api/payments/webhook", "destination": "/api/payments?route=webhook" }
+    { "source": "/api/payments/webhook", "destination": "/api/payments?route=webhook" },
+    { "source": "/widget.js", "destination": "/web-bot/widget.js" },
+    { "source": "/shop-widget.html", "destination": "/web-bot/shop-widget.html" },
+    { "source": "/shop-widget", "destination": "/web-bot/shop-widget.html" }
   ]
 }

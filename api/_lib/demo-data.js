@@ -1843,6 +1843,27 @@ function buildDemoSubscriptionResponse() {
   };
 }
 
+/**
+ * Build widget settings response for demo mode.
+ */
+function buildDemoWidgetSettingsResponse() {
+  return {
+    settings: {
+      enabled: true,
+      business_name: DEMO.shop.shop_name,
+      welcome_message: "👋 Hi there! Welcome to " + DEMO.shop.shop_name + "! How can we help you today?",
+      offline_message: "We've received your request. Our team is currently offline. Your booking has been recorded and a technician will contact you once the business opens.",
+      primary_color: "#22c55e",
+      widget_position: "bottom-right",
+      logo_url: DEMO.shop.logo_url || "",
+      theme: "auto",
+      show_avatar: true,
+    },
+    embedCode: `<script src="https://coolcare.ai/web-bot/widget.js" data-shop-id="${DEMO.shop.id || 1}"></script>`,
+    isDemo: true,
+  };
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // EXPORTS — updated
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1870,4 +1891,5 @@ module.exports = {
   buildDemoWhatsAppLogsResponse,
   buildDemoWhatsAppStatusResponse,
   buildDemoSubscriptionResponse,
+  buildDemoWidgetSettingsResponse,
 };

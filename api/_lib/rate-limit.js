@@ -65,6 +65,7 @@ const loginLimiter = rateLimit({ max: 5, window: 300000, prefix: "login" }); // 
 const signupLimiter = rateLimit({ max: 3, window: 600000, prefix: "signup" }); // 3 per 10 min
 const apiLimiter = rateLimit({ max: 60, window: 60000, prefix: "api" }); // 60 per min
 const webhookLimiter = rateLimit({ max: 100, window: 60000, prefix: "webhook" }); // 100 per min
+const chatLimiter = rateLimit({ max: 40, window: 60000, prefix: "chat" }); // 40 per min (public widget)
 
 /**
  * Apply rate limit and send 429 response if exceeded.
@@ -92,5 +93,6 @@ module.exports = {
   signupLimiter,
   apiLimiter,
   webhookLimiter,
+  chatLimiter,
   applyLimit,
 };
