@@ -48,16 +48,26 @@ CREATE TABLE IF NOT EXISTS widget_settings (
   welcome_message  TEXT DEFAULT '',            -- shown when chat opens
   offline_message  TEXT DEFAULT '',
   primary_color    TEXT NOT NULL DEFAULT '#22c55e',
+  accent_color     TEXT NOT NULL DEFAULT '#16a34a',
   widget_position  TEXT NOT NULL DEFAULT 'bottom-right'
                    CHECK (widget_position IN ('bottom-right', 'bottom-left')),
   logo_url         TEXT DEFAULT '',
   theme            TEXT NOT NULL DEFAULT 'auto'
                    CHECK (theme IN ('light', 'dark', 'auto')),
   show_avatar      BOOLEAN NOT NULL DEFAULT true,
+  auto_open        BOOLEAN NOT NULL DEFAULT false,
+  language         TEXT NOT NULL DEFAULT 'en'
+                   CHECK (language IN ('en', 'hi', 'ta', 'ar', 'auto')),
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT unique_widget_settings_shop UNIQUE (repair_shop_id)
 );
+
+-- Backfill new columns for shops that already have a row
+ALTER TABLE widget_settings ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT '#16a34a';
+ALTER TABLE widget_settings ADD COLUMN IF NOT EXISTS auto_open BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE widget_settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en'
+  CHECK (language IN ('en', 'hi', 'ta', 'ar', 'auto'));
 
 CREATE INDEX IF NOT EXISTS idx_widget_settings_shop ON widget_settings(repair_shop_id);
 

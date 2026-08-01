@@ -24,7 +24,23 @@
   // ── Resolve script tag attributes ──────────────────────────────────────────
   var scripts = document.getElementsByTagName("script");
   var script = scripts[scripts.length - 1];
-  var shopId = script.getAttribute("data-shop-id") || script.dataset.shopId || "";
+  // Accept both data-shop-id (classic) and data-widget-id (new embed format)
+  var shopId = script.getAttribute("data-widget-id") ||
+    script.getAttribute("data-shop-id") ||
+    script.dataset.shopId || script.dataset.widgetId || "";
+  // Sandbox override — used ONLY by the authenticated Developer Sandbox page so
+  // the shop owner can preview & test the widget before enabling it publicly.
+  // The signed ticket (issued by /api/shop?action=sandbox-ticket) is what the
+  // backend accepts as proof that this preview is legitimate.
+  var forceEnable = script.getAttribute("data-force-enable") === "1" ||
+    script.getAttribute("data-force-enable") === "true";
+  var sandboxToken = script.getAttribute("data-sandbox-token") || "";
+
+  // Sandbox token may be refreshed by the host page while the widget is open —
+  // prefer the freshest value so long testing sessions don't hit token expiry.
+  function currentSandboxToken() {
+    return sandboxToken || (window.__coolcareSandboxToken || "");
+  }
   var apiBase = script.getAttribute("data-api") ||
     script.getAttribute("data-api-base") ||
     (function () {
@@ -121,9 +137,12 @@
     businessName: "Chat",
     logoUrl: "",
     primaryColor: "#22c55e",
+    accentColor: "#16a34a",
     widgetPosition: "bottom-right",
     theme: "auto",
     showAvatar: true,
+    autoOpen: false,
+    language: "auto",
     welcomeMessage: "",
     offlineMessage: "",
     isOpen: true,
@@ -141,7 +160,7 @@
   var css = `
   :host{all:initial}
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  .ccw{--brand:${forcedColor || "#22c55e"};
+  .ccw{--brand:${forcedColor || "#22c55e"};--accent:#16a34a;
     position:fixed;z-index:2147483000;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
     -webkit-font-smoothing:antialiased;color-scheme:light}
   .ccw.dark{color-scheme:dark}
@@ -195,6 +214,7 @@
   .head-title{font:700 15px -apple-system,sans-serif;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .head-status{font:500 11px -apple-system,sans-serif;opacity:.9;margin-top:2px;display:flex;align-items:center;gap:6px}
   .head-status .dot{width:7px;height:7px;border-radius:50%;background:#fff;display:inline-block;animation:blink 1.6s ease-in-out infinite}
+  .ccw.open .head-status .dot{background:var(--accent,#fff)}
   .head-status.off .dot{background:rgba(255,255,255,.55);animation:none}
   .head-reset{margin-left:auto;background:rgba(255,255,255,.16);border:none;color:#fff;border-radius:8px;
     font:600 11px -apple-system,sans-serif;padding:7px 11px;cursor:pointer;flex-shrink:0;transition:background .2s}
@@ -344,6 +364,14 @@
     }
     var brand = forcedColor || config.primaryColor || "#22c55e";
     root.style.setProperty("--brand", brand);
+    var accent = config.accentColor || "#16a34a";
+    root.style.setProperty("--accent", accent);
+    // Language override for the widget chrome (AI conversation stays auto-detected)
+    if (config.language && config.language !== "auto" && STRINGS[config.language]) {
+      lang = config.language;
+      T = STRINGS[lang];
+      applyChromeStrings();
+    }
     $("cc-title").textContent = forcedTitle || config.businessName || "Chat";
     // Logo
     var logo = $("cc-logo");
@@ -379,6 +407,17 @@
 
   function forcedTheme() {
     return script.getAttribute("data-theme") || null;
+  }
+
+  // Re-apply static chrome strings (used when the language changes via config)
+  function applyChromeStrings() {
+    var inp = $("cc-input"); if (inp) inp.placeholder = T.placeholder;
+    var reset = $("cc-reset"); if (reset) { reset.title = T.reset; reset.textContent = "↺ " + T.reset; }
+    var emoji = $("cc-emoji-btn"); if (emoji) emoji.title = T.emoji;
+    var attach = $("cc-attach"); if (attach) attach.title = T.attach;
+    var send = $("cc-send"); if (send) send.title = T.send;
+    var bubble = root.querySelector(".bubble");
+    if (bubble) { bubble.title = T.open; bubble.setAttribute("aria-label", T.open); }
   }
 
   // ── Message rendering ──────────────────────────────────────────────────────
@@ -513,6 +552,8 @@
       message: text || "",
       messageType: messageType,
     };
+    var sTok = forceEnable ? currentSandboxToken() : "";
+    if (sTok) payload.sandboxToken = sTok;
     if (imageData) payload.imageData = imageData;
 
     // Optimistically render the user message
@@ -568,14 +609,22 @@
     fetch(apiUrl("config", { shopId: shopId }))
       .then(function (r) { return r.json(); })
       .then(function (cfg) {
-        if (cfg && cfg.enabled === false) {
-          // Widget disabled — hide entirely
+        if (cfg && cfg.enabled === false && !forceEnable) {
+          // Widget disabled — hide entirely (unless sandbox force-enable)
           host.remove();
           return;
         }
         applyConfig(cfg || {});
         initInteractions();
         startSession();
+        // Auto-open the chat window when configured (or in the sandbox preview)
+        if (config.autoOpen || forceEnable) {
+          setTimeout(function () {
+            open = true;
+            setBubbleOpen(true);
+            if (inputEl) inputEl.focus();
+          }, 700);
+        }
       })
       .catch(function () {
         // Network failure — keep a minimal bubble so visitors can still chat
@@ -693,7 +742,7 @@
 
   // ── Session / history ──────────────────────────────────────────────────────
   function startSession() {
-    post({ action: "start", shopId: shopId, visitorId: visitorId })
+    post({ action: "start", shopId: shopId, visitorId: visitorId, sandboxToken: (forceEnable ? (currentSandboxToken() || undefined) : undefined) })
       .then(function (data) {
         if (data.greeting) {
           addMessage({ id: "greet-" + Date.now(), role: "bot", message: data.greeting, created_at: new Date().toISOString() });

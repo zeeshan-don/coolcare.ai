@@ -25,10 +25,11 @@ const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
 const { getGatewayList, invalidateCache } = require("./_lib/gateway");
-const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse, buildDemoWidgetSettingsResponse } = require("./_lib/demo-data");
+const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse, buildDemoWidgetSettingsResponse, buildDemoSandboxStatusResponse } = require("./_lib/demo-data");
 const { buildRealCommandCenter } = require("./_lib/command-center");
 const { z } = require("zod");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -63,7 +64,10 @@ const ADMIN_POST_ACTIONS = new Set([
 const GATED_POST_ACTIONS = new Set(["update"]);
 const GATED_GET_ACTIONS = new Set(["export"]);
 // Non-gated shop GET actions (view-only, always allowed)
-const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close", "widget-settings"]);
+const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close", "widget-settings", "sandbox-status", "sandbox-ticket"]);
+
+// Prompt/engine version surfaced in the Developer Sandbox panel
+const PROMPT_VERSION = "llama-3.3-70b-versatile · engine v1.0";
 
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
@@ -1408,6 +1412,8 @@ async function handleShopGet(request, response, sql, shopId, auth, action) {
         note: "In production, this shows real conversation transcripts, images, files, and sentiment data.",
       });
       case "widget-settings": return response.status(200).json(buildDemoWidgetSettingsResponse());
+      case "sandbox-status": return response.status(200).json(buildDemoSandboxStatusResponse());
+      case "sandbox-ticket": return handleSandboxTicket(request, response, sql, shopId);
       case "conversation-analytics": return response.status(200).json({
         daily: [], summary: {
           totalConversations: 42, totalBookings: 28, totalHandoffs: 3,
@@ -1432,6 +1438,8 @@ async function handleShopGet(request, response, sql, shopId, auth, action) {
     case "conversation-transcript": return handleConversationTranscript(request, response, sql, shopId);
     case "conversation-analytics": return handleConversationAnalytics(request, response, sql, shopId);
     case "widget-settings": return handleGetWidgetSettings(request, response, sql, shopId);
+    case "sandbox-status": return handleSandboxStatus(request, response, sql, shopId);
+    case "sandbox-ticket": return handleSandboxTicket(request, response, sql, shopId);
     default: return response.status(400).json({ error: "Unknown GET action" });
   }
 }
@@ -1746,45 +1754,55 @@ async function handleGetWidgetSettings(request, response, sql, shopId) {
       welcome_message: "",
       offline_message: "",
       primary_color: "#22c55e",
+      accent_color: "#16a34a",
       widget_position: "bottom-right",
       logo_url: shop[0]?.logo_url || "",
       theme: "auto",
       show_avatar: true,
+      auto_open: false,
+      language: "en",
     };
   }
 
   // Compute the embed snippet for this shop
   const appUrl = process.env.APP_URL || "https://coolcare.ai";
-  const embedCode = `<script src="${appUrl}/web-bot/widget.js" data-shop-id="${shopId}"></script>`;
+  const embedCode = `<script src="${appUrl}/web-bot/widget.js" data-widget-id="${shopId}"></script>`;
 
   return response.status(200).json({ settings, embedCode });
 }
 
 async function handleSaveWidgetSettings(request, response, sql, shopId, body) {
-  const { enabled, businessName, welcomeMessage, offlineMessage, primaryColor, widgetPosition, logoUrl, theme, showAvatar } = body;
+  const { enabled, businessName, welcomeMessage, offlineMessage, primaryColor, accentColor, widgetPosition, logoUrl, theme, showAvatar, autoOpen, language } = body;
 
   const color = /^#[0-9a-fA-F]{6}$/.test(String(primaryColor || "")) ? primaryColor : "#22c55e";
+  const accent = /^#[0-9a-fA-F]{6}$/.test(String(accentColor || "")) ? accentColor : "#16a34a";
   const position = widgetPosition === "bottom-left" ? "bottom-left" : "bottom-right";
   const themeVal = ["light", "dark", "auto"].includes(theme) ? theme : "auto";
+  const langVal = ["en", "hi", "ta", "ar", "auto"].includes(language) ? language : "en";
 
   try {
     await sql`
       INSERT INTO widget_settings
         (repair_shop_id, enabled, business_name, welcome_message, offline_message,
-         primary_color, widget_position, logo_url, theme, show_avatar, updated_at)
+         primary_color, accent_color, widget_position, logo_url, theme, show_avatar,
+         auto_open, language, updated_at)
       VALUES
         (${shopId}, ${!!enabled}, ${businessName || null}, ${welcomeMessage || ""}, ${offlineMessage || ""},
-         ${color}, ${position}, ${logoUrl || ""}, ${themeVal}, ${showAvatar !== false}, now())
+         ${color}, ${accent}, ${position}, ${logoUrl || ""}, ${themeVal}, ${showAvatar !== false},
+         ${!!autoOpen}, ${langVal}, now())
       ON CONFLICT (repair_shop_id) DO UPDATE SET
         enabled = EXCLUDED.enabled,
         business_name = EXCLUDED.business_name,
         welcome_message = EXCLUDED.welcome_message,
         offline_message = EXCLUDED.offline_message,
         primary_color = EXCLUDED.primary_color,
+        accent_color = EXCLUDED.accent_color,
         widget_position = EXCLUDED.widget_position,
         logo_url = EXCLUDED.logo_url,
         theme = EXCLUDED.theme,
         show_avatar = EXCLUDED.show_avatar,
+        auto_open = EXCLUDED.auto_open,
+        language = EXCLUDED.language,
         updated_at = now()
     `;
     return response.status(200).json({ message: "Widget settings saved" });
@@ -1800,10 +1818,13 @@ async function handleSaveWidgetSettings(request, response, sql, shopId, body) {
           welcome_message TEXT DEFAULT '',
           offline_message TEXT DEFAULT '',
           primary_color TEXT NOT NULL DEFAULT '#22c55e',
+          accent_color TEXT NOT NULL DEFAULT '#16a34a',
           widget_position TEXT NOT NULL DEFAULT 'bottom-right',
           logo_url TEXT DEFAULT '',
           theme TEXT NOT NULL DEFAULT 'auto',
           show_avatar BOOLEAN NOT NULL DEFAULT true,
+          auto_open BOOLEAN NOT NULL DEFAULT false,
+          language TEXT NOT NULL DEFAULT 'en',
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           CONSTRAINT unique_widget_settings_shop UNIQUE (repair_shop_id)
@@ -1811,16 +1832,19 @@ async function handleSaveWidgetSettings(request, response, sql, shopId, body) {
         await sql`
           INSERT INTO widget_settings
             (repair_shop_id, enabled, business_name, welcome_message, offline_message,
-             primary_color, widget_position, logo_url, theme, show_avatar, updated_at)
+             primary_color, accent_color, widget_position, logo_url, theme, show_avatar,
+             auto_open, language, updated_at)
           VALUES
             (${shopId}, ${!!enabled}, ${businessName || null}, ${welcomeMessage || ""}, ${offlineMessage || ""},
-             ${color}, ${position}, ${logoUrl || ""}, ${themeVal}, ${showAvatar !== false}, now())
+             ${color}, ${accent}, ${position}, ${logoUrl || ""}, ${themeVal}, ${showAvatar !== false},
+             ${!!autoOpen}, ${langVal}, now())
           ON CONFLICT (repair_shop_id) DO UPDATE SET
             enabled = EXCLUDED.enabled, business_name = EXCLUDED.business_name,
             welcome_message = EXCLUDED.welcome_message, offline_message = EXCLUDED.offline_message,
-            primary_color = EXCLUDED.primary_color, widget_position = EXCLUDED.widget_position,
-            logo_url = EXCLUDED.logo_url, theme = EXCLUDED.theme,
-            show_avatar = EXCLUDED.show_avatar, updated_at = now()
+            primary_color = EXCLUDED.primary_color, accent_color = EXCLUDED.accent_color,
+            widget_position = EXCLUDED.widget_position, logo_url = EXCLUDED.logo_url,
+            theme = EXCLUDED.theme, show_avatar = EXCLUDED.show_avatar,
+            auto_open = EXCLUDED.auto_open, language = EXCLUDED.language, updated_at = now()
         `;
         return response.status(200).json({ message: "Widget settings saved (table auto-created)" });
       } catch (createErr) {
@@ -1832,6 +1856,106 @@ async function handleSaveWidgetSettings(request, response, sql, shopId, body) {
     return response.status(500).json({ error: "Failed to save widget settings" });
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SANDBOX STATUS — powers the Developer Sandbox debug panel
+// GET /api/shop?action=sandbox-status&visitor=web_xxx
+// Returns the live conversation state, booking, technician & AI info for a
+// website-visitor session. Uses the SAME engine + tables as production.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSandboxStatus(request, response, sql, shopId) {
+  const visitor = String(request.query?.visitor || "");
+  if (!visitor) return response.status(400).json({ error: "visitor query param required" });
+
+  let state = null;
+  try {
+    const rows = await sql`SELECT * FROM conversation_state WHERE customer_number = ${visitor} AND repair_shop_id = ${shopId} LIMIT 1`;
+    state = rows[0] || null;
+  } catch (e) { /* table may not exist */ }
+
+  let booking = null;
+  let technician = null;
+  if (state && state.booking_id) {
+    try {
+      const rows = await sql`
+        SELECT b.*, t.name AS tech_name, t.phone AS tech_phone
+        FROM bookings b LEFT JOIN technicians t ON t.id = b.technician_id
+        WHERE b.id = ${parseInt(state.booking_id, 10)} AND b.repair_shop_id = ${shopId}
+        LIMIT 1
+      `;
+      booking = rows[0] || null;
+      technician = booking ? { name: booking.tech_name || booking.technician_name, phone: booking.tech_phone } : null;
+    } catch (e) { /* ok */ }
+  }
+
+  let widget = null;
+  try {
+    const rows = await sql`SELECT * FROM widget_settings WHERE repair_shop_id = ${shopId} LIMIT 1`;
+    widget = rows[0] || null;
+  } catch (e) { /* ok */ }
+
+  let aiSettings = null;
+  try {
+    const rows = await sql`SELECT business_hours, greeting_message, languages_spoken FROM ai_settings WHERE repair_shop_id = ${shopId} LIMIT 1`;
+    aiSettings = rows[0] || null;
+  } catch (e) { /* ok */ }
+
+  return response.status(200).json({
+    shopId,
+    channel: "website",
+    widgetId: shopId,
+    widgetEnabled: !!(widget && widget.enabled),
+    visitorId: visitor,
+    aiStatus: state?.status || "NO_SESSION",
+    language: state?.language || "en",
+    bookingId: state?.booking_id || null,
+    bookingStatus: booking?.status || null,
+    technician,
+    state: {
+      status: state?.status || null,
+      appliance: state?.appliance || null,
+      issue: state?.issue || null,
+      customer_name: state?.customer_name || null,
+      area: state?.area || null,
+      urgency: state?.urgency || null,
+      human_handoff: !!state?.human_handoff,
+      selected_slot: state?.selected_slot || null,
+      image_urls: Array.isArray(state?.image_urls) ? state.image_urls : [],
+      file_urls: Array.isArray(state?.file_urls) ? state.file_urls : [],
+    },
+    booking: booking ? {
+      id: booking.id,
+      status: booking.status,
+      service_type: booking.service_type,
+      customer_name: booking.customer_name,
+      address: booking.address,
+      created_at: booking.created_at,
+    } : null,
+    businessHours: aiSettings?.business_hours || null,
+    greetingMessage: aiSettings?.greeting_message || "",
+    promptVersion: PROMPT_VERSION,
+    serverTime: new Date().toISOString(),
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SANDBOX TICKET — signed, short-lived token that lets the (authenticated)
+// Developer Sandbox page run the real widget even while the widget is disabled.
+// The public /api/chat only honors sandbox mode when this token verifies,
+// so strangers cannot bypass a shop's disabled-widget gate.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleSandboxTicket(request, response, sql, shopId) {
+  if (!process.env.JWT_SECRET) {
+    return response.status(500).json({ error: "JWT_SECRET not configured" });
+  }
+  const token = jwt.sign(
+    { scope: "sandbox", shopId, channel: "website" },
+    process.env.JWT_SECRET,
+    { expiresIn: "30m" }
+  );
+  return response.status(200).json({ token, expiresIn: 1800 });
+}
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // GATEWAY MANAGEMENT (Super Admin only)

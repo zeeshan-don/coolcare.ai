@@ -23,6 +23,7 @@
 //   - Prompt injection: handled in the engine's system prompts
 
 const { neon } = require("@neondatabase/serverless");
+const jwt = require("jsonwebtoken");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { chatLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
@@ -54,6 +55,26 @@ function sanitizeText(value, maxLen = 2000) {
 }
 
 const VISITOR_RE = /^web_[A-Za-z0-9\-]{8,64}$/;
+
+/**
+ * Verify a signed Developer-Sandbox ticket. Only requests carrying a valid
+ * JWT issued by /api/shop?action=sandbox-ticket (scoped to THIS shop) may
+ * run the engine while the widget is disabled.
+ */
+async function isSandboxTicketValid(token, shopId) {
+  if (!token || !process.env.JWT_SECRET) return false;
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    return !!(
+      payload &&
+      payload.scope === "sandbox" &&
+      payload.channel === "website" &&
+      parseInt(payload.shopId, 10) === parseInt(shopId, 10)
+    );
+  } catch (e) {
+    return false;
+  }
+}
 
 // ─── Allowed image MIME types + magic-byte checks ─────────────────────────────
 const IMAGE_MIME = new Map([
@@ -173,10 +194,13 @@ async function loadWidgetSettings(sql, shopId) {
       welcome_message: "",
       offline_message: "",
       primary_color: "#22c55e",
+      accent_color: "#16a34a",
       widget_position: "bottom-right",
       logo_url: "",
       theme: "auto",
       show_avatar: true,
+      auto_open: false,
+      language: "en",
     };
   }
   return ws;
@@ -274,9 +298,12 @@ async function handleGet(request, response) {
       businessName: widget.business_name || shop.shop_name,
       logoUrl: widget.logo_url || shop.logo_url || "",
       primaryColor: widget.primary_color || "#22c55e",
+      accentColor: widget.accent_color || "#16a34a",
       widgetPosition: widget.widget_position || "bottom-right",
       theme: widget.theme || "auto",
       showAvatar: widget.show_avatar !== false,
+      autoOpen: !!widget.auto_open,
+      language: widget.language || "en",
       welcomeMessage: widget.welcome_message || "",
       offlineMessage: widget.offline_message ||
         "We've received your request. Our team is currently offline. Your booking has been recorded and a technician will contact you once the business opens.",
@@ -327,10 +354,15 @@ async function handlePost(request, response) {
   if (!shopId || isNaN(shopId)) return response.status(400).json({ error: "Invalid shopId" });
 
   // Only enable-gated for actions that run the engine (uploads allowed when disabled
-  // so a visitor's image still lands on the session before chat is cut off)
+  // so a visitor's image still lands on the session before chat is cut off).
+  // Sandbox mode requires a signed, short-lived ticket that ONLY the authenticated
+  // shop owner can obtain (via /api/shop?action=sandbox-ticket). This lets the
+  // Developer Sandbox page test the real widget before it's publicly enabled,
+  // without letting strangers bypass a shop's disabled-widget gate.
   const widget = await loadWidgetSettings(sql, shopId);
-  await validateShop(sql, shopId, action === "upload" ? undefined : widget);
-  if (!widget.enabled && action !== "upload") {
+  const isSandbox = await isSandboxTicketValid(body.sandboxToken, shopId);
+  await validateShop(sql, shopId, action === "upload" || isSandbox ? undefined : widget);
+  if (!widget.enabled && action !== "upload" && !isSandbox) {
     return response.status(403).json({ error: "Website chat is disabled for this shop" });
   }
 

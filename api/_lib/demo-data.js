@@ -1854,13 +1854,61 @@ function buildDemoWidgetSettingsResponse() {
       welcome_message: "👋 Hi there! Welcome to " + DEMO.shop.shop_name + "! How can we help you today?",
       offline_message: "We've received your request. Our team is currently offline. Your booking has been recorded and a technician will contact you once the business opens.",
       primary_color: "#22c55e",
+      accent_color: "#16a34a",
       widget_position: "bottom-right",
       logo_url: DEMO.shop.logo_url || "",
       theme: "auto",
       show_avatar: true,
+      auto_open: false,
+      language: "en",
     },
-    embedCode: `<script src="https://coolcare.ai/web-bot/widget.js" data-shop-id="${DEMO.shop.id || 1}"></script>`,
+    embedCode: `<script src="https://coolcare.ai/web-bot/widget.js" data-widget-id="${DEMO.shop.id || 1}"></script>`,
     isDemo: true,
+  };
+}
+
+/**
+ * Build sandbox status response for demo mode.
+ * Mirrors the real sandbox-status payload with demo conversation data.
+ */
+function buildDemoSandboxStatusResponse() {
+  return {
+    shopId: DEMO.shop.id || 1,
+    channel: "website",
+    widgetId: DEMO.shop.id || 1,
+    widgetEnabled: true,
+    visitorId: "web_demo_visitor",
+    aiStatus: "BOOKED",
+    language: "en",
+    bookingId: "42",
+    bookingStatus: "assigned",
+    technician: { name: "Vikram Kumar", phone: "+919876543210" },
+    state: {
+      status: "BOOKED",
+      appliance: "AC",
+      issue: "Not cooling",
+      customer_name: "Rahul Sharma",
+      area: "Indiranagar",
+      urgency: "Today",
+      human_handoff: false,
+      selected_slot: null,
+      image_urls: [],
+      file_urls: [],
+    },
+    booking: {
+      id: 42,
+      status: "assigned",
+      service_type: "AC — Not cooling",
+      customer_name: "Rahul Sharma",
+      address: "12, 1st Main Road, Indiranagar, Bengaluru",
+      created_at: ago(1),
+    },
+    businessHours: DEMO.shop.business_hours,
+    greetingMessage: "Hi! 👋 Welcome! Which appliance needs repair?",
+    promptVersion: "llama-3.3-70b-versatile · engine v1.0",
+    isOpen: true,
+    isDemo: true,
+    serverTime: new Date().toISOString(),
   };
 }
 
@@ -1892,4 +1940,5 @@ module.exports = {
   buildDemoWhatsAppStatusResponse,
   buildDemoSubscriptionResponse,
   buildDemoWidgetSettingsResponse,
+  buildDemoSandboxStatusResponse,
 };

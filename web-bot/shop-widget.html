@@ -118,6 +118,14 @@
         </div>
       </div>
       <div class="field">
+        <label>Accent color</label>
+        <div class="color-row">
+          <input type="color" id="accentColorPicker" value="#16a34a">
+          <input type="text" id="accentColor" value="#16a34a" maxlength="7">
+        </div>
+      </div>
+    </div>
+      <div class="field">
         <label>Widget position</label>
         <select id="widgetPosition">
           <option value="bottom-right">Bottom right</option>
@@ -135,10 +143,29 @@
         </select>
       </div>
       <div class="field">
+        <label>Language</label>
+        <select id="language">
+          <option value="auto">Auto (detect visitor)</option>
+          <option value="en">English</option>
+          <option value="hi">हिंदी</option>
+          <option value="ta">தமிழ்</option>
+          <option value="ar">العربية</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field">
         <label>Show bot avatar</label>
         <select id="showAvatar">
           <option value="true">Yes</option>
           <option value="false">No</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Auto-open chat</label>
+        <select id="autoOpen">
+          <option value="false">No (manual)</option>
+          <option value="true">Yes (auto on load)</option>
         </select>
       </div>
     </div>
@@ -216,7 +243,7 @@ function updateStatusPill() {
 
 function renderEmbed() {
   const appUrl = window.location.origin;
-  const code = `<script src="${appUrl}/web-bot/widget.js" data-shop-id="${shopId}"><\/script>`;
+  const code = `<script src="${appUrl}/web-bot/widget.js" data-widget-id="${shopId}"><\/script>`;
   document.getElementById('embedBox').textContent = code;
 }
 
@@ -239,6 +266,13 @@ document.getElementById('primaryColor').addEventListener('input', function() {
   const v = this.value;
   if (/^#[0-9a-fA-F]{6}$/.test(v)) document.getElementById('colorPicker').value = v;
 });
+document.getElementById('accentColorPicker').addEventListener('input', function() {
+  document.getElementById('accentColor').value = this.value;
+});
+document.getElementById('accentColor').addEventListener('input', function() {
+  const v = this.value;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) document.getElementById('accentColorPicker').value = v;
+});
 
 async function saveSettings() {
   if (isDemo) { showToast('🔒 This is a demo account. Changes are not saved.'); return; }
@@ -255,10 +289,13 @@ async function saveSettings() {
         welcomeMessage: document.getElementById('welcomeMessage').value,
         offlineMessage: document.getElementById('offlineMessage').value,
         primaryColor: document.getElementById('primaryColor').value,
+        accentColor: document.getElementById('accentColor').value,
         widgetPosition: document.getElementById('widgetPosition').value,
         logoUrl: document.getElementById('logoUrl').value,
         theme: document.getElementById('theme').value,
         showAvatar: document.getElementById('showAvatar').value === 'true',
+        autoOpen: document.getElementById('autoOpen').value === 'true',
+        language: document.getElementById('language').value,
       }),
     });
     if (!res.ok) {
@@ -295,9 +332,14 @@ async function loadSettings() {
     const color = /^#[0-9a-fA-F]{6}$/.test(s.primary_color) ? s.primary_color : '#22c55e';
     document.getElementById('primaryColor').value = color;
     document.getElementById('colorPicker').value = color;
+    const accent = /^#[0-9a-fA-F]{6}$/.test(s.accent_color) ? s.accent_color : '#16a34a';
+    document.getElementById('accentColor').value = accent;
+    document.getElementById('accentColorPicker').value = accent;
     document.getElementById('widgetPosition').value = s.widget_position || 'bottom-right';
     document.getElementById('theme').value = s.theme || 'auto';
     document.getElementById('showAvatar').value = s.show_avatar === false ? 'false' : 'true';
+    document.getElementById('autoOpen').value = s.auto_open ? 'true' : 'false';
+    document.getElementById('language').value = s.language || 'auto';
     renderEmbed();
   } catch (err) {
     renderEmbed();
