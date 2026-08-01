@@ -2,7 +2,7 @@
 // Shared "Command Center" builder — KPIs, Today's Priorities, Business Health,
 // AI Performance & Technician Performance.
 // Used by BOTH the shop dashboard (api/shop.js) and the morning digest cron
-// (api/cron/digest.js) so the numbers the owner sees in a digest always match
+// (api/cron.js) so the numbers the owner sees in a digest always match
 // the numbers on the dashboard.
 // Every sub-query is defensive so neither consumer breaks on partial schema.
 
