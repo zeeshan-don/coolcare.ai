@@ -2,9 +2,6 @@
   "regions": ["bom1"],
   "cleanUrls": true,
   "trailingSlash": false,
-  "crons": [
-    { "path": "/api/cron/digest", "schedule": "0 * * * *" }
-  ],
   "headers": [
     {
       "source": "/api/(.*)",
