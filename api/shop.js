@@ -1839,6 +1839,7 @@ async function adminListPaymentLogs(request, response, sql, auth) {
     const cnt = await sql(`SELECT COUNT(*) as total FROM payment_logs pl ${whereClause}`, qp);
     return response.status(200).json({ logs, pagination: { page, limit, total: parseInt(cnt[0]?.total || "0", 10) } });
   } catch (e) { return response.status(200).json({ logs: [], pagination: { page, limit, total: 0 } }); }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONVERSATION TRANSCRIPT — full chat history for a customer
