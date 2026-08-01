@@ -1645,9 +1645,15 @@ UPDATE bookings SET customer_sentiment = 'neutral' WHERE customer_sentiment IS N
 UPDATE bookings SET human_takeover_history = '[]'::jsonb WHERE human_takeover_history IS NULL;
 
 
+-- 22. MORNING DIGEST — per-shop digest preferences for the cron that pushes
+--     Today's Priorities to the owner (api/cron/digest.js)
+ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS digest_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS digest_time TEXT NOT NULL DEFAULT '08:00';
+ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS digest_sent_at TIMESTAMPTZ;
+
 -- =============================================================================
 -- MIGRATION COMPLETE
 -- =============================================================================
--- All 21 migration files + schema.sql have been merged into this
+-- All 22 migration files + schema.sql have been merged into this
 -- single file. All operations are idempotent (safe to re-run).
 -- =============================================================================

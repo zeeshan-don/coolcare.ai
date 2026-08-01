@@ -123,6 +123,19 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>☀️ Morning Digest</h2>
+    <p style="color:var(--ink2);font-size:13px;margin:-4px 0 16px;">Get Today's Priorities pushed to you every morning via WhatsApp and email — so you start the day knowing what needs you.</p>
+    <div class="grid">
+      <div class="field"><label>Morning Digest</label>
+        <select id="digest_enabled"><option value="true">Enabled</option><option value="false">Disabled</option></select>
+      </div>
+      <div class="field"><label>Send Time (your local time)</label>
+        <input id="digest_time" type="time" value="08:00">
+      </div>
+    </div>
+  </div>
+
   <button class="btn" id="saveBtn" onclick="saveSettings()">Save Settings</button>
 </div>
 
@@ -182,6 +195,8 @@ async function loadSettings() {
     if (s.language) document.getElementById('language').value = s.language;
     if (s.currency) document.getElementById('currency').value = s.currency;
     if (s.timezone) document.getElementById('timezone').value = s.timezone;
+    if (s.digest_enabled !== undefined && s.digest_enabled !== null) document.getElementById('digest_enabled').value = s.digest_enabled ? 'true' : 'false';
+    if (s.digest_time) document.getElementById('digest_time').value = s.digest_time;
   } catch (err) { console.error('Failed to load settings:', err); }
 }
 
@@ -197,6 +212,8 @@ async function saveSettings() {
     const el = document.getElementById(f);
     if (el) body[f] = el.value;
   });
+  body.digestEnabled = document.getElementById('digest_enabled')?.value === 'true';
+  body.digestTime = document.getElementById('digest_time')?.value || '08:00';
   try {
     const res = await fetch('/api/shop', {
       method: 'POST',

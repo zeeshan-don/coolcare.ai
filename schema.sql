@@ -188,3 +188,8 @@ CREATE TABLE IF NOT EXISTS whitelisted_phones (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(repair_shop_id, phone_number)
 );
+
+-- Morning digest preferences (pushed to owner via api/cron/digest.js)
+ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS digest_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS digest_time TEXT NOT NULL DEFAULT '08:00';
+ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS digest_sent_at TIMESTAMPTZ;

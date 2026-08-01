@@ -387,20 +387,23 @@ function generateBookings(customers, techCount) {
     });
   }
 
-  // ---- COMPLETED BOOKINGS (120) - spread across 365 days ----
-  // These provide revenue history across 12 months with a growth trend
+  // ---- COMPLETED BOOKINGS (220) - spread across 365 days ----
+  // These provide revenue history across 12 months with a growth trend.
+  // Recent months are busier so the dashboard always shows a healthy
+  // pipeline of jobs completed "today" and "this week".
   let completedId = 0;
   for (let monthOffset = 12; monthOffset >= 1; monthOffset--) {
     // More bookings in recent months (growth trend)
-    const baseCount = monthOffset <= 1 ? 18 : Math.max(3, Math.floor(18 - (12 - monthOffset) * 1.2));
+    const baseCount = monthOffset <= 1 ? 26 : Math.max(3, Math.floor(24 - (12 - monthOffset) * 0.9));
     const count = baseCount + randInt(-2, 3);
 
-    for (let i = 0; i < count && completedId < 120; i++) {
+    for (let i = 0; i < count && completedId < 220; i++) {
       const customerIdx = randInt(0, customers.length - 1);
       const techIdx = randInt(0, techCount - 1);
       const service = pick(SERVICES);
       const area = pick(BENGALURU_AREAS);
-      const daysInMonth = monthOffset * 30 - randInt(0, 28);
+      // Most recent month spreads across the last 30 days (including today)
+      const daysInMonth = monthOffset === 1 ? randInt(0, 28) : monthOffset * 30 - randInt(0, 28);
       const finalCost = randInt(service.minCost, service.maxCost);
       const urgency = pick(URGENCIES);
 
@@ -425,6 +428,29 @@ function generateBookings(customers, techCount) {
       completedId++;
     }
   }
+
+  // Guarantee a few jobs completed *today* so the dashboard's
+  // "Revenue Today" / "Completed Today" metrics are never empty.
+  const todayServices = [SERVICES[0], SERVICES[2], SERVICES[10], SERVICES[8]];
+  todayServices.forEach((service, i) => {
+    const customerIdx = randInt(0, customers.length - 1);
+    const cust = customers[customerIdx];
+    cust.total_visits = (cust.total_visits || 0) + 1;
+    cust.total_spent = (cust.total_spent || 0) + service.maxCost;
+    bookings.push({
+      customerIdx,
+      techIdx: i % techCount,
+      status: "completed",
+      service: service.name,
+      area: pick(BENGALURU_AREAS),
+      cost: service.maxCost,
+      final_cost: service.maxCost,
+      created_days_ago: 0,
+      completed_days_ago: 0,
+      urgency: "today",
+      priority: "normal",
+    });
+  });
 
   // ---- CANCELLED BOOKINGS (30) - spread across last 90 days ----
   for (let i = 0; i < 30; i++) {
@@ -1059,6 +1085,190 @@ function generateRevenueChart() {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// COMMAND CENTER — business KPIs, Today's Priorities, Business Health,
+// AI Performance & Technician Performance.
+// Deterministic + derived from BOOKINGS/TECHNICIANS/CONVERSATIONS so it stays
+// cacheable. Mirrors the payload handleDashboard() computes for real shops.
+// ═════════════════════════════════════════════════════════════════════════════
+function buildCommandCenterData() {
+  // ── Revenue & volume (today / yesterday / month) ─────────────────────────
+  let revenueToday = 0;
+  let revenueYesterday = 0;
+  let todayBookings = 0;
+  let monthlyRevenue = 0;
+  let prevMonthRevenue = 0;
+  let monthBookings = 0;
+  let weekRevenue = 0;
+
+  for (const b of BOOKINGS) {
+    const days = b.created_days_ago;
+    if (days < 1) todayBookings++;
+    if (b.status === "completed" && b.final_cost) {
+      if (days < 1) revenueToday += b.final_cost;
+      else if (days < 2) revenueYesterday += b.final_cost;
+      if (days >= 1 && days < 7) weekRevenue += b.final_cost;
+      if (days < 30) monthlyRevenue += b.final_cost;
+      else if (days < 60) prevMonthRevenue += b.final_cost;
+    }
+    if (days < 30) monthBookings++;
+  }
+
+  // Delta vs the 7-day average (robust even when yesterday had 0 completions)
+  const prevAvgRevenue = Math.round(weekRevenue / 7);
+  let revenueDeltaPct = prevAvgRevenue > 0 ? Math.round(((revenueToday - prevAvgRevenue) / prevAvgRevenue) * 100) : 0;
+  revenueDeltaPct = Math.max(-99, Math.min(199, revenueDeltaPct)); // keep the number believable
+  const monthGrowthPct =
+    prevMonthRevenue > 0
+      ? Math.round(((monthlyRevenue - prevMonthRevenue) / prevMonthRevenue) * 100)
+      : monthlyRevenue > 0 ? 25 : 0;
+
+  // ── AI pipeline (67% conversation→booking, matching demo analytics) ──────
+  const aiConversationsToday = CONVERSATIONS.filter((c, i) => i % 4 === 0).length;
+  const aiConversationsMonth = CONVERSATIONS.length;
+  const aiBookingsToday = Math.round(aiConversationsToday * 0.67);
+  const aiBookingsMonth = Math.round(aiConversationsMonth * 0.67);
+  const humanTransfersToday = Math.max(0, Math.round(aiConversationsToday * 0.08));
+  const humanTransfersMonth = Math.max(0, Math.round(aiConversationsMonth * 0.08));
+  // 4 minutes per handled conversation + 20 minutes per AI-created booking
+  const hoursSavedToday = Math.round((aiConversationsToday * 0.067 + aiBookingsToday * 0.33) * 10) / 10;
+  const hoursSavedMonth = Math.round((aiConversationsMonth * 0.067 + aiBookingsMonth * 0.33) * 10) / 10;
+  const avgResponseSeconds = 6 + (aiConversationsToday % 5); // 6–10s
+  const aiSuccessRate = aiConversationsMonth > 0 ? Math.round((aiBookingsMonth / aiConversationsMonth) * 100) : 0;
+  const satisfaction =
+    Math.round((TECHNICIANS.reduce((s, t) => s + (t.rating || 0), 0) / Math.max(TECHNICIANS.length, 1)) * 10) / 10;
+
+  // ── Technician availability ──────────────────────────────────────────────
+  const busySet = new Set();
+  for (const b of BOOKINGS) {
+    if (["assigned", "on_the_way", "arrived"].includes(b.status) && b.techIdx != null) busySet.add(b.techIdx);
+  }
+  const techniciansFree = Math.max(0, TECHNICIANS.length - busySet.size);
+  const techniciansBusy = busySet.size;
+
+  // ── Waiting / overdue / payments ──────────────────────────────────────────
+  const jobsWaiting = BOOKINGS.filter((b) => ["open", "accepted"].includes(b.status)).length;
+  const waitingConfirmation = BOOKINGS.filter((b) => b.status === "open").length;
+  const overdueJobs = BOOKINGS.filter(
+    (b) => b.priority === "urgent" && ["open", "accepted"].includes(b.status) && b.created_days_ago >= 2
+  ).length;
+  const pendingPayments =
+    BOOKINGS.filter((b) => b.status === "completed" && b.final_cost && b.created_days_ago <= 2).length + 1;
+
+  // ── Today's Priorities ────────────────────────────────────────────────────
+  const priorities = [];
+  const plural = (n) => (n === 1 ? "" : "s");
+  if (jobsWaiting > 0) {
+    priorities.push({ level: "red", count: jobsWaiting, text: `${jobsWaiting} booking${plural(jobsWaiting)} waiting for technician assignment`, action: "Assign →", filter: "open", scrollTo: "bookings" });
+  }
+  if (overdueJobs > 0) {
+    priorities.push({ level: "red", count: overdueJobs, text: `${overdueJobs} overdue repair${plural(overdueJobs)} need attention today`, action: "Review →", filter: "open", scrollTo: "bookings" });
+  }
+  if (waitingConfirmation > 0) {
+    priorities.push({ level: "yellow", count: waitingConfirmation, text: `${waitingConfirmation} customer${plural(waitingConfirmation)} waiting for confirmation`, action: "Confirm →", filter: "open", scrollTo: "bookings" });
+  }
+  if (pendingPayments > 3) {
+    priorities.push({ level: "yellow", count: pendingPayments, text: `${pendingPayments} payment${plural(pendingPayments)} pending collection`, action: "View →", scrollTo: "bookings" });
+  }
+  if (techniciansFree > 0) {
+    priorities.push({ level: "green", count: techniciansFree, text: `${techniciansFree} technician${plural(techniciansFree)} available right now`, action: "Dispatch →", scrollTo: "widgets" });
+  }
+  priorities.push({
+    level: "green",
+    count: aiBookingsToday,
+    text: `AI booked ${aiBookingsToday} job${plural(aiBookingsToday)} today · responding in ~${avgResponseSeconds}s`,
+    action: "Details →",
+    scrollTo: "widgets",
+  });
+
+  // ── Business Health ───────────────────────────────────────────────────────
+  let healthScore = 100;
+  healthScore -= Math.min(12, overdueJobs * 5);
+  if (waitingConfirmation > 10) healthScore -= 5;
+  if (techniciansFree === 0) healthScore -= jobsWaiting > 0 ? 2 : 5; // fully booked is a good problem
+  if (pendingPayments > 4) healthScore -= 3;
+  if (monthGrowthPct < 0) healthScore -= 8;
+  healthScore = Math.max(55, Math.min(98, healthScore));
+  const healthLabel = healthScore >= 90 ? "Excellent" : healthScore >= 75 ? "Great" : healthScore >= 60 ? "Fair" : "At Risk";
+  const businessHealth = {
+    score: healthScore,
+    label: healthLabel,
+    checks: [
+      { ok: aiConversationsToday > 0, label: "AI responding normally" },
+      { ok: overdueJobs === 0, label: "No overdue repairs" },
+      { ok: avgResponseSeconds < 20, label: `Response time under 20s (${avgResponseSeconds}s)` },
+      { ok: monthGrowthPct >= 0, label: monthGrowthPct >= 0 ? "Revenue growing this month" : "Revenue declined this month" },
+      { ok: techniciansFree > 0, label: techniciansFree > 0 ? `${techniciansFree} technician${plural(techniciansFree)} ready to dispatch` : "No technicians free" },
+    ],
+  };
+
+  // ── AI Performance ────────────────────────────────────────────────────────
+  const aiPerformance = {
+    conversationsToday: aiConversationsToday,
+    conversationsMonth: aiConversationsMonth,
+    bookingsCreatedToday: aiBookingsToday,
+    bookingsCreatedMonth: aiBookingsMonth,
+    humanTransfersToday: humanTransfersToday,
+    humanTransfersMonth: humanTransfersMonth,
+    hoursSavedToday: hoursSavedToday,
+    hoursSavedMonth: hoursSavedMonth,
+    successRate: aiSuccessRate,
+    avgResponseSeconds: avgResponseSeconds,
+  };
+
+  // ── Technician Performance (last 30 days) ─────────────────────────────────
+  const techStats = TECHNICIANS.map((t, i) => {
+    let repairs = 0;
+    let revenue = 0;
+    for (const b of BOOKINGS) {
+      if (b.techIdx === i && b.status === "completed" && b.created_days_ago < 30) {
+        repairs++;
+        revenue += b.final_cost || 0;
+      }
+    }
+    return {
+      id: i + 1,
+      name: t.name,
+      rating: t.rating || 0,
+      repairs,
+      revenue: Math.round(revenue),
+      busy: busySet.has(i),
+      area: t.area || "",
+      specialization: (t.specialization && t.specialization[0]) || "",
+    };
+  }).sort((a, b) => b.revenue - a.revenue || b.repairs - a.repairs);
+
+  const top = techStats[0] || { name: "—", rating: 0, repairs: 0, revenue: 0, busy: false };
+  const technicianPerformance = { top, list: techStats };
+
+  return {
+    kpis: {
+      revenueToday: Math.round(revenueToday),
+      revenueYesterday: Math.round(revenueYesterday),
+      revenueDeltaPct,
+      monthlyRevenue: Math.round(monthlyRevenue),
+      monthGrowthPct,
+      todayBookings,
+      monthBookings,
+      jobsWaiting,
+      overdueJobs,
+      techniciansFree,
+      technicianCount: TECHNICIANS.length,
+      pendingPayments,
+      satisfaction,
+      aiConversationsToday,
+      aiBookingsToday,
+      aiSuccessRate,
+      hoursSavedToday,
+      avgResponseSeconds,
+    },
+    priorities,
+    businessHealth,
+    aiPerformance,
+    technicianPerformance,
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // PERFORMANCE CACHE — demo data is identical for every visitor, so we cache
 // the pre-computed responses aggressively to avoid recomputation.
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1215,6 +1425,10 @@ function buildDemoDashboardResponse(params) {
   const revenueChart = generateRevenueChart();
   perfMark('revenue chart done');
 
+  // ── Command center payload (KPIs, priorities, health, AI & tech perf) ────
+  const commandCenter = buildCommandCenterData();
+  perfMark('command center done');
+
   // ── Activity feed (deterministic, cacheable) ─────────────────────────────
   const activityFeed = TIMELINE.slice(0, 20).map((t, i) => {
     const cust = CUSTOMERS[t.bookingId % CUSTOMERS.length];
@@ -1337,6 +1551,7 @@ function buildDemoDashboardResponse(params) {
     activityFeed,
     customerHistory,
     recentCustomers,
+    ...commandCenter,
     subscription: {
       id: 1,
       repair_shop_id: 1,
@@ -1529,6 +1744,11 @@ function buildDemoAiSettingsResponse() {
 function buildDemoShopSettingsResponse() {
   return {
     shop: DEMO.shop,
+    settings: {
+      ...DEMO.shop,
+      digest_enabled: true,
+      digest_time: "08:00",
+    },
     whatsappNumber: DEMO.shop.whatsapp_number,
     isDemo: true,
   };

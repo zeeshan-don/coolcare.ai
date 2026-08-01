@@ -26,6 +26,7 @@ const { setSecurityHeaders } = require("./_lib/security");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
 const { getGatewayList, invalidateCache } = require("./_lib/gateway");
 const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse } = require("./_lib/demo-data");
+const { buildRealCommandCenter } = require("./_lib/command-center");
 const { z } = require("zod");
 const bcrypt = require("bcryptjs");
 
@@ -243,6 +244,12 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     ORDER BY visit_count DESC, last_visit DESC LIMIT 20
   `;
 
+  // ── Command center: KPIs, priorities, health, AI & technician performance ─
+  const commandCenter = await buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, todayBookings, {
+    monthlyRevenue: parseFloat(revenue.monthly_revenue),
+    monthBookings,
+  });
+
   const shopRows = await sql`
     SELECT id, shop_name, owner_name, email, mobile, city, services_offered, service_areas, role
     FROM repair_shops WHERE id = ${shopId} LIMIT 1
@@ -282,6 +289,7 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     activityFeed: activityFeed.map((a) => ({ id: a.id, bookingId: a.booking_id, action: a.action, oldValue: a.old_value, newValue: a.new_value, customerName: a.customer_name, customerNumber: a.customer_number, serviceType: a.service_type, createdAt: a.created_at })),
     customerHistory: customerHistory.map((c) => ({ name: c.customer_name, phone: c.customer_number, visits: parseInt(c.visit_count, 10), lastVisit: c.last_visit, firstVisit: c.first_visit, totalSpent: parseFloat(c.total_spent) })),
     recentCustomers: recentCustomers.map((c) => ({ name: c.customer_name, phone: c.customer_number, lastBooking: c.last_booking })),
+    ...commandCenter,
     subscription,
     subscriptionRequired,
     subscriptionStatus,
@@ -1677,7 +1685,8 @@ async function handleMarkNotificationRead(request, response, sql, shopId, body) 
 async function handleGetShopSettings(request, response, sql, shopId) {
   const shop = await sql`
     SELECT id, shop_name, owner_name, email, mobile, city, address, services_offered,
-           service_areas, gst_number, logo_url, language, timezone, currency, business_hours
+           service_areas, gst_number, logo_url, language, timezone, currency, business_hours,
+           digest_enabled, digest_time
     FROM repair_shops WHERE id = ${shopId} LIMIT 1
   `;
   return response.status(200).json({ settings: shop[0] || null });
@@ -1693,6 +1702,8 @@ async function handleSaveShopSettings(request, response, sql, shopId, body) {
     if (body[bodyKey] !== undefined) updates[col] = body[bodyKey];
   }
   if (body.businessHours !== undefined) updates.business_hours = body.businessHours;
+  if (body.digestEnabled !== undefined) updates.digest_enabled = !!body.digestEnabled;
+  if (body.digestTime !== undefined) updates.digest_time = String(body.digestTime || '08:00').slice(0, 5);
 
   if (Object.keys(updates).length === 0) return response.status(400).json({ error: "No fields to update" });
 

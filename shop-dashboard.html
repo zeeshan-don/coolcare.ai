@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#0a0a0a;--bg2:#111111;--bg3:#1a1a1a;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--muted2:#525252;--green:#22c55e;--green-bg:#0a1a0a;--red:#ef4444;--red-bg:#1a0a0a;--yellow:#eab308;--yellow-bg:rgba(234,179,8,0.08)}
+    :root{--bg:#0a0a0a;--bg2:#111111;--bg3:#1a1a1a;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--muted2:#525252;--green:#22c55e;--green-bg:#0a1a0a;--red:#ef4444;--red-bg:#1a0a0a;--yellow:#eab308;--yellow-bg:rgba(234,179,8,0.08);--blue:#3b82f6;--blue-bg:rgba(59,130,246,0.1)}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,sans-serif}
     h1,h2,h3,.brand,.stat-card .value{font-family:'Inter',system-ui,sans-serif;font-weight:700}
     a{color:inherit;text-decoration:none}
@@ -34,20 +34,123 @@
     .mobile-menu a:hover,.mobile-menu button:hover{background:var(--bg3);color:#fff}
     .mobile-menu .divider{border-top:1px solid var(--border);margin:6px 0}
     .wrap{max-width:1280px;margin:auto;padding:26px}
-    .header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px}.header h1{font-size:36px;letter-spacing:-1px;margin:0 0 4px;color:#fff}.header p{color:var(--muted);margin:0;font-size:15px}
+    .header{margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px}.header h1{font-size:32px;letter-spacing:-1px;margin:0 0 4px;color:#fff}.header p{color:var(--muted);margin:0;font-size:14px}
+    .header .greet-sub{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .live-pill{display:inline-flex;align-items:center;gap:7px;background:var(--green-bg);border:1px solid rgba(34,197,94,0.25);border-radius:20px;padding:4px 12px;font:600 11px 'Inter',sans-serif;color:var(--green);letter-spacing:0.3px}
+    .live-pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:livePulse 1.6s ease-in-out infinite}
+    @keyframes livePulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,0.4)}50%{opacity:.6;box-shadow:0 0 0 5px rgba(34,197,94,0)}}
     .sub-banner{background:var(--yellow-bg);border:1px solid rgba(234,179,8,0.2);border-radius:12px;padding:14px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
     .sub-banner.inactive{background:var(--red-bg);border-color:rgba(239,68,68,0.2)}
     .sub-banner-text{font-size:14px;font-weight:600;color:var(--yellow)}.sub-banner.inactive .sub-banner-text{color:var(--red)}
     .sub-banner-sub{font-size:12px;color:var(--muted)}
     .sub-banner a{display:inline-block;background:#fff;color:#000;font:600 12px 'Inter',sans-serif;border:0;border-radius:8px;padding:8px 16px;cursor:pointer;text-decoration:none}
     .sub-banner a:hover{background:#e5e5e5}
-    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
-    .stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 20px;position:relative;overflow:hidden}
-    .stat-card .label{font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--muted);margin-bottom:4px;text-transform:uppercase}
-    .stat-card .value{font-size:32px;font-weight:700;letter-spacing:-0.5px}
-    .stat-card.open .value{color:#fff}.stat-card.completed .value{color:var(--green)}.stat-card.cancelled .value{color:var(--muted)}
-    .stat-card.revenue .value{color:var(--green);font-size:24px}
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:24px}
+
+    /* ── KPI row ─────────────────────────────────────────────────────────── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+    .kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:18px 20px;position:relative;overflow:hidden;transition:border-color 0.25s, transform 0.25s}
+    .kpi-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+    .kpi-card::after{content:'';position:absolute;top:-40px;right:-40px;width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,0.04),transparent 70%);pointer-events:none}
+    .kpi-card .kpi-icon{font-size:17px;margin-bottom:8px;opacity:.9}
+    .kpi-card .kpi-label{font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--muted);text-transform:uppercase;margin-bottom:3px}
+    .kpi-card .kpi-value{font-size:28px;font-weight:800;letter-spacing:-0.5px;color:#fff;line-height:1.15}
+    .kpi-card .kpi-value.green{color:var(--green)}
+    .kpi-card .kpi-sub{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:12px;color:var(--muted)}
+    .kpi-card .kpi-sub .sub-strong{color:var(--ink2);font-weight:600}
+    .delta{display:inline-flex;align-items:center;gap:3px;font:700 11px 'Inter',sans-serif;padding:2px 7px;border-radius:6px}
+    .delta.up{color:var(--green);background:var(--green-bg)}
+    .delta.down{color:var(--red);background:var(--red-bg)}
+    .delta.flat{color:var(--muted);background:var(--bg3)}
+
+    /* ── Today's Priorities ─────────────────────────────────────────────── */
+    .priority-card{background:linear-gradient(180deg,var(--bg2),var(--bg3));border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:18px}
+    .priority-card .pc-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+    .priority-card h2{font-size:15px;margin:0;color:#fff;display:flex;align-items:center;gap:8px}
+    .priority-card h2 .badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
+    .priority-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+    .priority-item{display:flex;align-items:center;gap:12px;background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px 14px;transition:all 0.2s;cursor:default}
+    .priority-item:hover{border-color:var(--border2);transform:translateY(-1px)}
+    .priority-item .p-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+    .priority-item.red .p-dot{background:var(--red);box-shadow:0 0 0 3px rgba(239,68,68,0.15)}
+    .priority-item.yellow .p-dot{background:var(--yellow);box-shadow:0 0 0 3px rgba(234,179,8,0.15)}
+    .priority-item.green .p-dot{background:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,0.15)}
+    .priority-item .p-text{flex:1;font-size:13px;color:var(--ink2);line-height:1.45}
+    .priority-item .p-text strong{color:#fff;font-weight:700}
+    .priority-item .p-count{font:800 15px 'Inter',sans-serif;color:#fff}
+    .priority-item .p-action{font:600 11px 'Inter',sans-serif;color:var(--muted);white-space:nowrap;transition:color 0.2s}
+    .priority-item .p-action:hover{color:#fff}
+
+    /* ── Pipeline chips (kept booking status counts, now clickable) ─────── */
+    .pipeline{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+    .pipe-chip{display:inline-flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px 13px;font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;transition:all 0.2s;user-select:none}
+    .pipe-chip:hover{border-color:var(--border2);color:#fff}
+    .pipe-chip.active{border-color:var(--green);color:#fff;background:var(--green-bg)}
+    .pipe-chip .pc-count{background:var(--bg3);border-radius:6px;padding:0 7px;font:700 11px 'Inter',sans-serif;color:var(--ink);min-width:20px;text-align:center}
+    .pipe-chip.active .pc-count{background:rgba(34,197,94,0.2);color:var(--green)}
+    .pipe-chip .pc-dot{width:6px;height:6px;border-radius:50%}
+    .pipe-chip.red .pc-dot{background:var(--red)}.pipe-chip.green .pc-dot{background:var(--green)}.pipe-chip.yellow .pc-dot{background:var(--yellow)}.pipe-chip.blue .pc-dot{background:var(--blue)}
+
+    /* ── Widgets grid ───────────────────────────────────────────────────── */
+    .widgets{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:18px}
+    .widget{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;flex-direction:column}
+    .widget h2{font-size:15px;margin:0 0 14px;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .widget h2 .w-badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
+    .widget h2 .w-sub{font-size:11px;font-weight:500;color:var(--muted)}
+
+    /* Health ring */
+    .health-top{display:flex;align-items:center;gap:18px;margin-bottom:14px}
+    .ring{position:relative;width:92px;height:92px;flex-shrink:0}
+    .ring svg{transform:rotate(-90deg)}
+    .ring .ring-bg{stroke:var(--bg3);fill:none;stroke-width:9}
+    .ring .ring-fg{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset 1s ease, stroke 0.6s}
+    .ring .ring-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .ring .ring-num b{font:800 24px 'Inter',sans-serif;color:#fff;line-height:1}
+    .ring .ring-num span{font:600 9px 'Inter',sans-serif;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-top:2px}
+    .health-label{font:700 15px 'Inter',sans-serif;color:#fff}
+    .health-label .tag{display:inline-block;margin-left:6px;font:700 10px 'Inter',sans-serif;padding:2px 8px;border-radius:20px;vertical-align:middle}
+    .health-label .tag.excellent{background:var(--green-bg);color:var(--green)}
+    .health-label .tag.great{background:var(--blue-bg);color:var(--blue)}
+    .health-label .tag.fair{background:var(--yellow-bg);color:var(--yellow)}
+    .health-label .tag.risk{background:var(--red-bg);color:var(--red)}
+    .health-meta{font-size:12px;color:var(--muted);margin-top:3px}
+    .health-checks{display:flex;flex-direction:column;gap:7px;margin-top:auto}
+    .h-check{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink2);padding:7px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--border)}
+    .h-check .h-ico{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0}
+    .h-check.ok .h-ico{background:var(--green-bg);color:var(--green)}
+    .h-check.bad .h-ico{background:var(--red-bg);color:var(--red)}
+
+    /* AI performance */
+    .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+    .ai-tile{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:12px 13px}
+    .ai-tile .a-label{font-size:10.5px;font-weight:600;letter-spacing:0.4px;color:var(--muted);text-transform:uppercase}
+    .ai-tile .a-value{font:800 22px 'Inter',sans-serif;color:#fff;letter-spacing:-0.3px;line-height:1.25}
+    .ai-tile .a-value.green{color:var(--green)}
+    .ai-tile .a-sub{font-size:10.5px;color:var(--muted);margin-top:1px}
+    .ai-tile .a-value .unit{font-size:12px;font-weight:600;color:var(--ink2)}
+
+    /* Technician performance */
+    .tech-top{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(34,197,94,0.08),transparent);border:1px solid rgba(34,197,94,0.18);border-radius:12px;padding:14px;margin-bottom:12px}
+    .tech-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#2a2a2a,#1a1a1a);border:2px solid rgba(34,197,94,0.4);display:flex;align-items:center;justify-content:center;font:800 15px 'Inter',sans-serif;color:#fff;flex-shrink:0}
+    .tech-top .tt-name{font:700 14px 'Inter',sans-serif;color:#fff}
+    .tech-top .tt-sub{font-size:11.5px;color:var(--muted)}
+    .tech-top .tt-stats{margin-left:auto;text-align:right;flex-shrink:0}
+    .tech-top .tt-stats .rev{font:800 16px 'Inter',sans-serif;color:var(--green)}
+    .tech-top .tt-stats .n{font-size:11px;color:var(--muted)}
+    .star{color:var(--yellow);font-size:11px;letter-spacing:1px}
+    .tech-list{display:flex;flex-direction:column;gap:5px;margin-top:auto}
+    .tech-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;transition:background 0.2s}
+    .tech-row:hover{background:var(--bg)}
+    .tech-row .t-rank{width:18px;text-align:center;font:700 11px 'Inter',sans-serif;color:var(--muted2);flex-shrink:0}
+    .tech-row .t-rank.top{color:var(--green)}
+    .tech-row .t-av{width:26px;height:26px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:700 10px 'Inter',sans-serif;color:var(--ink2);flex-shrink:0}
+    .tech-row .t-name{flex:1;font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tech-row .t-stat{font-size:11.5px;color:var(--muted);white-space:nowrap}
+    .tech-row .t-stat b{color:var(--ink);font-weight:700}
+    .tech-row .busy-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .busy-dot.free{background:var(--green)}.busy-dot.busy{background:var(--yellow)}.busy-dot.off{background:var(--muted2)}
+
+    /* ── Charts & timeline ──────────────────────────────────────────────── */
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
     .section-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:18px}
     .section-card h2{font-size:16px;margin:0 0 16px;color:#fff;display:flex;align-items:center;justify-content:space-between}
     .section-card h2 .badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
@@ -55,12 +158,27 @@
     .chart-bar{flex:1;background:var(--bg3);border-radius:3px 3px 0 0;min-width:4px;transition:background 0.2s;position:relative}
     .chart-bar:hover{background:var(--green)}.chart-bar.has-value{background:rgba(34,197,94,0.3)}
     .chart-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;padding:0 4px}
-    .activity-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
-    .activity-item:last-child{border-bottom:0}
-    .activity-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);margin-top:6px;flex-shrink:0}
-    .activity-dot.status_change{background:var(--green)}.activity-dot.technician_assigned{background:#3b82f6}.activity-dot.priority_change{background:var(--yellow)}
-    .activity-text{color:var(--ink2);line-height:1.5}.activity-text strong{color:#fff;font-weight:600}
-    .activity-time{color:var(--muted);font-size:11px}
+
+    /* Business timeline */
+    .tl{border-left:2px solid var(--border);margin-left:7px;padding-left:0}
+    .tl-item{position:relative;padding:0 0 16px 24px}
+    .tl-item:last-child{padding-bottom:0}
+    .tl-item::before{content:'';position:absolute;left:-7px;top:3px;width:12px;height:12px;border-radius:50%;background:var(--bg2);border:2px solid var(--muted2)}
+    .tl-item.money::before{border-color:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,0.12)}
+    .tl-item.booking::before{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,0.12)}
+    .tl-item.ai::before{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,0.12)}
+    .tl-item.tech::before{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(234,179,8,0.12)}
+    .tl-item.done::before{border-color:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,0.12)}
+    .tl-item.star::before{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(234,179,8,0.12)}
+    .tl-item.alert::before{border-color:var(--red);box-shadow:0 0 0 3px rgba(239,68,68,0.12)}
+    .tl-head{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2)}
+    .tl-head .tl-ico{font-size:14px;flex-shrink:0}
+    .tl-head strong{color:#fff;font-weight:700}
+    .tl-sub{font-size:12px;color:var(--muted);margin-top:1px}
+    .tl-sub b{color:var(--ink2);font-weight:600}
+    .tl-time{font-size:10.5px;color:var(--muted2);margin-top:2px}
+
+    /* ── Bookings & tables (unchanged features) ─────────────────────────── */
     table{width:100%;border-collapse:collapse;font-size:13px}
     th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;padding:10px 12px;border-bottom:1px solid var(--border)}
     td{padding:10px 12px;border-bottom:1px solid var(--border);color:var(--ink2)}tr:last-child td{border-bottom:0}
@@ -83,9 +201,30 @@
     .booking-badge.on_the_way{background:rgba(255,255,255,0.05);color:var(--ink2);border:1px solid var(--border2)}
     .booking-badge.arrived{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,0.2)}
     .empty{text-align:center;color:var(--muted);padding:40px 20px}
-    @media(max-width:900px){.grid-2{grid-template-columns:1fr}}
+
+    /* ── Live feed toasts ───────────────────────────────────────────────── */
+    .toast-stack{position:fixed;bottom:20px;right:20px;z-index:99990;display:flex;flex-direction:column;gap:10px;max-width:340px;width:calc(100vw - 40px);pointer-events:none}
+    .toast{background:rgba(20,20,20,0.96);border:1px solid var(--border2);border-left:3px solid var(--green);border-radius:12px;padding:13px 15px;box-shadow:0 12px 40px rgba(0,0,0,0.55);display:flex;gap:11px;align-items:flex-start;opacity:0;transform:translateX(30px);transition:all 0.35s cubic-bezier(.2,.8,.3,1);pointer-events:auto;cursor:pointer}
+    .toast.show{opacity:1;transform:translateX(0)}
+    .toast .t-ico{font-size:18px;flex-shrink:0;margin-top:1px}
+    .toast .t-title{font:700 12.5px 'Inter',sans-serif;color:#fff}
+    .toast .t-body{font-size:12px;color:var(--ink2);line-height:1.45;margin-top:1px}
+    .toast .t-time{font-size:10px;color:var(--muted2);margin-top:2px}
+    .toast .t-x{margin-left:auto;font-size:12px;color:var(--muted);flex-shrink:0;padding:0 2px}
+    .toast .t-x:hover{color:#fff}
+
+    /* ── Live feed mini-panel ───────────────────────────────────────────── */
+    .feed-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-top:2px}
+    .feed-chip{flex-shrink:0;display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:7px 11px;font-size:11.5px;color:var(--ink2);white-space:nowrap}
+    .feed-chip .fc-ico{font-size:13px}
+    .feed-chip .fc-t{color:var(--muted);font-weight:600}
+
+    @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.widgets{grid-template-columns:1fr 1fr}}
+    @media(max-width:900px){.grid-2{grid-template-columns:1fr}.widgets{grid-template-columns:1fr}}
     @media(max-width:660px){
-      .stats{grid-template-columns:repeat(2,1fr)}
+      .kpi-grid{grid-template-columns:1fr 1fr;gap:10px}
+      .kpi-card{padding:14px}
+      .kpi-card .kpi-value{font-size:22px}
       .nav-right{gap:6px}
       .brand-signature{height:26px}
       .shop-name{display:none}
@@ -93,7 +232,7 @@
       .logout-btn{display:none}
       .bell{margin-left:auto}
       .hamburger{display:flex}
-      .header h1{font-size:28px}
+      .header h1{font-size:26px}
       .nav{position:relative}
     }
     .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
@@ -155,37 +294,124 @@
   <div id="subBanner" style="display:none"></div>
 
   <div class="header">
-    <div><h1>Dashboard</h1><p>Manage your CoolCare service bookings</p></div>
+    <div>
+      <h1 id="greeting">Dashboard</h1>
+      <div class="greet-sub">
+        <p id="todayDate"></p>
+        <span class="live-pill"><span class="dot"></span>Live</span>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;align-items:center">
       <a href="/shop-referrals.html" class="nav-link">Referrals</a>
       <button onclick="exportCSV()" class="nav-link">Export CSV</button>
     </div>
   </div>
 
-  <div class="stats" id="stats">
-    <div class="stat-card open"><div class="label">Open</div><div class="value" id="count-open">—</div></div>
-    <div class="stat-card accepted"><div class="label">Accepted</div><div class="value" id="count-accepted">—</div></div>
-    <div class="stat-card assigned"><div class="label">Assigned</div><div class="value" id="count-assigned">—</div></div>
-    <div class="stat-card completed"><div class="label">Completed</div><div class="value" id="count-completed">—</div></div>
-    <div class="stat-card"><div class="label">Today</div><div class="value" id="count-today" style="color:#fff">—</div></div>
-    <div class="stat-card"><div class="label">This Month</div><div class="value" id="count-month" style="color:#fff">—</div></div>
-    <div class="stat-card"><div class="label">Pending</div><div class="value" id="count-pending" style="color:var(--yellow)">—</div></div>
-    <div class="stat-card revenue"><div class="label">Revenue</div><div class="value" id="count-revenue">—</div></div>
+  <!-- ═══ KPI row — the money & motion of the business ═══ -->
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi-card">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-label">Revenue Today</div>
+      <div class="kpi-value green" id="kpi-revenue-today">—</div>
+      <div class="kpi-sub"><span class="delta" id="kpi-revenue-delta">…</span><span class="sub-strong" id="kpi-revenue-month"></span> this month</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">📦</div>
+      <div class="kpi-label">Bookings Today</div>
+      <div class="kpi-value" id="kpi-bookings-today">—</div>
+      <div class="kpi-sub"><span class="sub-strong" id="kpi-bookings-month"></span> this month</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">🤖</div>
+      <div class="kpi-label">AI Conversations Today</div>
+      <div class="kpi-value" id="kpi-ai-convos">—</div>
+      <div class="kpi-sub"><span class="sub-strong" id="kpi-ai-bookings"></span> booked by AI today</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon">⏱️</div>
+      <div class="kpi-label">Hours Saved</div>
+      <div class="kpi-value green" id="kpi-hours-saved">—</div>
+      <div class="kpi-sub"><span class="sub-strong" id="kpi-avg-response"></span> avg AI response</div>
+    </div>
   </div>
 
+  <!-- ═══ Today's Priorities ═══ -->
+  <div class="priority-card" id="priorities">
+    <div class="pc-head">
+      <h2>🎯 Today's Priorities <span class="badge" id="priorityCount">0</span></h2>
+      <span style="font-size:11px;color:var(--muted);font-weight:500">What needs your attention right now</span>
+    </div>
+    <div class="priority-list" id="priorityList"><div class="empty" style="padding:16px">Loading priorities…</div></div>
+  </div>
+
+  <!-- ═══ Pipeline — booking status counts (kept feature, now clickable filters) ═══ -->
+  <div class="pipeline" id="pipeline">
+    <div class="pipe-chip active" data-filter="all" onclick="filterBookings('all')">All<span class="pc-count" id="pipe-all">0</span></div>
+    <div class="pipe-chip red" data-filter="open" onclick="filterBookings('open')"><span class="pc-dot"></span>Open<span class="pc-count" id="pipe-open">0</span></div>
+    <div class="pipe-chip yellow" data-filter="accepted" onclick="filterBookings('accepted')"><span class="pc-dot"></span>Accepted<span class="pc-count" id="pipe-accepted">0</span></div>
+    <div class="pipe-chip blue" data-filter="assigned" onclick="filterBookings('assigned')"><span class="pc-dot"></span>Assigned<span class="pc-count" id="pipe-assigned">0</span></div>
+    <div class="pipe-chip" data-filter="on_the_way" onclick="filterBookings('on_the_way')"><span class="pc-dot"></span>On The Way<span class="pc-count" id="pipe-on_the_way">0</span></div>
+    <div class="pipe-chip" data-filter="arrived" onclick="filterBookings('arrived')"><span class="pc-dot"></span>Arrived<span class="pc-count" id="pipe-arrived">0</span></div>
+    <div class="pipe-chip green" data-filter="completed" onclick="filterBookings('completed')"><span class="pc-dot"></span>Completed<span class="pc-count" id="pipe-completed">0</span></div>
+  </div>
+
+  <!-- ═══ Command widgets ═══ -->
+  <div class="widgets" id="widgets">
+    <!-- Business Health -->
+    <div class="widget">
+      <h2>🩺 Business Health <span class="w-sub" id="healthUpdated"></span></h2>
+      <div class="health-top">
+        <div class="ring">
+          <svg width="92" height="92" viewBox="0 0 92 92">
+            <circle class="ring-bg" cx="46" cy="46" r="38"></circle>
+            <circle class="ring-fg" id="healthRing" cx="46" cy="46" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"></circle>
+          </svg>
+          <div class="ring-num"><b id="healthScore">—</b><span>Score</span></div>
+        </div>
+        <div>
+          <div class="health-label" id="healthLabel">Loading…</div>
+          <div class="health-meta" id="healthMeta"></div>
+        </div>
+      </div>
+      <div class="health-checks" id="healthChecks"></div>
+    </div>
+
+    <!-- AI Performance -->
+    <div class="widget">
+      <h2>🤖 AI Performance <span class="w-sub" id="aiPerfSub"></span></h2>
+      <div class="ai-grid">
+        <div class="ai-tile"><div class="a-label">Conversations Today</div><div class="a-value" id="ai-convos-today">—</div><div class="a-sub" id="ai-convos-month"></div></div>
+        <div class="ai-tile"><div class="a-label">Bookings by AI</div><div class="a-value green" id="ai-bookings-today">—</div><div class="a-sub" id="ai-bookings-month"></div></div>
+        <div class="ai-tile"><div class="a-label">Human Transfers</div><div class="a-value" id="ai-transfers-today">—</div><div class="a-sub" id="ai-transfers-month"></div></div>
+        <div class="ai-tile"><div class="a-label">Hours Saved</div><div class="a-value green" id="ai-hours-today">—</div><div class="a-sub" id="ai-hours-month"></div></div>
+        <div class="ai-tile"><div class="a-label">AI Success Rate</div><div class="a-value" id="ai-success-rate">—</div><div class="a-sub">conversation → booking</div></div>
+        <div class="ai-tile"><div class="a-label">Avg Response</div><div class="a-value" id="ai-avg-response">—</div><div class="a-sub">first reply, 24/7</div></div>
+      </div>
+    </div>
+
+    <!-- Technician Performance -->
+    <div class="widget">
+      <h2>👨‍🔧 Technicians <span class="w-badge" id="techFreeBadge">— free</span></h2>
+      <div class="tech-top" id="techTop"></div>
+      <div class="tech-list" id="techList"></div>
+    </div>
+  </div>
+
+  <!-- ═══ Revenue + Live Business Feed ═══ -->
   <div class="grid-2">
     <div class="section-card">
-      <h2>Revenue (30 days)</h2>
+      <h2>Revenue (30 days) <span class="badge" id="chartMonthBadge"></span></h2>
       <div class="chart" id="revenueChart"><div class="empty" style="width:100%">Loading…</div></div>
       <div class="chart-labels" id="chartLabels"></div>
     </div>
     <div class="section-card">
-      <h2>Recent Activity</h2>
-      <div id="activityFeed"><div class="empty">No recent activity</div></div>
+      <h2>Business Timeline <span class="badge">live</span></h2>
+      <div class="tl" id="activityFeed"><div class="empty">No recent activity</div></div>
+      <div class="feed-strip" id="feedStrip"></div>
     </div>
   </div>
 
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
+  <div id="bookingsHead" style="scroll-margin-top:90px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
     <div class="section-header" style="margin:0">Bookings <span class="badge" id="totalBadge">0</span></div>
     <div style="display:flex;gap:8px;align-items:center">
       <input id="searchInput" type="text" placeholder="Search name or phone…" onkeyup="if(event.key==='Enter')searchBookings()" style="border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font:inherit;font-size:13px;width:200px;background:var(--bg);color:var(--ink)">
@@ -216,6 +442,8 @@
   </div>
 </div>
 
+<div class="toast-stack" id="toastStack"></div>
+
 <script>
   const token = localStorage.getItem('cc_token');
   if (!token) { window.location.href = '/login.html'; }
@@ -224,6 +452,7 @@
   let currentFilter = 'all';
   let currentPage = 1;
   let searchQuery = '';
+  let lastActivityCount = 0;
 
   const shopData = JSON.parse(localStorage.getItem('cc_shop') || '{}');
   if (shopData.shopName) document.getElementById('shopName').textContent = shopData.shopName;
@@ -253,8 +482,6 @@
   }
 
   // ── Progressive Loading Screen ────────────────────────────────────────────
-  // Shows a polished loading animation on first dashboard visit, then
-  // progressively renders content as it becomes available.
   let dashboardLoaded = false;
 
   function injectDashboardLoader() {
@@ -273,22 +500,10 @@
       </div>
       <div style="width:280px">
         <div style="display:flex;flex-direction:column;gap:6px">
-          <div class="dash-load-step" data-dstep="1">
-            <span class="dls-icon"></span>
-            <span class="dls-label">Summary cards</span>
-          </div>
-          <div class="dash-load-step" data-dstep="2">
-            <span class="dls-icon"></span>
-            <span class="dls-label">Revenue chart</span>
-          </div>
-          <div class="dash-load-step" data-dstep="3">
-            <span class="dls-icon"></span>
-            <span class="dls-label">Recent activity</span>
-          </div>
-          <div class="dash-load-step" data-dstep="4">
-            <span class="dls-icon"></span>
-            <span class="dls-label">Bookings & customers</span>
-          </div>
+          <div class="dash-load-step" data-dstep="1"><span class="dls-icon"></span><span class="dls-label">Business KPIs</span></div>
+          <div class="dash-load-step" data-dstep="2"><span class="dls-icon"></span><span class="dls-label">Today's priorities</span></div>
+          <div class="dash-load-step" data-dstep="3"><span class="dls-icon"></span><span class="dls-label">AI & team health</span></div>
+          <div class="dash-load-step" data-dstep="4"><span class="dls-icon"></span><span class="dls-label">Bookings & customers</span></div>
         </div>
       </div>
       <style>
@@ -303,35 +518,6 @@
       </style>
     `;
     document.body.appendChild(div);
-  }
-
-  function showDashboardLoader() {
-    injectDashboardLoader();
-    const items = document.querySelectorAll('.dash-load-step');
-    let step = 0;
-    function advance() {
-      if (step > 0 && step <= items.length) {
-        items[step - 1].classList.remove('active');
-        items[step - 1].classList.add('done');
-      }
-      if (step < items.length) {
-        items[step].classList.add('active');
-        step++;
-      }
-    }
-    advance();
-    const interval = setInterval(advance, 300);
-    return {
-      done: () => {
-        clearInterval(interval);
-        items.forEach(el => { el.classList.remove('active'); el.classList.add('done'); });
-      },
-      hide: () => {
-        clearInterval(interval);
-        const el = document.getElementById('dashLoader');
-        if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }
-      }
-    };
   }
 
   function logout() {
@@ -349,12 +535,13 @@
     window.open(`/api/shop?action=export&${params}`, '_blank');
   }
 
-  // ── INR formatting for demo ────────────────────────────────────────────────
+  // ── Formatting ─────────────────────────────────────────────────────────────
   function fmt(val) { return '₹' + Number(val || 0).toLocaleString('en-IN'); }
+  function fmtMoney(val) { return isDemo ? fmt(val) : '$' + Number(val || 0).toFixed(2); }
+  function fmtHours(h) { return (Number(h || 0) % 1 === 0) ? Number(h || 0) + 'h' : Number(h || 0).toFixed(1) + 'h'; }
 
-  // ── Unified dashboard loader (works for both demo and real) ────────────────
+  // ── Unified dashboard loader ───────────────────────────────────────────────
   async function loadDashboard() {
-    // Dashboard loader: show only after 150ms delay (avoids flash for cached responses)
     let loaderCtrl = null;
     let loaderTimeout = null;
     if (!dashboardLoaded && isDemo) {
@@ -362,7 +549,6 @@
       loaderTimeout = setTimeout(() => {
         const el = document.getElementById('dashLoader');
         if (el) { el.style.opacity = '1'; el.style.pointerEvents = 'auto'; }
-        // Start animation
         const items = document.querySelectorAll('.dash-load-step');
         if (items.length) {
           let step = 0;
@@ -401,22 +587,20 @@
         bannerEl.innerHTML = `<div><div class="sub-banner-text">${st==='expired'?'Expired — Renew now':st==='inactive'?'Not active — Subscribe':'Needs attention'}</div><div class="sub-banner-sub">Status: ${st.charAt(0).toUpperCase()+st.slice(1)}</div></div><a href="/shop-subscription.html">Subscribe Now →</a>`;
       } else { bannerEl.style.display = 'none'; }
 
-      if (data.counts) {
-        document.getElementById('count-open').textContent = data.counts.open || 0;
-        document.getElementById('count-accepted').textContent = data.counts.accepted || 0;
-        document.getElementById('count-assigned').textContent = data.counts.assigned || 0;
-        document.getElementById('count-completed').textContent = data.counts.completed || 0;
-      }
-      if (data.stats) {
-        document.getElementById('count-today').textContent = data.stats.todayBookings || 0;
-        document.getElementById('count-month').textContent = data.stats.monthBookings || 0;
-        document.getElementById('count-pending').textContent = data.stats.pendingJobs || 0;
-        document.getElementById('count-revenue').textContent = isDemo ? fmt(data.stats.totalRevenue) : '$' + Number(data.stats.totalRevenue || 0).toFixed(2);
+      if (data.shop) {
+        document.getElementById('shopName').textContent = data.shop.shop_name || '';
+        localStorage.setItem('cc_shop', JSON.stringify({ shopName: data.shop.shop_name }));
+        setGreeting(data.shop.owner_name || data.shop.shop_name);
       }
 
+      renderPipeline(data.counts || {});
+      renderKpis(data.kpis, data.stats || {});
+      renderPriorities(data.priorities || []);
+      renderHealth(data.businessHealth, data.kpis?.satisfaction);
+      renderAiPerf(data.aiPerformance);
+      renderTechPerf(data.technicianPerformance);
       renderRevenueChart(data.revenueChart || []);
-      renderActivityFeed(data.activityFeed || []);
-      renderCustomerHistory(data.customerHistory || []);
+      renderTimeline(data.activityFeed || []);
 
       allBookings = data.bookings || [];
       const total = data.pagination?.total || allBookings.length;
@@ -425,18 +609,22 @@
       document.getElementById('prevBtn').disabled = (data.pagination?.page || 1) <= 1;
       document.getElementById('nextBtn').disabled = (data.pagination?.page || 1) >= (data.pagination?.totalPages || 1);
       renderBookings();
+      renderCustomerHistory(data.customerHistory || []);
       loadNotificationCount();
 
-      if (data.shop) {
-        document.getElementById('shopName').textContent = data.shop.shop_name || '';
-        localStorage.setItem('cc_shop', JSON.stringify({ shopName: data.shop.shop_name }));
+      // New-activity detection → live toast
+      const feed = data.activityFeed || [];
+      if (feed.length > lastActivityCount && lastActivityCount > 0) {
+        const fresh = feed.slice(0, feed.length - lastActivityCount);
+        fresh.forEach(a => pushLiveToast(a));
       }
-      // Hide loader once first load is complete
+      lastActivityCount = feed.length;
+      renderFeedStrip(feed);
+
       clearTimeout(loaderTimeout);
       if (loaderCtrl) clearInterval(loaderCtrl);
       const dashEl = document.getElementById('dashLoader');
       if (dashEl) {
-        // Mark all steps done
         document.querySelectorAll('.dash-load-step').forEach(el => { el.classList.remove('active'); el.classList.add('done'); });
         dashEl.style.opacity = '0';
         setTimeout(() => dashEl.remove(), 400);
@@ -452,6 +640,178 @@
     }
   }
 
+  // ── Greeting ───────────────────────────────────────────────────────────────
+  function setGreeting(name) {
+    const h = new Date().getHours();
+    const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+    document.getElementById('greeting').textContent = `${part}, ${name || 'there'} 👋`;
+    document.getElementById('todayDate').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  // ── KPI cards ──────────────────────────────────────────────────────────────
+  function renderKpis(k, stats) {
+    if (!k) return;
+    const revEl = document.getElementById('kpi-revenue-today');
+    countUp(revEl, k.revenueToday || 0, v => fmtMoney(v));
+
+    const d = document.getElementById('kpi-revenue-delta');
+    const dp = k.revenueDeltaPct || 0;
+    d.className = 'delta ' + (dp > 0 ? 'up' : dp < 0 ? 'down' : 'flat');
+    d.textContent = dp > 0 ? `▲ ${dp}%` : dp < 0 ? `▼ ${Math.abs(dp)}%` : '— vs yesterday';
+
+    const mEl = document.getElementById('kpi-revenue-month');
+    mEl.textContent = k.monthlyRevenue != null ? fmtMoney(k.monthlyRevenue) : (stats.monthlyRevenue != null ? fmtMoney(stats.monthlyRevenue) : '—');
+    if (k.monthGrowthPct != null) {
+      mEl.textContent += ` · ${k.monthGrowthPct > 0 ? '+' : ''}${k.monthGrowthPct}%`;
+    }
+
+    countUp(document.getElementById('kpi-bookings-today'), k.todayBookings || stats.todayBookings || 0, v => v);
+    document.getElementById('kpi-bookings-month').textContent = (k.monthBookings || stats.monthBookings || 0) + ' jobs';
+    countUp(document.getElementById('kpi-ai-convos'), k.aiConversationsToday || 0, v => v);
+    document.getElementById('kpi-ai-bookings').textContent = (k.aiBookingsToday || 0) + ' jobs';
+    countUp(document.getElementById('kpi-hours-saved'), k.hoursSavedToday || 0, v => fmtHours(v), 1);
+    document.getElementById('kpi-avg-response').textContent = k.avgResponseSeconds ? `~${k.avgResponseSeconds}s` : '—';
+  }
+
+  function countUp(el, target, formatter, decimals) {
+    if (!el) return;
+    const t = Number(target || 0);
+    const fmtFn = formatter || (v => v);
+    if (t === 0) { el.textContent = fmtFn(0); return; }
+    const dur = 700;
+    const start = performance.now();
+    function frame(now) {
+      const p = Math.min(1, (now - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const val = decimals ? (t * eased).toFixed(decimals) : Math.round(t * eased);
+      el.textContent = fmtFn(val);
+      if (p < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ── Today's Priorities ─────────────────────────────────────────────────────
+  function renderPriorities(list) {
+    const el = document.getElementById('priorityList');
+    document.getElementById('priorityCount').textContent = list.length;
+    if (!list.length) { el.innerHTML = '<div class="empty" style="padding:16px">All clear — nothing needs attention 🎉</div>'; return; }
+    el.innerHTML = list.map((p, i) => `
+      <div class="priority-item ${p.level || 'yellow'}" onclick="priorityAction(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){priorityAction(${i})}" style="cursor:pointer">
+        <span class="p-dot"></span>
+        <span class="p-text"><strong>${p.count}</strong> · ${esc(p.text)}</span>
+        ${p.action ? `<span class="p-action">${esc(p.action)}</span>` : ''}
+      </div>`).join('');
+    window.__priorities = list;
+  }
+
+  function priorityAction(i) {
+    const p = (window.__priorities || [])[i];
+    if (!p) return;
+    if (p.filter) filterBookings(p.filter);
+    const target = p.scrollTo === 'widgets' ? document.getElementById('widgets') : document.getElementById('bookingsHead');
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // ── Pipeline (booking status counts) ───────────────────────────────────────
+  function renderPipeline(counts) {
+    const map = { open: counts.open, accepted: counts.accepted, assigned: counts.assigned, on_the_way: counts.on_the_way, arrived: counts.arrived, completed: counts.completed };
+    let total = 0;
+    Object.values(counts).forEach(v => { if (v != null) total += v; });
+    document.getElementById('pipe-all').textContent = total;
+    Object.keys(map).forEach(k => {
+      const el = document.getElementById('pipe-' + k);
+      if (el) el.textContent = map[k] || 0;
+    });
+  }
+
+  // ── Business Health ────────────────────────────────────────────────────────
+  function renderHealth(h, satisfaction) {
+    if (!h) return;
+    const score = h.score || 0;
+    document.getElementById('healthScore').textContent = score;
+    const ring = document.getElementById('healthRing');
+    const C = 238.76;
+    const color = score >= 90 ? 'var(--green)' : score >= 75 ? 'var(--blue)' : score >= 60 ? 'var(--yellow)' : 'var(--red)';
+    ring.style.stroke = color;
+    setTimeout(() => { ring.style.strokeDashoffset = C - (C * score / 100); }, 60);
+
+    const label = document.getElementById('healthLabel');
+    const tagClass = score >= 90 ? 'excellent' : score >= 75 ? 'great' : score >= 60 ? 'fair' : 'risk';
+    label.innerHTML = `${esc(h.label || '—')}<span class="tag ${tagClass}">${tagClass === 'risk' ? 'At Risk' : tagClass === 'excellent' ? 'Excellent' : tagClass === 'great' ? 'Great' : 'Fair'}</span>`;
+
+    const meta = document.getElementById('healthMeta');
+    const parts = [];
+    const sat = Number(satisfaction || 0);
+    if (sat > 0) parts.push(`⭐ <b>${sat.toFixed(1)}</b> customer satisfaction`);
+    parts.push(h.updatedAt ? 'Updated ' + getTimeAgo(new Date(h.updatedAt)) : 'Based on live business data');
+    meta.innerHTML = parts.join(' · ');
+    document.getElementById('healthUpdated').textContent = h.label || '';
+
+    const checks = document.getElementById('healthChecks');
+    checks.innerHTML = (h.checks || []).map(c => `
+      <div class="h-check ${c.ok ? 'ok' : 'bad'}">
+        <span class="h-ico">${c.ok ? '✓' : '✕'}</span><span>${esc(c.label)}</span>
+      </div>`).join('');
+  }
+
+  // ── AI Performance ─────────────────────────────────────────────────────────
+  function renderAiPerf(a) {
+    if (!a) return;
+    const set = (id, v, unit) => { const el = document.getElementById(id); if (el) el.innerHTML = v + (unit ? `<span class="unit"> ${unit}</span>` : ''); };
+    set('ai-convos-today', a.conversationsToday || 0);
+    document.getElementById('ai-convos-month').textContent = (a.conversationsMonth || 0) + ' this month';
+    set('ai-bookings-today', a.bookingsCreatedToday || 0);
+    document.getElementById('ai-bookings-month').textContent = (a.bookingsCreatedMonth || 0) + ' this month';
+    set('ai-transfers-today', a.humanTransfersToday || 0);
+    document.getElementById('ai-transfers-month').textContent = (a.humanTransfersMonth || 0) + ' this month';
+    set('ai-hours-today', fmtHours(a.hoursSavedToday), 'saved');
+    document.getElementById('ai-hours-month').textContent = fmtHours(a.hoursSavedMonth) + ' this month';
+    set('ai-success-rate', (a.successRate || 0) + '%');
+    set('ai-avg-response', a.avgResponseSeconds ? '~' + a.avgResponseSeconds + 's' : '—');
+    document.getElementById('aiPerfSub').textContent = '24/7 on WhatsApp';
+  }
+
+  // ── Technician Performance ─────────────────────────────────────────────────
+  function renderTechPerf(tp) {
+    if (!tp) return;
+    const top = tp.top;
+    const list = tp.list || [];
+    const freeCount = list.filter(t => !t.busy).length;
+    document.getElementById('techFreeBadge').textContent = `${freeCount} of ${list.length} free`;
+
+    const topEl = document.getElementById('techTop');
+    if (top && top.name && top.name !== '—') {
+      topEl.innerHTML = `
+        <div class="tech-avatar">${esc(initials(top.name))}</div>
+        <div>
+          <div class="tt-name">👑 ${esc(top.name)}</div>
+          <div class="tt-sub"><span class="star">${stars(top.rating)}</span> ${top.rating ? top.rating.toFixed(1) : '—'} · ${top.busy ? 'On a job' : 'Available'}</div>
+        </div>
+        <div class="tt-stats"><div class="rev">${fmtMoney(top.revenue)}</div><div class="n">${top.repairs || 0} repairs this month</div></div>`;
+      topEl.style.display = 'flex';
+    } else { topEl.style.display = 'none'; }
+
+    const listEl = document.getElementById('techList');
+    if (!list.length) { listEl.innerHTML = '<div class="empty" style="padding:12px">No technicians added yet</div>'; return; }
+    listEl.innerHTML = list.slice(0, 7).map((t, i) => `
+      <div class="tech-row">
+        <span class="t-rank ${i === 0 ? 'top' : ''}">${i === 0 ? '🏆' : i + 1}</span>
+        <span class="t-av">${esc(initials(t.name))}</span>
+        <span class="t-name">${esc(t.name)}</span>
+        <span class="t-stat"><b>${t.repairs || 0}</b> jobs · <b>${fmtMoney(t.revenue)}</b></span>
+        <span class="busy-dot ${t.busy ? 'busy' : 'free'}" title="${t.busy ? 'On a job' : 'Available'}"></span>
+      </div>`).join('');
+  }
+
+  function initials(name) {
+    return String(name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  }
+  function stars(r) {
+    const n = Math.round(r || 0);
+    return '★'.repeat(Math.max(0, Math.min(5, n))) + '☆'.repeat(Math.max(0, 5 - Math.min(5, n)));
+  }
+
+  // ── Revenue chart ──────────────────────────────────────────────────────────
   function renderRevenueChart(chart) {
     const el = document.getElementById('revenueChart');
     const labels = document.getElementById('chartLabels');
@@ -459,38 +819,127 @@
     const maxRev = Math.max(...chart.map(d => d.revenue), 1);
     el.innerHTML = chart.map(d => {
       const h = Math.max(4, (d.revenue / maxRev) * 110);
-      return `<div class="chart-bar${d.revenue > 0 ? ' has-value' : ''}" style="height:${h}px" title="${new Date(d.date).toLocaleDateString('en-IN')}: ${isDemo ? fmt(d.revenue) : '$' + d.revenue.toFixed(2)}"></div>`;
+      return `<div class="chart-bar${d.revenue > 0 ? ' has-value' : ''}" style="height:${h}px" title="${new Date(d.date).toLocaleDateString('en-IN')}: ${fmtMoney(d.revenue)}"></div>`;
     }).join('');
     const first = chart[0]?.date ? new Date(chart[0].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
     const last = chart[chart.length - 1]?.date ? new Date(chart[chart.length - 1].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
     labels.innerHTML = `<span>${first}</span><span>${last}</span>`;
+    const total30 = chart.reduce((s, d) => s + (d.revenue || 0), 0);
+    document.getElementById('chartMonthBadge').textContent = fmtMoney(total30) + ' total';
   }
 
-  function renderActivityFeed(feed) {
+  // ── Business Timeline ──────────────────────────────────────────────────────
+  const TL_META = {
+    booking_created:       { icon: '📅', cls: 'booking', title: (a) => `New booking · ${esc(a.serviceType || 'Service')}` },
+    ai_booked_service:     { icon: '🤖', cls: 'ai', title: (a) => `AI booked ${esc(a.serviceType || 'a job')} via WhatsApp` },
+    payment_received:      { icon: '💰', cls: 'money', title: () => 'Payment received' },
+    job_completed:         { icon: '✅', cls: 'done', title: () => 'Repair completed' },
+    customer_reviewed:     { icon: '⭐', cls: 'star', title: () => 'Customer left a review' },
+    technician_assigned:   { icon: '👨‍🔧', cls: 'tech', title: (a) => `Technician ${esc(a.newValue || 'assigned')} assigned` },
+    invoice_sent:          { icon: '📄', cls: 'tech', title: () => 'Invoice sent' },
+    rescheduled:           { icon: '🕐', cls: 'alert', title: () => 'Booking rescheduled' },
+    customer_called:       { icon: '📞', cls: 'tech', title: () => 'Customer called in' },
+    status_change:         { icon: '🔁', cls: 'tech', title: (a) => `Status: ${esc(a.oldValue || '')} → ${esc(a.newValue || '')}` },
+    priority_change:       { icon: '⚠️', cls: 'alert', title: () => 'Priority changed' },
+    human_handoff:         { icon: '🤝', cls: 'alert', title: () => 'Conversation transferred to team' },
+  };
+  const DEFAULT_TL = { icon: '🔔', cls: 'tech', title: (a) => esc((a.action || 'update').replace(/_/g, ' ')) };
+
+  function renderTimeline(feed) {
     const el = document.getElementById('activityFeed');
     if (!feed.length) { el.innerHTML = '<div class="empty">No recent activity</div>'; return; }
-    el.innerHTML = feed.slice(0, 10).map(a => {
-      const actionLabel = a.action.replace(/_/g, ' ');
-      const timeAgo = getTimeAgo(new Date(a.createdAt));
-      return `<div class="activity-item">
-        <div class="activity-dot ${a.action}"></div>
-        <div><div class="activity-text"><strong>#${a.bookingId}</strong> ${actionLabel}: ${esc(a.oldValue || '')} → ${esc(a.newValue || '')}</div>
-        <div class="activity-time">${esc(a.customerName || a.customerNumber)} · ${timeAgo}</div></div>
+    el.innerHTML = feed.slice(0, 8).map(a => {
+      const meta = TL_META[a.action] || DEFAULT_TL;
+      const name = a.customerName || a.customerNumber || '';
+      const sub = a.action === 'payment_received' && a.newValue
+        ? `<b>${esc(a.newValue)}</b> from ${esc(name)}`
+        : `<b>${esc(name)}</b>${a.serviceType ? ` · ${esc(a.serviceType)}` : ''}${a.notes ? ` · ${esc(a.notes)}` : ''}`;
+      return `<div class="tl-item ${meta.cls}">
+        <div class="tl-head"><span class="tl-ico">${meta.icon}</span>${meta.title(a)}</div>
+        <div class="tl-sub">${sub}</div>
+        <div class="tl-time">${getTimeAgo(new Date(a.createdAt))}</div>
       </div>`;
     }).join('');
   }
 
+  function renderFeedStrip(feed) {
+    const el = document.getElementById('feedStrip');
+    if (!feed || !feed.length) { el.innerHTML = ''; return; }
+    el.innerHTML = feed.slice(0, 6).map(a => {
+      const meta = TL_META[a.action] || DEFAULT_TL;
+      return `<div class="feed-chip"><span class="fc-ico">${meta.icon}</span><span class="fc-t">${esc(a.customerName || a.serviceType || a.action.replace(/_/g, ' '))}</span></div>`;
+    }).join('');
+  }
+
+  // ── Live toasts ────────────────────────────────────────────────────────────
+  function pushLiveToast(a) {
+    const meta = TL_META[a.action] || DEFAULT_TL;
+    const stack = document.getElementById('toastStack');
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = `
+      <span class="t-ico">${meta.icon}</span>
+      <div style="flex:1">
+        <div class="t-title">${meta.title(a)}</div>
+        <div class="t-body"><b>${esc(a.customerName || 'Customer')}</b>${a.serviceType ? ` · ${esc(a.serviceType)}` : ''}${a.area ? ` · ${esc(a.area)}` : ''}</div>
+        <div class="t-time">just now</div>
+      </div>
+      <span class="t-x">✕</span>`;
+    t.onclick = () => { t.classList.remove('show'); setTimeout(() => t.remove(), 350); };
+    stack.appendChild(t);
+    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
+    // Keep max 4 toasts
+    while (stack.children.length > 4) stack.removeChild(stack.firstChild);
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 350); }, 6000);
+  }
+
+  // Demo live simulation — the business keeps moving while you watch
+  const DEMO_SERVICES = ['AC Repair & Service', 'Washing Machine Repair', 'Refrigerator Not Cooling', 'AC Gas Refill', 'Geyser Repair', 'Microwave Repair', 'RO Purifier Service', 'TV Screen Issue'];
+  const DEMO_AREAS = ['Indiranagar', 'Koramangala', 'Whitefield', 'HSR Layout', 'Jayanagar', 'Marathahalli', 'JP Nagar', 'Bellandur'];
+  const DEMO_NAMES = ['Aarav Mehta', 'Sneha Kulkarni', 'Ravi Verma', 'Priya Nair', 'Arjun Reddy', 'Kavya Iyer', 'Mohammed Khan', 'Divya Sharma', 'Sanjay Patel', 'Ananya Rao'];
+  const DEMO_TECHS = ['Rajesh Kumar', 'Suresh Patel', 'Amit Singh', 'Deepa Iyer', 'Prakash Rao', 'Kavita Nair'];
+  const DEMO_ACTIONS = ['booking_created', 'ai_booked_service', 'payment_received', 'technician_assigned', 'job_completed'];
+  let demoSimIdx = 0;
+
+  function simulateLiveEvent() {
+    const action = DEMO_ACTIONS[demoSimIdx++ % DEMO_ACTIONS.length];
+    const name = DEMO_NAMES[demoSimIdx % DEMO_NAMES.length];
+    const event = {
+      action,
+      customerName: name,
+      serviceType: DEMO_SERVICES[demoSimIdx % DEMO_SERVICES.length],
+      area: DEMO_AREAS[demoSimIdx % DEMO_AREAS.length],
+      newValue: action === 'payment_received' ? '₹' + (Math.floor(Math.random() * 2500) + 800) : action === 'technician_assigned' ? DEMO_TECHS[demoSimIdx % DEMO_TECHS.length] : null,
+      createdAt: new Date().toISOString(),
+    };
+    pushLiveToast(event);
+    // Prepend into the visible timeline for the "business is moving" feeling
+    const el = document.getElementById('activityFeed');
+    const meta = TL_META[action] || DEFAULT_TL;
+    const sub = action === 'payment_received'
+      ? `<b>${esc(event.newValue)}</b> from ${esc(name)}`
+      : `<b>${esc(name)}</b> · ${esc(event.serviceType)}${event.area ? ` · ${esc(event.area)}` : ''}`;
+    const item = document.createElement('div');
+    item.className = 'tl-item ' + meta.cls;
+    item.style.animation = 'none';
+    item.innerHTML = `<div class="tl-head"><span class="tl-ico">${meta.icon}</span>${meta.title(event)}</div><div class="tl-sub">${sub}</div><div class="tl-time">just now</div>`;
+    el.prepend(item);
+    while (el.children.length > 8) el.removeChild(el.lastChild);
+  }
+
+  // ── Customer history ───────────────────────────────────────────────────────
   function renderCustomerHistory(customers) {
     const el = document.getElementById('customerTable');
     document.getElementById('custBadge').textContent = customers.length;
     if (!customers.length) { el.innerHTML = '<div class="empty">No customer data yet</div>'; return; }
     el.innerHTML = `<table><thead><tr><th>Customer</th><th>Phone</th><th>Visits</th><th>Total Spent</th><th>Last Visit</th></tr></thead><tbody>${
-      customers.map(c => `<tr><td>${esc(c.name || 'Unknown')}</td><td>${esc(c.phone)}</td><td>${c.visits}</td><td>${isDemo ? fmt(c.totalSpent) : '$' + c.totalSpent.toFixed(2)}</td><td>${new Date(c.lastVisit).toLocaleDateString()}</td></tr>`).join('')
+      customers.map(c => `<tr><td>${esc(c.name || 'Unknown')}</td><td>${esc(c.phone)}</td><td>${c.visits}</td><td>${fmtMoney(c.totalSpent)}</td><td>${new Date(c.lastVisit).toLocaleDateString()}</td></tr>`).join('')
     }</tbody></table>`;
   }
 
   function getTimeAgo(date) {
     const s = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (isNaN(s) || s < 0) return 'just now';
     if (s < 60) return 'just now';
     if (s < 3600) return Math.floor(s / 60) + 'm ago';
     if (s < 86400) return Math.floor(s / 3600) + 'h ago';
@@ -507,7 +956,9 @@
   function filterBookings(status) {
     currentFilter = status; currentPage = 1;
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`.tab[data-filter="${status}"]`).classList.add('active');
+    document.querySelector(`.tab[data-filter="${status}"]`)?.classList.add('active');
+    document.querySelectorAll('.pipe-chip').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.pipe-chip[data-filter="${status}"]`)?.classList.add('active');
     loadDashboard();
   }
 
@@ -556,12 +1007,12 @@
   // ── Guided Tour for Demo Mode ──────────────────────────────────────────────
   const TOUR_STEPS = [
     { title: '👋 Welcome to CoolCare AI', body: 'This is a simulated repair business using CoolCare. Everything you see is demo data — no real customers or businesses are shown here.', selector: null },
-    { title: '📊 Dashboard at a Glance', body: 'Here you can see today\'s jobs, pending bookings, completed services, and revenue. These cards give an instant overview of your business.', selector: '#stats' },
+    { title: '💵 Money & Motion', body: 'These are the numbers that matter — revenue today, bookings coming in, conversations your AI handled, and the hours it saved your team.', selector: '#kpiGrid' },
+    { title: '🎯 Today\'s Priorities', body: 'Red needs you now, yellow can wait, green is going well. This is your morning routine — open it, scan it, act on it.', selector: '#priorities' },
+    { title: '🩺 Business Health', body: 'One number that tells you if your business is running well — AI active, no overdue repairs, fast responses, revenue growing.', selector: '#widgets' },
+    { title: '🤖 AI Performance', body: 'Every conversation your AI handles is time you don\'t spend on the phone. Bookings created, transfers, hours saved — proof your AI is earning its keep.', selector: '#widgets' },
+    { title: '📈 Live Business Feed', body: 'The timeline shows every booking, payment, and completion as it happens. Watch your business move in real time.', selector: '#activityFeed' },
     { title: '📅 Bookings Management', body: 'Every WhatsApp enquiry from your customers appears here as a booking. Accept, assign, and track each job through completion.', selector: '.tabs' },
-    { title: '🤖 AI Conversations', body: 'The AI assistant handles customer enquiries on WhatsApp 24/7. It answers questions, provides quotes, and books appointments automatically.', selector: null },
-    { title: '🔧 Technician Management', body: 'Assign jobs to your technicians with one click. Track their location, completion status, and customer ratings in real time.', selector: '.stat-card.assigned' },
-    { title: '📈 Reports & Analytics', body: 'Track revenue, booking trends, and technician performance. The chart shows your last 30 days of earnings.', selector: '#revenueChart' },
-    { title: '⚙️ Settings & AI Config', body: 'Connect WhatsApp, configure your AI assistant, set working hours, and manage your team from Settings.', selector: null },
     { title: '🎉 You\'re All Set!', body: 'Ready to automate your own repair business? Click "Get Started" to create your own account and start accepting bookings from WhatsApp today!', selector: null, isLast: true },
   ];
 
@@ -647,6 +1098,7 @@
 
   loadDashboard();
   setInterval(loadDashboard, 30000);
+  if (isDemo) setInterval(simulateLiveEvent, 16000);
 </script>
 </body>
 </html>
