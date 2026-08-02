@@ -1904,7 +1904,7 @@ function buildDemoSandboxStatusResponse() {
       created_at: ago(1),
     },
     businessHours: DEMO.shop.business_hours,
-    greetingMessage: "Hi! 👋 Welcome! Which appliance needs repair?",
+    greetingMessage: `Hi 👋 Welcome to ${DEMO.shop.shop_name}!\nI'm your AI assistant.\nHow can I help you today?`,
     promptVersion: "llama-3.3-70b-versatile · engine v1.0",
     isOpen: true,
     isDemo: true,

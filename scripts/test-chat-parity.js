@@ -198,21 +198,23 @@ function createFakeDb() {
       bookingSeq += 1;
       const id = bookingSeq;
       // Engine INSERT values:
-      //   [customer_number, customer_name, address, service_type, area,
-      //    urgency, image_urls, file_urls, repair_shop_id, channel]
+      //   [customer_number, customer_name, customer_phone, address,
+      //    service_type, area, urgency, image_urls, file_urls,
+      //    repair_shop_id, channel]
       // ('open' status and 'neutral' sentiment are literals in the SQL, so the
-      // shop id is at index 8 and the channel/source at index 9.)
+      // shop id is at index 9 and the channel/source at index 10.)
       bookings.push({
         id,
         customer_number: cn,
         customer_name: values[1],
-        address: values[2],
-        service_type: values[3],
-        area: values[4],
-        urgency: values[5],
+        customer_phone: values[2],
+        address: values[3],
+        service_type: values[4],
+        area: values[5],
+        urgency: values[6],
         status: "open",
-        repair_shop_id: values[8] ?? null,
-        source: values[9] ?? "whatsapp",
+        repair_shop_id: values[9] ?? null,
+        source: values[10] ?? "whatsapp",
         technician_name: null,
         technician_id: null,
         estimated_cost: null,
@@ -301,9 +303,15 @@ global.fetch = async function fakeFetch(url, options) {
     const m = prompt.match(/Message: "([^"]*)"/);
     return jsonResponse({ intent: fakeIntent(m ? m[1] : "") });
   }
-  if (prompt.includes("Extract appliance")) return jsonResponse({ value: "AC" });
-  if (prompt.includes("Extract issue")) return jsonResponse({ value: "not cooling" });
-  if (prompt.includes("Extract full address")) return jsonResponse({ value: "123 Main St" });
+  if (prompt.includes("Recognize synonyms")) return jsonResponse({ value: "AC" });
+  if (prompt.includes("problem/issue description")) {
+    // Only produce an issue when the user text actually describes one —
+    // appliance-only messages ("AC") must NOT yield a fake issue.
+    const m = prompt.match(/User: "([^"]*)"/);
+    const userText = m ? m[1] : "";
+    return jsonResponse({ value: /not|no\s|broken|leak|spin|cool|heat|water|error|noise|stopped|working/i.test(userText) ? "not cooling" : null });
+  }
+  if (prompt.includes("complete address")) return jsonResponse({ value: "123 Main St", area: "Downtown" });
   if (prompt.includes("Extract area/locality")) return jsonResponse({ value: "Downtown" });
   if (prompt.includes("Extract service date preference")) {
     // Extract the date the customer actually typed — makes the reschedule test
@@ -325,9 +333,11 @@ after(() => {
 const engine = require("../api/_lib/conversation-engine");
 const { handleMessage, saveState, isDuplicateRequest, STATUS, MODE, t } = engine;
 
+const WELCOME = t("en").welcome("CoolCare");
 const ASK_PHOTO = t("en").askPhoto;
 const ASK_NAME = t("en").askName;
-const WELCOME = t("en").welcome;
+const ASK_PHONE = t("en").askPhone;
+const ASK_DATE = t("en").askDate;
 const FALLBACK = t("en").fallback;
 const HUMAN_HANDOFF = t("en").humanHandoff;
 const CANCELLED = t("en").cancelled;
@@ -337,10 +347,23 @@ function webOpts() {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// The redesigned conversation flow, shared by both channels: greeting → issue →
+// photo → name → address → phone → date → summary → confirm. The ONLY input
+// that differs is the phone step — Website asks for the number, WhatsApp
+// auto-uses the sender's number (confirmed with "same").
+function bookingInputs(channel) {
+  const isWhatsApp = channel === "whatsapp";
+  return [
+    "AC", "It's not cooling", "no photo", "Ravi", "123 Main St, Downtown",
+    isWhatsApp ? "same" : "9876543210",
+    "today", "yes",
+  ];
+}
+
 // Drive a customer through the full booking flow, returning the last reply and
 // the resulting state (which has booking_id + status BOOKED).
 async function completeBooking(cn, opts) {
-  const inputs = ["AC", "It's not cooling", "not cooling", "no photo", "Ravi", "123 Main St", "Downtown", "today", "yes"];
+  const inputs = bookingInputs(opts.channel || "whatsapp");
   let reply = "";
   for (const input of inputs) {
     reply = await handleMessage(cn, input, "text", null, opts);
@@ -370,34 +393,47 @@ test("ALL photo-skip variants continue the booking flow (never the fallback)", a
   }
 });
 
-test("website chat and whatsapp produce IDENTICAL replies for the same inputs", async () => {
+test("website chat and whatsapp use IDENTICAL flow (only the phone question differs)", async () => {
   const wa = "wa_parity_test_1";
   const web = "web_parity_test_1";
-  // NOTE: the engine consumes one field per turn, and the very first message
-  // only starts the session (it returns the welcome). The photo step also
-  // consumes one turn before the name step, so the sequence below matches the
-  // real state machine 1:1.
-  const inputs = ["AC", "It's not cooling", "not cooling", "no photo", "Ravi", "123 Main St", "Downtown", "today", "yes"];
-
+  // Same conversation on both channels — the ONLY divergence is the phone step:
+  // Website asks for the number, WhatsApp auto-uses the sender's number.
+  const shared = ["AC", "It's not cooling", "no photo", "Ravi", "123 Main St, Downtown"];
   const waReplies = [];
   const webReplies = [];
-  for (const input of inputs) {
+  for (const input of [...shared, "same", "today", "yes"]) {
     waReplies.push(await handleMessage(wa, input, "text", null, { channel: "whatsapp" }));
+  }
+  for (const input of [...shared, "9876543210", "today", "yes"]) {
     webReplies.push(await handleMessage(web, input, "text", null, webOpts()));
   }
 
-  // Each channel creates its own booking, so the auto-incrementing Ref numbers
-  // legitimately differ (#1 vs #2). Normalize refs — the BEHAVIOR must be
-  // identical, the numeric ids are independent per channel.
-  const norm = (s) => String(s).replace(/#\d+/g, "#N");
-  assert.deepEqual(webReplies.map(norm), waReplies.map(norm), "website replies must EXACTLY match whatsapp replies (modulo independent booking refs)");
+  // The first reply greets the customer AND continues the flow when the very
+  // first message names an appliance — identical on both channels.
+  assert.ok(waReplies[0].includes(WELCOME), "first reply includes the branded greeting");
+  assert.ok(waReplies[0].includes(t("en").whatProblem({ appliance: "AC" })), "first reply continues the flow with the AC problem question");
 
-  // Spot-check the booking flow actually progressed (not fallback-everywhere).
-  assert.equal(waReplies[0], WELCOME, "first message should be the welcome");
-  assert.equal(waReplies[1], t("en").whatProblem({ appliance: "AC" }), "second should ask the issue");
-  assert.equal(waReplies[2], ASK_PHOTO, "third should ask for the optional photo");
-  assert.equal(waReplies[3], ASK_NAME, "no photo at the photo step continues to the name");
-  assert.ok(waReplies[8].includes("Booking confirmed"), "yes at confirmation should create the booking");
+  // Steps 1-3 (photo, name, address) must be byte-identical.
+  assert.deepEqual(webReplies.slice(1, 4), waReplies.slice(1, 4), "issue/photo/name/address steps must EXACTLY match across channels");
+  assert.equal(waReplies[1], ASK_PHOTO, "after the issue we ask for the optional photo");
+  assert.equal(waReplies[2], ASK_NAME, "no photo at the photo step continues to the name");
+
+  // The phone step is the ONLY intended difference between the two channels.
+  assert.equal(waReplies[4], t("en").askPhoneWhatsApp(wa), "whatsapp auto-uses the sender number (changeable)");
+  assert.equal(webReplies[4], ASK_PHONE, "website asks for the mobile number");
+
+  // Steps after the phone step must match again (date → summary → confirm).
+  assert.equal(webReplies[5], waReplies[5], "date step must match");
+  assert.equal(waReplies[5], ASK_DATE, "after the phone step we ask for the service date");
+  assert.ok(waReplies[6].includes("Booking Summary"), "summary shown before confirmation");
+  assert.ok(webReplies[6].includes("Booking Summary"), "summary shown before confirmation");
+  assert.ok(waReplies[6].includes("Reply YES"), "confirmation prompt uses YES/NO");
+  assert.ok(webReplies[6].includes("Reply YES"), "confirmation prompt uses YES/NO");
+
+  // Confirmation is identical modulo independent booking refs (#1 vs #2).
+  const norm = (s) => String(s).replace(/#\d+/g, "#N");
+  assert.equal(norm(webReplies[7]), norm(waReplies[7]), "confirmation must be identical (modulo independent booking refs)");
+  assert.ok(waReplies[7].includes("Booking confirmed"), "yes at confirmation should create the booking");
 });
 
 test("image handling is shared: an image at the photo step advances identically", async () => {
@@ -412,6 +448,67 @@ test("image handling is shared: an image at the photo step advances identically"
 
   assert.equal(webReply, waReply, "image handling must be identical across channels");
   assert.ok(waReply.includes("Thanks for the photo"), "photo at the photo step should advance the flow");
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONVERSATION REDESIGN — natural, human, no duplicate questions
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("first message with appliance AND issue is handled in ONE turn (no duplicate questions)", async () => {
+  const cn = "wa_first_msg";
+  const reply = await handleMessage(cn, "My washing machine is not spinning", "text", null, { channel: "whatsapp" });
+  assert.ok(reply.includes(WELCOME), "first reply greets the customer");
+  assert.ok(reply.includes(t("en").issueMoreDetail), "empathetic follow-up asks for a little more detail");
+  assert.ok(!reply.toLowerCase().includes("which appliance"), "must never re-ask the appliance");
+  const st = await engine.loadState(cn);
+  assert.equal(st.appliance, "Washing Machine", "appliance silently extracted from the first message");
+  assert.ok(st.issue, "issue silently extracted from the same message");
+  assert.equal(st.status, STATUS.COLLECTING_ISSUE, "asking for more detail — never a duplicate question");
+});
+
+test("appliance synonyms are recognized deterministically (no LLM needed)", async () => {
+  const cases = [
+    ["my fridge is not cooling", "Refrigerator"],
+    ["split ac not working", "AC"],
+    ["front load washer issue", "Washing Machine"],
+    ["ro purifier", "RO"],
+    ["smart tv", "TV"],
+    ["water heater leaking", "Geyser"],
+  ];
+  for (const [msg, expected] of cases) {
+    const cn = "syn_" + expected.replace(/\s+/g, "_").toLowerCase();
+    await handleMessage(cn, msg, "text", null, { channel: "whatsapp" });
+    const st = await engine.loadState(cn);
+    assert.equal(st.appliance, expected, `"${msg}" should map to ${expected}`);
+    assert.ok(st.status === STATUS.COLLECTING_ISSUE || st.status === STATUS.COLLECTING_PHOTO, "flow advanced past the appliance");
+  }
+});
+
+test("whatsapp auto-fills the sender number and allows changing it", async () => {
+  const cn = "919876543210";
+  const inputs = ["AC", "It's not cooling", "no photo", "Ravi", "123 Main St, Downtown"];
+  let reply = "";
+  for (const input of inputs) {
+    reply = await handleMessage(cn, input, "text", null, { channel: "whatsapp" });
+  }
+  assert.ok(reply.includes("919876543210"), "sender number auto-filled into the phone question");
+
+  // The customer can swap the number instead of confirming it.
+  reply = await handleMessage(cn, "9988776655", "text", null, { channel: "whatsapp" });
+  const st = await engine.loadState(cn);
+  assert.equal(st.customer_phone, "9988776655", "customer can change the WhatsApp number");
+  assert.equal(st.status, STATUS.COLLECTING_DATE, "after the phone we ask for the service date");
+});
+
+test("customer phone is stored on the booking and in the summary", async () => {
+  const cn = "web_phone_booking";
+  const { state } = await completeBooking(cn, webOpts());
+  const booking = db.bookings.find((b) => b.customer_number === cn);
+  assert.equal(booking.customer_phone, "9876543210", "booking carries the customer phone");
+  assert.equal(state.customer_phone, "9876543210", "state carries the customer phone");
+  const summary = t("en").confirmBooking({ ...state, image_urls: [] });
+  assert.ok(summary.includes("9876543210"), "booking summary shows the phone");
+  assert.ok(summary.includes("Photo: Not Provided"), "summary reports the photo status");
 });
 
 test("human handoff is shared and identical across channels", async () => {
@@ -582,7 +679,7 @@ test("different customers / different texts are never suppressed", async () => {
 
 test("confirming twice cannot create two bookings (no double processing)", async () => {
   const cn = "wa_one_reply_test";
-  const inputs = ["AC", "It's not cooling", "not cooling", "no photo", "Ravi", "123 Main St", "Downtown", "today", "yes"];
+  const inputs = bookingInputs("whatsapp");
   for (const input of inputs) {
     await handleMessage(cn, input, "text", null, { channel: "whatsapp" });
   }
@@ -631,7 +728,7 @@ async function driveChannelMessage(cn, channel, shopId, text, messageType = "tex
 test("DASHBOARD: whatsapp bot writes bookings + WhatsApp Logs + analytics + notification", async () => {
   const cn = "wa_dash_test";
   const shopId = 555;
-  const inputs = ["AC", "It's not cooling", "not cooling", "no photo", "Ravi", "123 Main St", "Downtown", "today", "yes"];
+  const inputs = bookingInputs("whatsapp");
   for (const input of inputs) {
     await driveChannelMessage(cn, "whatsapp", shopId, input);
   }
@@ -645,7 +742,7 @@ test("DASHBOARD: whatsapp bot writes bookings + WhatsApp Logs + analytics + noti
 
   // whatsapp_conversations — the “WhatsApp Logs” page
   const logs = db.waLogs.filter((l) => l.customer_number === cn);
-  assert.ok(logs.length >= 18, "every inbound+outbound message must be logged (got " + logs.length + ")");
+  assert.ok(logs.length >= 16, "every inbound+outbound message must be logged (got " + logs.length + ")");
   assert.ok(logs.some((l) => l.direction === "inbound" && l.channel === "whatsapp"), "inbound rows logged with channel=whatsapp");
   assert.ok(logs.some((l) => l.direction === "outbound" && l.channel === "whatsapp"), "outbound rows logged with channel=whatsapp");
   assert.ok(logs.every((l) => l.repair_shop_id === shopId), "all log rows scoped to the shop");
@@ -665,7 +762,7 @@ test("DASHBOARD: whatsapp bot writes bookings + WhatsApp Logs + analytics + noti
 test("DASHBOARD: website bot writes the SAME rows with channel=website", async () => {
   const cn = "web_dash_test";
   const shopId = 777;
-  const inputs = ["AC", "It's not cooling", "not cooling", "no photo", "Ravi", "123 Main St", "Downtown", "today", "yes"];
+  const inputs = bookingInputs("website");
   for (const input of inputs) {
     await driveChannelMessage(cn, "website", shopId, input);
   }
@@ -676,7 +773,7 @@ test("DASHBOARD: website bot writes the SAME rows with channel=website", async (
   assert.equal(booking.source, "website", "booking source must be website");
 
   const logs = db.waLogs.filter((l) => l.customer_number === cn);
-  assert.ok(logs.length >= 18, "every inbound+outbound message must be logged");
+  assert.ok(logs.length >= 16, "every inbound+outbound message must be logged (got " + logs.length + ")");
   assert.ok(logs.some((l) => l.direction === "inbound" && l.channel === "website"));
   assert.ok(logs.some((l) => l.direction === "outbound" && l.channel === "website"));
   assert.ok(logs.every((l) => l.repair_shop_id === shopId));
@@ -694,9 +791,11 @@ test("DASHBOARD: website bot writes the SAME rows with channel=website", async (
 test("DASHBOARD: whatsapp and website produce IDENTICAL dashboard data shape", async () => {
   const wa = "wa_dash_parity";
   const web = "web_dash_parity";
-  const inputs = ["AC", "It's not cooling", "not cooling", "no photo", "Ravi", "123 Main St", "Downtown", "today", "yes"];
-  for (const input of inputs) {
+  // Same 8-message flow on each channel; only the phone input differs.
+  for (const input of bookingInputs("whatsapp")) {
     await driveChannelMessage(wa, "whatsapp", 1001, input);
+  }
+  for (const input of bookingInputs("website")) {
     await driveChannelMessage(web, "website", 1002, input);
   }
 
@@ -722,7 +821,7 @@ test("DASHBOARD: whatsapp and website produce IDENTICAL dashboard data shape", a
 test("DASHBOARD: human handoff writes human_handoff analytics + notification", async () => {
   const cn = "wa_handoff_dash";
   const shopId = 888;
-  const inputs = ["AC", "It's not cooling", "not cooling", "no photo", "Ravi", "123 Main St", "Downtown", "today", "yes"];
+  const inputs = bookingInputs("whatsapp");
   for (const input of inputs) {
     await driveChannelMessage(cn, "whatsapp", shopId, input);
   }

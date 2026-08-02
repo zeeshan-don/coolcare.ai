@@ -372,8 +372,14 @@ async function handlePost(request, response) {
       });
     }
     const aiSettings = await loadShopKnowledge(shopId);
+    // Branded greeting — same template the shared engine renders.
+    let businessName = widget.business_name || "CoolCare";
+    try {
+      const shopRows = await sql`SELECT shop_name FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+      if (shopRows[0]?.shop_name) businessName = shopRows[0].shop_name;
+    } catch (e) { /* fall back to widget/default name */ }
     const greeting = widget.welcome_message || aiSettings?.greeting_message ||
-      "Hi! 👋 Welcome! Which appliance needs repair?";
+      `Hi 👋 Welcome to ${businessName}!\nI'm your AI assistant.\nHow can I help you today?`;
     const isOpen = await isShopOpenNow(sql, shopId, aiSettings);
     return response.status(200).json({ visitorId, greeting, isOpen });
   }

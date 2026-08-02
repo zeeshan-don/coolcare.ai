@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS conversation_state (
   appliance     TEXT,   -- e.g. "Geyser", "Refrigerator", "AC"
   issue         TEXT,   -- e.g. "No hot water", "Not cooling"
   customer_name TEXT,
+  customer_phone TEXT,  -- technician contact number (WhatsApp sender or website input)
   address       TEXT,
   area          TEXT,
   urgency       TEXT,   -- e.g. "Today", "Tomorrow morning"
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   id SERIAL PRIMARY KEY,
   customer_number TEXT NOT NULL,
   customer_name TEXT,
+  customer_phone TEXT,
   address TEXT,
   service_type TEXT,
   area TEXT,

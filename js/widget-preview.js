@@ -289,6 +289,7 @@
     COLLECTING_PHOTO: 'Asking for photo…',
     COLLECTING_NAME: 'Collecting name…',
     COLLECTING_ADDRESS: 'Collecting address…',
+    COLLECTING_PHONE: 'Asking for phone…',
     COLLECTING_LOCALITY: 'Collecting area…',
     COLLECTING_DATE: 'Collecting date…',
     SELECTING_SLOT: 'Selecting slot…',

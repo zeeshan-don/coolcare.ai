@@ -1368,6 +1368,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS technician_notes TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS estimated_cost NUMERIC(10,2);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS final_cost NUMERIC(10,2);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS phone_number_id TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_phone TEXT;
 
 DO $$
 BEGIN
@@ -1442,6 +1443,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS final_cost NUMERIC(10,2);
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS repair_shop_id INTEGER
   REFERENCES repair_shops(id) ON DELETE SET NULL;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS phone_number_id TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS customer_phone TEXT;
 
 DO $$
 BEGIN
@@ -1585,6 +1587,7 @@ ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS human_handoff BOOLEAN NO
 ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS handoff_closed_at TIMESTAMPTZ;
 ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS ai_memory JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS selected_slot TIMESTAMPTZ;
+ALTER TABLE conversation_state ADD COLUMN IF NOT EXISTS customer_phone TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_conv_state_handoff ON conversation_state(repair_shop_id, human_handoff)
   WHERE human_handoff = true;
