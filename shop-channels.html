@@ -54,6 +54,8 @@
     .btn.green:hover{filter:brightness(1.1)}
     .btn.ghost{border-style:dashed}
     .btn.ghost:hover{border-color:var(--green);color:var(--green)}
+    .btn.preview{border-color:rgba(59,130,246,.45);color:#60a5fa}
+    .btn.preview:hover{background:rgba(59,130,246,.12);border-color:#3b82f6;color:#93c5fd}
     .btn .mini-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
     .future-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
     .future{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;text-align:center;position:relative;transition:border-color .2s}
@@ -148,12 +150,13 @@
     <div class="ch-actions">
       <button class="btn green" id="webEnable" onclick="toggleWebsiteChat(true)">Enable</button>
       <button class="btn" id="webDisable" style="display:none" onclick="toggleWebsiteChat(false)">Disable</button>
+      <button class="btn preview" id="webPreview" onclick="openWidgetPreview()">👁 Preview Widget</button>
       <a class="btn" href="/web-bot/shop-widget.html">🎨 Customize</a>
       <a class="btn ghost" href="/shop-sandbox.html">🧪 Open Developer Sandbox</a>
       <button class="btn" onclick="showEmbed()">Generate Embed Code</button>
     </div>
     <div class="embed-box" id="embedBox"><span id="embedCodeText"></span><button class="copy-btn" id="copyEmbedBtn" onclick="copyEmbed()" style="display:none">Copy</button></div>
-    <div class="empty-note">💡 Test the widget before publishing with the <a href="/shop-sandbox.html" style="color:var(--green);font-weight:600">Developer Sandbox</a> — it uses the real widget, real AI and real booking logic.</div>
+    <div class="empty-note">💡 Click <b style="color:var(--green)">Preview Widget</b> to test the <b>exact</b> widget your customers will embed — right here inside the dashboard. Real AI, real bookings, real technician assignment, real notifications. Watch everything live in the <b>Developer Panel</b>.</div>
   </div>
 
   <!-- ═══ Future ═══ -->
@@ -167,6 +170,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/js/widget-preview.js"></script>
 <script>
 const token = localStorage.getItem('cc_token');
 if (!token) window.location.href = '/login.html';
@@ -174,7 +178,8 @@ if (!token) window.location.href = '/login.html';
 const isDemo = localStorage.getItem('cc_is_demo') === 'true';
 if (isDemo) {
   document.getElementById('demoBanner').classList.add('show');
-  document.querySelectorAll('.btn').forEach(b => { if (b.tagName === 'BUTTON') b.disabled = true; });
+  // Preview stays available in demo (read-only testing, same as the sandbox)
+  document.querySelectorAll('.btn').forEach(b => { if (b.tagName === 'BUTTON' && b.id !== 'webPreview') b.disabled = true; });
 }
 
 function toggleMobileMenu() {
@@ -223,6 +228,19 @@ if (!shopId) {
   try { const s = JSON.parse(localStorage.getItem('cc_shop') || '{}'); if (s.id) shopId = s.id; } catch (e) {}
 }
 if (!shopId) shopId = 1;
+
+// ── Website Chat live preview (REAL widget, REAL AI, REAL bookings) ───────────
+// Boots the shared preview engine. "Preview Widget" opens a full-page preview
+// INSIDE this dashboard — the exact widget customers embed, driving the real
+// /api/chat → shared conversation engine. The collapsible Developer Panel shows
+// the live session (conversation state, booking id, technician, API status).
+if (window.WidgetPreview) {
+  window.WidgetPreview.init({ mode: 'overlay', shopId: shopId, token: token, isDemo: isDemo });
+}
+
+function openWidgetPreview() {
+  if (window.WidgetPreview) window.WidgetPreview.open();
+}
 
 // ── WhatsApp status ───────────────────────────────────────────────────────────
 async function loadWhatsApp() {
