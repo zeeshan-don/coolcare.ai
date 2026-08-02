@@ -188,6 +188,9 @@ module.exports = withErrorHandler(async (request, response) => {
   let messageType = incomingMessage.type || "text";
   let mediaData = null;
 
+  const requestId = "wa-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  console.log("[whatsapp] message", JSON.stringify({ requestId, from: customerNumber, type: messageType }));
+
   // Extract media data for images and documents
   if (messageType === "image" && incomingMessage.image) {
     customerText = incomingMessage.image.caption || "(sent an image)";
@@ -262,5 +265,6 @@ module.exports = withErrorHandler(async (request, response) => {
     return response.status(502).json({ error: "Could not send WhatsApp reply" });
   }
 
+  console.log("[whatsapp] reply sent", JSON.stringify({ requestId, from: customerNumber, replyLen: reply ? reply.length : 0 }));
   return response.status(200).json({ replied: true });
 });

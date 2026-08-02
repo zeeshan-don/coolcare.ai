@@ -163,9 +163,10 @@ const STATUS = {
 
 const COLLECTION_STEPS = [
   STATUS.COLLECTING_APPLIANCE, STATUS.COLLECTING_ISSUE,
-  STATUS.COLLECTING_NAME, STATUS.COLLECTING_ADDRESS,
-  STATUS.COLLECTING_LOCALITY, STATUS.COLLECTING_DATE,
-  STATUS.SELECTING_SLOT, STATUS.CONFIRMATION_PENDING,
+  STATUS.COLLECTING_PHOTO, STATUS.COLLECTING_NAME,
+  STATUS.COLLECTING_ADDRESS, STATUS.COLLECTING_LOCALITY,
+  STATUS.COLLECTING_DATE, STATUS.SELECTING_SLOT,
+  STATUS.CONFIRMATION_PENDING,
 ];
 
 const STEP_FIELD = {
@@ -490,6 +491,21 @@ function isHumanHandoffRequest(text) {
   return HUMAN_HANDOFF_KEYWORDS.some(kw => lower.includes(kw)) || lower.startsWith("human") || lower === "agent" || lower === "support";
 }
 
+// ─── Photo skip detection (optional-image step, no LLM) ──────────────────────
+// Accepts "no photo", "No photo", "NO PHOTO", "skip", "skip photo", "no",
+// "no picture" and "nope" — case-insensitive. Returns true only when the
+// visitor is declining the optional photo, so the booking flow can continue.
+function isPhotoSkip(text) {
+  const lower = String(text || "").toLowerCase().trim();
+  return (
+    lower === "no" ||
+    lower.includes("no photo") ||
+    lower.includes("skip") ||
+    lower.includes("no picture") ||
+    lower.includes("nope")
+  );
+}
+
 // ─── Name validation (regex, no LLM) ─────────────────────────────────────────
 function validateName(raw) {
   const trimmed = raw.trim();
@@ -748,11 +764,12 @@ async function handleMessage(customerNumber, userText, messageType, mediaData, o
   // ── Handle image/document messages ─────────────────────────────────────
   if (messageType === "image" && mediaData) {
     const existing = Array.isArray(state.image_urls) ? state.image_urls : [];
-    existing.push(mediaData.id || mediaData.link);
+    const imgRef = mediaData.id || mediaData.link;
+    if (existing.indexOf(imgRef) === -1) existing.push(imgRef); // avoid duplicate URLs on the booking
     await saveState(customerNumber, { image_urls: existing });
 
     if (currentStatus === STATUS.COLLECTING_PHOTO) {
-      const nextStatus = COLLECTION_STEPS[Math.max(0, COLLECTION_STEPS.indexOf(currentStatus))];
+      const nextStatus = STATUS.COLLECTING_NAME;
       await saveState(customerNumber, { status: nextStatus });
       const updatedState = await loadState(customerNumber);
       return `Thanks for the photo! I can see the issue. ${getStepQuestion(nextStatus, updatedState, lang, null)}`;
@@ -866,6 +883,25 @@ async function handleMessage(customerNumber, userText, messageType, mediaData, o
       return s.welcome;
     }
 
+    // Optional photo step — handled BEFORE the LLM intent classifier so the
+    // skip keywords ("no photo", "skip", "no", …) are never intercepted as a
+    // random message or an out-of-flow question and never fall through to the
+    // generic fallback. Both channels reach this identical code path.
+    if (currentStatus === STATUS.COLLECTING_PHOTO) {
+      if (isPhotoSkip(lowerText)) {
+        const nextStatus = STATUS.COLLECTING_NAME;
+        await saveState(customerNumber, { status: nextStatus });
+        const updatedState = await loadState(customerNumber);
+        return getStepQuestion(nextStatus, updatedState, lang, null);
+      }
+      // An image arriving here is handled above; any other text means the
+      // visitor is skipping — the photo is optional, so keep the flow moving.
+      const nextStatus = STATUS.COLLECTING_NAME;
+      await saveState(customerNumber, { status: nextStatus });
+      const updatedState = await loadState(customerNumber);
+      return `No problem! ${getStepQuestion(nextStatus, updatedState, lang, null)}`;
+    }
+
     const intent = await classifyIntent(text, currentStatus, state);
 
     // Handle random/non-sequitur messages gracefully (don't reset)
@@ -893,22 +929,6 @@ async function handleMessage(customerNumber, userText, messageType, mediaData, o
       const fieldName = STEP_FIELD[currentStatus];
       await saveState(customerNumber, { [fieldName]: extracted, status: STATUS.COLLECTING_PHOTO, language: lang });
       return s.askPhoto;
-    }
-
-    // Handle photo collection step
-    if (currentStatus === STATUS.COLLECTING_PHOTO) {
-      if (lowerText.includes("no photo") || lowerText.includes("skip") || lowerText.includes("no picture") || lowerText.includes("nope") || lowerText === "no") {
-        // Skip photo, go to next step
-        const nextStatus = STATUS.COLLECTING_NAME;
-        await saveState(customerNumber, { status: nextStatus });
-        const updatedState = await loadState(customerNumber);
-        return getStepQuestion(nextStatus, updatedState, lang, null);
-      }
-      // If they sent an image, it's handled above; if they sent text, pass through
-      const nextStatus = STATUS.COLLECTING_NAME;
-      await saveState(customerNumber, { status: nextStatus });
-      const updatedState = await loadState(customerNumber);
-      return `No problem! ${getStepQuestion(nextStatus, updatedState, lang, null)}`;
     }
 
     // Smart scheduling: after collecting date, check for available slots

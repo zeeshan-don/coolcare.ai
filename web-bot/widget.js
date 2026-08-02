@@ -439,8 +439,16 @@
 
   function addMessage(msg) {
     if (!msg || !msg.role) return;
-    if (sentIds[msg.id]) return;
-    if (msg.id) sentIds[msg.id] = true;
+    // Dedupe by id AND created_at. The same bot reply reaches the widget twice:
+    // once as the POST /send response (with a synthetic id) and again via the
+    // 4s poll (with its real DB id). Keying on created_at catches the poll copy,
+    // so one user message renders EXACTLY one AI response.
+    var idKey = msg.id ? String(msg.id) : null;
+    var tsKey = msg.created_at ? "ts:" + msg.created_at : null;
+    if (idKey && sentIds[idKey]) return;
+    if (tsKey && sentIds[tsKey]) return;
+    if (idKey) sentIds[idKey] = true;
+    if (tsKey) sentIds[tsKey] = true;
 
     var wrap = document.createElement("div");
     wrap.className = "msg " + (msg.role === "bot" ? "bot" : "user");
@@ -586,7 +594,9 @@
       .then(function (data) {
         hideTyping();
         sendBtn.disabled = false;
-        if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: new Date().toISOString() });
+        // Use the server's created_at (replyCreatedAt) so the polled copy of
+        // this reply is deduped instead of rendered a second time.
+        if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: data.replyCreatedAt || new Date().toISOString() });
         if (data.isOpen === false) {
           var status = $("cc-status");
           status.classList.add("off");
@@ -700,7 +710,7 @@
               hideTyping();
               sendBtn.disabled = false;
               addMessage({ id: "img-" + Date.now(), role: "user", message: "(image)", media_url: dataUrl, created_at: new Date().toISOString() });
-              if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: new Date().toISOString() });
+              if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: data.replyCreatedAt || new Date().toISOString() });
             })
             .catch(function (err) { hideTyping(); sendBtn.disabled = false; addSystem(err.message); });
         } else {
@@ -711,7 +721,7 @@
               hideTyping();
               sendBtn.disabled = false;
               addMessage({ id: "doc-" + Date.now(), role: "user", message: "(file)", file_name: file.name || "file", created_at: new Date().toISOString() });
-              if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: new Date().toISOString() });
+              if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: data.replyCreatedAt || new Date().toISOString() });
             })
             .catch(function (err) { hideTyping(); sendBtn.disabled = false; addSystem(err.message); });
         }

@@ -416,8 +416,10 @@ async function handlePost(request, response) {
 
   // ── SEND: run the shared engine ─────────────────────────────────────────
   if (action === "send") {
+    const requestId = "web-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const message = sanitizeText(body.message, 2000);
     const messageType = body.messageType === "image" ? "image" : body.messageType === "document" ? "document" : "text";
+    console.log("[chat] send start", JSON.stringify({ requestId, shopId, visitorId, messageType, textLen: message.length }));
 
     let mediaData = null;
     if (messageType === "image" && body.imageData) {
@@ -513,7 +515,11 @@ async function handlePost(request, response) {
       } catch (e) { /* ok */ }
     }
 
-    return response.status(200).json({ reply, visitorId, replyCreatedAt: savedBot?.created_at || null, isOpen });
+    console.log("[chat] send done", JSON.stringify({ requestId, visitorId, replyLen: reply ? reply.length : 0, replyCreatedAt: savedBot?.created_at || null }));
+    // Echo the requestId so the widget can log it — if the same visitor message
+    // ever appears twice in the logs with two requestIds, that's duplicate
+    // processing (not a duplicate render).
+    return response.status(200).json({ reply, visitorId, replyCreatedAt: savedBot?.created_at || null, requestId, isOpen });
   }
 
   return response.status(400).json({ error: "Unknown action" });
