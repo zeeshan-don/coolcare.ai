@@ -16,6 +16,9 @@ const {
   handleMessage,
   saveMessage,
   loadState,
+  isDuplicateRequest,
+  logDashboardConversation,
+  trackConversationFirstMessage,
 } = require("./_lib/conversation-engine");
 
 // ─── Send typing indicator ────────────────────────────────────────────────────
@@ -189,15 +192,33 @@ module.exports = withErrorHandler(async (request, response) => {
   let mediaData = null;
 
   const requestId = "wa-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-  console.log("[whatsapp] message", JSON.stringify({ requestId, from: customerNumber, type: messageType }));
+  console.log("[whatsapp] message", JSON.stringify({ requestId, from: customerNumber, type: messageType, msgId: incomingMessage.id || null }));
 
-  // Extract media data for images and documents
+  // Extract customer text BEFORE the dedupe check so the shared guard can use
+  // both its in-memory signature AND the cross-instance DB lookup.
   if (messageType === "image" && incomingMessage.image) {
     customerText = incomingMessage.image.caption || "(sent an image)";
   } else if (messageType === "document" && incomingMessage.document) {
     customerText = incomingMessage.document.caption || "(sent a document)";
   } else if (messageType === "text") {
     customerText = incomingMessage.text?.body?.trim() || "";
+  }
+
+  // ── DUPLICATE SUPPRESSION (shared with Website Chat) ────────────────────
+  // Meta webhooks are redelivered when a 200 isn't received quickly enough, and
+  // the SAME message id can arrive twice. Without this guard the engine would
+  // process the message twice → two AI replies. This is the same
+  // isDuplicateRequest() the website widget API uses — one guard, both channels.
+  if (await isDuplicateRequest({
+    channel: "whatsapp",
+    customerNumber,
+    text: customerText,
+    messageType,
+    externalId: incomingMessage.id || null,
+    requestId,
+  })) {
+    console.log("[whatsapp] duplicate message suppressed", JSON.stringify({ requestId, from: customerNumber, msgId: incomingMessage.id || null }));
+    return response.status(200).json({ received: true, duplicate: true });
   }
 
   const connection = await lookupConnection(phoneNumberId);
@@ -217,7 +238,13 @@ module.exports = withErrorHandler(async (request, response) => {
   }
 
   // Save inbound message
-  await saveMessage(customerNumber, "customer", customerText);
+  const savedIn = await saveMessage(customerNumber, "customer", customerText);
+  // Shared dashboard log — the SAME row Website Chat writes (one engine, two channels)
+  await logDashboardConversation(repairShopId || null, customerNumber, "inbound", customerText, "whatsapp", requestId);
+  // First-message tracking (total_conversations analytics + shop notification) —
+  // runs right after the inbound is saved, BEFORE the bot reply is stored, so the
+  // count is accurate. The SAME shared helper Website Chat uses.
+  await trackConversationFirstMessage(repairShopId || null, customerNumber, "whatsapp", savedIn?.id ?? 0, requestId);
 
   // Send typing indicator
   await sendTypingIndicator(phoneNumberId, customerNumber, accessToken, apiVersion);
@@ -240,11 +267,17 @@ module.exports = withErrorHandler(async (request, response) => {
     }
   }
 
-  // Run shared engine (channel = whatsapp by default)
-  const reply = await handleMessage(customerNumber, customerText, messageType, mediaData);
+  // Run shared engine (channel = whatsapp; shopId + requestId stamped for logs/state)
+  const reply = await handleMessage(customerNumber, customerText, messageType, mediaData, {
+    channel: "whatsapp",
+    shopId: repairShopId || null,
+    requestId,
+  });
 
   // Save outbound reply
   await saveMessage(customerNumber, "bot", reply);
+  // Shared dashboard log — same row shape Website Chat writes
+  await logDashboardConversation(repairShopId || null, customerNumber, "outbound", reply, "whatsapp", requestId);
 
   // Send reply via WhatsApp Cloud API with retry
   let metaRes;

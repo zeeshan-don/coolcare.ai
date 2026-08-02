@@ -151,6 +151,10 @@
   var pollTimer = null;
   var sentIds = {};
   var booted = false;
+  // In-flight send guard: one user message → one backend request. While a send
+  // is awaiting its response, re-submitting the SAME text is dropped (double
+  // Enter/click, paste+Enter races, retries). Different text queues normally.
+  var inFlightText = null;
 
   // ── Shadow DOM host ────────────────────────────────────────────────────────
   var host = document.createElement("div");
@@ -552,6 +556,9 @@
   // ── Business logic ─────────────────────────────────────────────────────────
   function sendMessage(text, imageData) {
     if (!text && !imageData) return;
+    // Duplicate-submit guard: identical text already in flight → drop.
+    if (!imageData && text && inFlightText !== null && text === inFlightText) return;
+    if (!imageData && text) inFlightText = text;
     var messageType = imageData ? "image" : "text";
     var payload = {
       action: "send",
@@ -594,6 +601,9 @@
       .then(function (data) {
         hideTyping();
         sendBtn.disabled = false;
+        inFlightText = null;
+        // Duplicate reply from the API (suppressed server-side) → do not render.
+        if (data.duplicate) return;
         // Use the server's created_at (replyCreatedAt) so the polled copy of
         // this reply is deduped instead of rendered a second time.
         if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: data.replyCreatedAt || new Date().toISOString() });
@@ -606,6 +616,7 @@
       .catch(function (err) {
         hideTyping();
         sendBtn.disabled = false;
+        inFlightText = null;
         addSystem(err.message || "Something went wrong. Please try again.");
       });
   }
@@ -709,6 +720,7 @@
             .then(function (data) {
               hideTyping();
               sendBtn.disabled = false;
+              if (data.duplicate) return;
               addMessage({ id: "img-" + Date.now(), role: "user", message: "(image)", media_url: dataUrl, created_at: new Date().toISOString() });
               if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: data.replyCreatedAt || new Date().toISOString() });
             })
@@ -720,6 +732,7 @@
             .then(function (data) {
               hideTyping();
               sendBtn.disabled = false;
+              if (data.duplicate) return;
               addMessage({ id: "doc-" + Date.now(), role: "user", message: "(file)", file_name: file.name || "file", created_at: new Date().toISOString() });
               if (data.reply) addMessage({ id: "bot-" + Date.now(), role: "bot", message: data.reply, created_at: data.replyCreatedAt || new Date().toISOString() });
             })

@@ -33,6 +33,9 @@ const {
   loadState,
   saveMessage,
   loadShopKnowledge,
+  isDuplicateRequest,
+  logDashboardConversation,
+  trackConversationFirstMessage,
 } = require("./_lib/conversation-engine");
 
 // ─── CORS (public widget API) ────────────────────────────────────────────────
@@ -263,19 +266,6 @@ async function validateShop(sql, shopId, widget) {
   return shop;
 }
 
-// ─── Log a message to the unified dashboard log (whatsapp_conversations) ─────
-async function logToConversations(sql, shopId, customerNumber, direction, messageText, channel = "website") {
-  try {
-    await sql`
-      INSERT INTO whatsapp_conversations
-        (repair_shop_id, customer_number, direction, message_text, channel, status, created_at)
-      VALUES (${shopId}, ${customerNumber}, ${direction}, ${messageText}, ${channel}, 'delivered', now())
-    `;
-  } catch (e) {
-    console.warn("[chat] Failed to log conversation row:", e.message);
-  }
-}
-
 // ─── GET: widget config + poll ───────────────────────────────────────────────
 async function handleGet(request, response) {
   setCors(response);
@@ -421,6 +411,23 @@ async function handlePost(request, response) {
     const messageType = body.messageType === "image" ? "image" : body.messageType === "document" ? "document" : "text";
     console.log("[chat] send start", JSON.stringify({ requestId, shopId, visitorId, messageType, textLen: message.length }));
 
+    // ── DUPLICATE SUPPRESSION (shared with WhatsApp) ─────────────────────
+    // One visitor message must produce exactly ONE backend request. The widget
+    // has an in-flight guard too, but a double-submit or a network retry can
+    // still reach this API twice — the shared isDuplicateRequest() (the SAME
+    // guard WhatsApp uses) collapses those into a single AI response.
+    if (await isDuplicateRequest({
+      channel: "website",
+      customerNumber: visitorId,
+      text: message,
+      messageType,
+      externalId: null,
+      requestId,
+    })) {
+      console.log("[chat] duplicate message suppressed", JSON.stringify({ requestId, shopId, visitorId, messageType }));
+      return response.status(200).json({ reply: null, visitorId, requestId, duplicate: true, isOpen: null });
+    }
+
     let mediaData = null;
     if (messageType === "image" && body.imageData) {
       try {
@@ -451,18 +458,13 @@ async function handlePost(request, response) {
     // Save inbound
     const inboundLabel = message || (messageType === "image" ? "(sent an image)" : messageType === "document" ? "(sent a file)" : "");
     const savedIn = await saveMessage(visitorId, "customer", inboundLabel, "website");
-    await logToConversations(sql, shopId, visitorId, "inbound", inboundLabel);
+    // Shared dashboard log — the SAME row WhatsApp writes (one engine, two channels)
+    await logDashboardConversation(shopId, visitorId, "inbound", inboundLabel, "website", requestId);
 
-    // First-message detection — drives analytics + the new-chat notification so a
-    // single visitor session counts once, not once per message.
-    let firstMessage = false;
-    try {
-      const cnt = await sql`
-        SELECT COUNT(*) AS c FROM conversations
-        WHERE customer_number = ${visitorId} AND id <> ${savedIn?.id ?? 0}
-      `;
-      firstMessage = parseInt(cnt[0]?.c || "0", 10) === 0;
-    } catch (e) { /* ok */ }
+    // First-message tracking (total_conversations analytics + shop notification) —
+    // runs right after the inbound is saved, BEFORE the bot reply is stored, so the
+    // count is accurate. The SAME shared helper WhatsApp uses.
+    await trackConversationFirstMessage(shopId, visitorId, "website", savedIn?.id ?? 0, requestId);
 
     // Business-hours check — outside hours we still run the engine and create the
     // booking, but the reply carries the offline notice (requirement).
@@ -472,6 +474,7 @@ async function handlePost(request, response) {
     let reply = await handleMessage(visitorId, message, messageType, mediaData, {
       channel: "website",
       shopId,
+      requestId,
     });
 
     // If a booking was created outside working hours, append the offline notice
@@ -489,31 +492,8 @@ async function handlePost(request, response) {
 
     // Save outbound
     const savedBot = await saveMessage(visitorId, "bot", reply, "website");
-    await logToConversations(sql, shopId, visitorId, "outbound", reply);
-
-    // Track conversation in analytics — once per new visitor session
-    if (firstMessage) {
-      try {
-        const today = new Date().toISOString().slice(0, 10);
-        await sql`
-          INSERT INTO conversation_analytics (repair_shop_id, date, total_conversations)
-          VALUES (${shopId}, ${today}, 1)
-          ON CONFLICT (repair_shop_id, date)
-          DO UPDATE SET total_conversations = conversation_analytics.total_conversations + 1
-        `;
-      } catch (e) { /* ok */ }
-    }
-
-    // Notify shop of a new website conversation (only first message)
-    if (firstMessage) {
-      try {
-        await sql`
-          INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
-          VALUES (${shopId}, 'website_chat', 'New Website Chat 🌐',
-                  ${`A visitor started chatting on your website.`}, '/shop-dashboard.html')
-        `;
-      } catch (e) { /* ok */ }
-    }
+    // Shared dashboard log — same row shape WhatsApp writes
+    await logDashboardConversation(shopId, visitorId, "outbound", reply, "website", requestId);
 
     console.log("[chat] send done", JSON.stringify({ requestId, visitorId, replyLen: reply ? reply.length : 0, replyCreatedAt: savedBot?.created_at || null }));
     // Echo the requestId so the widget can log it — if the same visitor message
