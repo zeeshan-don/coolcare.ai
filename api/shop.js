@@ -156,7 +156,9 @@ async function handleDashboard(request, response, sql, shopId, auth) {
 
   const offset = (params.page - 1) * params.limit;
 
-  const conditions = [`b.repair_shop_id = ${shopId}`];
+  // repair_shop_id is a real parameter ($1) — it MUST also be referenced in the SQL,
+  // otherwise PostgreSQL declares $1 with no type context → error 42P18.
+  const conditions = [`b.repair_shop_id = $1`];
   const sqlParams = [shopId];
   if (params.status && params.status !== "all") { sqlParams.push(params.status); conditions.push(`b.status = $${sqlParams.length}`); }
   if (params.search) { sqlParams.push(`%${params.search}%`); conditions.push(`(b.customer_name ILIKE $${sqlParams.length} OR b.customer_number ILIKE $${sqlParams.length})`); }
