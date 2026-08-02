@@ -589,6 +589,50 @@ function generateBookings(customers, techCount) {
     });
   }
 
+  // ---- IN PROGRESS BOOKINGS (5) — repair lifecycle mid-flight ----
+  for (let i = 0; i < 5; i++) {
+    const customerIdx = randInt(0, customers.length - 1);
+    const techIdx = randInt(0, techCount - 1);
+    const service = pick(SERVICES);
+    const area = pick(BENGALURU_AREAS);
+    const urgency = "urgent";
+
+    bookings.push({
+      customerIdx,
+      techIdx,
+      status: "in_progress",
+      service: service.name,
+      area,
+      cost: null,
+      final_cost: null,
+      created_days_ago: 0,
+      urgency,
+      priority: "urgent",
+    });
+  }
+
+  // ---- WAITING FOR PARTS BOOKINGS (3) ----
+  for (let i = 0; i < 3; i++) {
+    const customerIdx = randInt(0, customers.length - 1);
+    const techIdx = randInt(0, techCount - 1);
+    const service = pick(SERVICES);
+    const area = pick(BENGALURU_AREAS);
+    const urgency = "today";
+
+    bookings.push({
+      customerIdx,
+      techIdx,
+      status: "waiting_parts",
+      service: service.name,
+      area,
+      cost: null,
+      final_cost: null,
+      created_days_ago: 0,
+      urgency,
+      priority: "high",
+    });
+  }
+
   // Sort by created_days_ago descending (most recent first)
   bookings.sort((a, b) => a.created_days_ago - b.created_days_ago);
 
@@ -1140,7 +1184,7 @@ function buildCommandCenterData() {
   // ── Technician availability ──────────────────────────────────────────────
   const busySet = new Set();
   for (const b of BOOKINGS) {
-    if (["assigned", "on_the_way", "arrived"].includes(b.status) && b.techIdx != null) busySet.add(b.techIdx);
+    if (["assigned", "on_the_way", "arrived", "in_progress", "waiting_parts"].includes(b.status) && b.techIdx != null) busySet.add(b.techIdx);
   }
   const techniciansFree = Math.max(0, TECHNICIANS.length - busySet.size);
   const techniciansBusy = busySet.size;
@@ -1255,6 +1299,14 @@ function buildCommandCenterData() {
       technicianCount: TECHNICIANS.length,
       pendingPayments,
       satisfaction,
+      // ── Repair lifecycle analytics (demo values mirror a healthy shop) ──
+      jobsPending: BOOKINGS.filter((b) => ["open", "accepted"].includes(b.status)).length,
+      jobsAssigned: BOOKINGS.filter((b) => b.status === "assigned").length,
+      jobsInProgress: BOOKINGS.filter((b) => ["on_the_way", "arrived", "in_progress", "waiting_parts"].includes(b.status)).length,
+      jobsCompleted: BOOKINGS.filter((b) => b.status === "completed").length,
+      jobsCancelled: BOOKINGS.filter((b) => ["cancelled", "rejected"].includes(b.status)).length,
+      avgCompletionHours: 3.4,
+      avgTechResponseMinutes: 42,
       aiConversationsToday,
       aiBookingsToday,
       aiSuccessRate,
@@ -1384,7 +1436,7 @@ function buildDemoDashboardResponse(params) {
   }
 
   // ── Status counts ────────────────────────────────────────────────────────
-  const statusCounts = { open: 0, accepted: 0, assigned: 0, on_the_way: 0, arrived: 0, completed: 0, cancelled: 0, rejected: 0 };
+  const statusCounts = { open: 0, accepted: 0, rejected: 0, assigned: 0, on_the_way: 0, arrived: 0, in_progress: 0, waiting_parts: 0, completed: 0, cancelled: 0, payment_received: 0 };
   for (const b of BOOKINGS) {
     if (statusCounts[b.status] !== undefined) statusCounts[b.status]++;
   }
@@ -1416,7 +1468,7 @@ function buildDemoDashboardResponse(params) {
   }
 
   const pendingJobs = BOOKINGS.filter(b =>
-    ["open", "accepted", "assigned", "on_the_way", "arrived"].includes(b.status)
+    ["open", "accepted", "assigned", "on_the_way", "arrived", "in_progress", "waiting_parts"].includes(b.status)
   ).length;
 
   perfMark('revenue stats done');
@@ -1664,6 +1716,56 @@ function buildDemoBookingDetailResponse(bookingId) {
       actor_type: "shop",
       notes: "Technician assigned to job",
       created_at: new Date(bCreatedAt.getTime() + 7200000).toISOString(),
+    });
+  }
+
+  // Active repair stages (arrived → in progress → waiting for parts)
+  if (["arrived", "in_progress", "waiting_parts"].includes(b.status)) {
+    timeline.push({
+      id: 4,
+      booking_id: bookingId,
+      action: "status_change",
+      old_value: "on_the_way",
+      new_value: "arrived",
+      actor_type: "technician",
+      notes: "Technician arrived at the customer's location",
+      created_at: new Date(bCreatedAt.getTime() + 10800000).toISOString(),
+    });
+  }
+  if (b.status === "in_progress") {
+    timeline.push({
+      id: 5,
+      booking_id: bookingId,
+      action: "status_change",
+      old_value: "arrived",
+      new_value: "in_progress",
+      actor_type: "technician",
+      notes: "Repair started",
+      created_at: new Date(bCreatedAt.getTime() + 12600000).toISOString(),
+    });
+  }
+  if (b.status === "waiting_parts") {
+    timeline.push({
+      id: 5,
+      booking_id: bookingId,
+      action: "status_change",
+      old_value: "in_progress",
+      new_value: "waiting_parts",
+      actor_type: "technician",
+      notes: "Waiting for parts to arrive",
+      created_at: new Date(bCreatedAt.getTime() + 12600000).toISOString(),
+    });
+  }
+  if (b.status === "payment_received") {
+    timeline.push({
+      id: 6,
+      booking_id: bookingId,
+      action: "status_change",
+      old_value: "completed",
+      new_value: "payment_received",
+      actor_type: "system",
+      notes: "Payment received",
+      created_at: new Date(bCreatedAt.getTime() + 18000000).toISOString(),
     });
   }
   if (b.status === "completed") {

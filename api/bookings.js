@@ -12,6 +12,7 @@ const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { sendWhatsApp } = require("./_lib/notify");
+const { insertTimelineEvent, ACTORS } = require("./_lib/repair-lifecycle");
 const { validate } = require("./_lib/validate");
 const { z } = require("zod");
 
@@ -83,6 +84,18 @@ async function handleBookService(request, response, sql, shopId, body) {
   const bookingId = inserted[0]?.id ?? null;
   console.log("[bookings/book-service] Booking:", bookingId, "shop:", shopId);
 
+  // Record the lifecycle start — every repair timeline begins here.
+  try {
+    await insertTimelineEvent(sql, {
+      bookingId,
+      action: "booking_created",
+      newValue: "open",
+      actorType: ACTORS.SHOP,
+      actorId: shopId,
+      notes: "Booking created from the dashboard",
+    });
+  } catch (e) { console.warn("[bookings/book-service] Timeline create failed:", e.message); }
+
   // Attempt technician auto-assign
   try {
     const techs = await sql`
@@ -93,6 +106,13 @@ async function handleBookService(request, response, sql, shopId, body) {
     `;
     if (techs.length > 0) {
       await sql`UPDATE bookings SET technician_id = ${techs[0].id}, status = 'assigned' WHERE id = ${bookingId}`;
+      await insertTimelineEvent(sql, {
+        bookingId,
+        action: "technician_assigned",
+        newValue: techs[0].name,
+        actorType: ACTORS.SYSTEM,
+        notes: "Technician auto-assigned by the system",
+      });
       console.log("[bookings/book-service] Auto-assigned:", techs[0].name);
     }
   } catch (e) { console.warn("[bookings/book-service] Auto-assign failed:", e.message); }
@@ -106,7 +126,8 @@ async function handleBookService(request, response, sql, shopId, body) {
     (address ? `• Address: ${address}\n` : "") +
     `• Slot: ${slot}\n` +
     (bookingId ? `• Ref #: ${bookingId}\n` : "") +
-    `\nA technician will be in touch shortly. Thank you for choosing CoolCare! 🙏`;
+    `\nA technician will be in touch shortly. Thank you for choosing CoolCare! 🙏` +
+    (bookingId ? `\n\nTrack your repair anytime: ${process.env.APP_URL || "https://coolcare.ai"}/tracker.html?booking=${bookingId}` : "");
 
   const waResult = await sendWhatsApp(customerNumber, msg);
   if (!waResult.ok) {
@@ -130,5 +151,30 @@ async function handleLegacyUpdate(request, response, sql, shopId, body) {
       updated_at = now()
     WHERE id = ${id} AND repair_shop_id = ${shopId}
   `;
+
+  // Record the lifecycle event (status change + technician assignment).
+  try {
+    if (status && status !== rows[0].status) {
+      await insertTimelineEvent(sql, {
+        bookingId: id,
+        action: "status_change",
+        oldValue: rows[0].status,
+        newValue: status,
+        actorType: ACTORS.SHOP,
+        actorId: shopId,
+        notes: "Booking updated from the dashboard",
+      });
+    }
+    if (technician_id && technician_id !== rows[0].technician_id) {
+      await insertTimelineEvent(sql, {
+        bookingId: id,
+        action: "technician_assigned",
+        newValue: String(technician_id),
+        actorType: ACTORS.SHOP,
+        actorId: shopId,
+      });
+    }
+  } catch (e) { /* timeline is non-fatal */ }
+
   return response.status(200).json({ updated: true });
 }

@@ -149,7 +149,8 @@ BEGIN
   ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
   ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
     CHECK (status IN (
-      'open','accepted','rejected','assigned','on_the_way','arrived','completed','cancelled'
+      'open','accepted','rejected','assigned','on_the_way','arrived',
+      'in_progress','waiting_parts','completed','cancelled','payment_received'
     ));
 EXCEPTION WHEN others THEN NULL;
 END $$;
@@ -1389,7 +1390,8 @@ BEGIN
   ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
   ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
     CHECK (status IN (
-      'open','accepted','rejected','assigned','on_the_way','arrived','completed','cancelled'
+      'open','accepted','rejected','assigned','on_the_way','arrived',
+      'in_progress','waiting_parts','completed','cancelled','payment_received'
     ));
 EXCEPTION WHEN others THEN NULL;
 END $$;
@@ -1464,7 +1466,8 @@ BEGIN
   ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
   ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
     CHECK (status IN (
-      'open','accepted','rejected','assigned','on_the_way','arrived','completed','cancelled'
+      'open','accepted','rejected','assigned','on_the_way','arrived',
+      'in_progress','waiting_parts','completed','cancelled','payment_received'
     ));
 EXCEPTION WHEN others THEN NULL;
 END $$;

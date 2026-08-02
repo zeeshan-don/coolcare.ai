@@ -18,10 +18,16 @@ const STATUS_MESSAGES = {
     `🚗 *Technician On The Way!*\nHi ${b.customer_name}, your technician *${b.technician_name || "our specialist"}* is on the way to your location for the *${b.service_type}* repair. Ref #${b.id}`,
   arrived: (b) =>
     `📍 *Technician Arrived*\nHi ${b.customer_name}, your technician has arrived at your location to service your *${b.service_type}*. Ref #${b.id}`,
+  in_progress: (b) =>
+    `🔧 *Repair In Progress*\nHi ${b.customer_name}, the repair of your *${b.service_type}* has started. We'll update you as soon as it's done. Ref #${b.id}`,
+  waiting_parts: (b) =>
+    `⏳ *Waiting For Parts*\nHi ${b.customer_name}, your *${b.service_type}* repair needs a part that isn't in stock. We'll notify you the moment it arrives and the repair resumes. Ref #${b.id}`,
   completed: (b) =>
     `🎉 *Repair Completed!*\nHi ${b.customer_name}, your *${b.service_type}* repair has been completed by ${b.shop_name}.${b.final_cost ? ` Total: ₹${b.final_cost}` : ""} Thank you for choosing CoolCare! 🙏`,
   cancelled: (b) =>
     `🚫 *Booking Cancelled*\nHi ${b.customer_name}, your booking for *${b.service_type}* (Ref #${b.id}) has been cancelled. Please contact us if you'd like to rebook.`,
+  payment_received: (b) =>
+    `💰 *Payment Received*\nHi ${b.customer_name}, we've received your payment for the *${b.service_type}* repair${b.final_cost ? ` (${b.final_cost})` : ""}. Thank you for choosing ${b.shop_name || "CoolCare"}! Ref #${b.id}`,
   rescheduled: (b) =>
     `📅 *Booking Rescheduled*\nHi ${b.customer_name}, your booking for *${b.service_type}* (Ref #${b.id}) has been rescheduled to ${b.reschedule_date || "a new date"}. We'll confirm the new time shortly.`,
 };
@@ -121,11 +127,25 @@ async function logNotification(shopId, bookingId, channel, recipient, template, 
   }
 }
 
+// Statuses that produce a customer notification. Meaningful milestones only —
+// intermediate states (in_progress, waiting_parts) stay silent so the customer
+// is never spammed with every micro-update. Accepted/rejected are kept because
+// they are existing user-facing confirmations.
+const NOTIFY_STATUSES = new Set([
+  "accepted", "rejected", "assigned", "on_the_way", "arrived",
+  "completed", "cancelled", "payment_received",
+]);
+
 // ─── Send status change notification to customer ────────────────────────────
 async function notifyStatusChange(booking, newStatus) {
   const messageFn = STATUS_MESSAGES[newStatus];
   if (!messageFn) {
     console.log("[notify] No template for status:", newStatus, "— skipping");
+    return;
+  }
+  // Do not spam — only meaningful milestones reach the customer.
+  if (!NOTIFY_STATUSES.has(newStatus)) {
+    console.log("[notify] Status not customer-facing, skipping:", newStatus);
     return;
   }
 

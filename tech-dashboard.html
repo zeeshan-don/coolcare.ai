@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoolCare | Technician Jobs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0a0a0a;--bg2:#111111;--bg3:#1a1a1a;--border:#1e1e1e;--border2:#333;
+      --ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--muted2:#525252;
+      --green:#22c55e;--green-bg:#0a1a0a;--red:#ef4444;--red-bg:#1a0a0a;
+      --blue:#60a5fa;--blue-bg:#0a1420;--yellow:#eab308;--yellow-bg:#141a08;
+    }
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,sans-serif}
+    h1,h2,h3,.brand{font-family:'Inter',system-ui,sans-serif;font-weight:700}
+    a{color:var(--ink2);text-decoration:none;transition:color 0.2s}a:hover{color:#fff}
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
+    .brand{font-weight:700;letter-spacing:0.5px;font-size:24px;color:#fff;text-transform:lowercase;display:flex;align-items:center}.brand b{color:#fff;font-weight:900}
+    .brand-by{font-weight:400;color:#9CA3AF;font-size:14px;opacity:.75;margin-left:8px;margin-right:12px}
+    .brand-signature{height:36px;width:auto;vertical-align:middle}
+    .nav-right{display:flex;align-items:center;gap:16px}
+    .user-chip{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink2)}
+    .user-chip .u-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#2a2a2a,#1a1a1a);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font:800 12px 'Inter',sans-serif;color:#fff}
+    .logout{font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;background:none;border:1px solid var(--border2);border-radius:8px;padding:8px 14px;transition:all 0.2s}
+    .logout:hover{color:#fff;border-color:#555}
+    .wrap{max-width:1040px;margin:auto;padding:28px 24px 60px}
+    .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:14px;flex-wrap:wrap}
+    .page-header h1{font-size:26px;letter-spacing:-0.5px;margin:0 0 4px;color:#fff}
+    .page-header .sub{font-size:13px;color:var(--muted)}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:22px}
+    .stat{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+    .stat .s-label{font-size:10.5px;font-weight:600;letter-spacing:0.5px;color:var(--muted);text-transform:uppercase;margin-bottom:3px}
+    .stat .s-value{font-size:26px;font-weight:800;letter-spacing:-0.5px;color:#fff;line-height:1.2}
+    .stat .s-value.green{color:var(--green)}
+    .stat .s-value.blue{color:var(--blue)}
+    .stat .s-value.yellow{color:var(--yellow)}
+    .stat .s-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .jobs{display:grid;gap:14px}
+    .job{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:20px 22px;transition:border-color 0.2s}
+    .job:hover{border-color:var(--border2)}
+    .job-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .job-id{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:0.4px;margin-bottom:4px}
+    .job-name{font-size:17px;font-weight:700;color:#fff;margin-bottom:2px}
+    .job-service{font-size:13px;color:var(--ink2)}
+    .job-detail{font-size:12.5px;color:var(--muted);margin-top:2px}
+    .badge{display:inline-block;padding:5px 11px;border-radius:6px;font-size:10px;font-weight:600;letter-spacing:0.3px;white-space:nowrap}
+    .badge.open,.badge.accepted,.badge.assigned,.badge.on_the_way{background:rgba(255,255,255,0.05);color:var(--ink2);border:1px solid var(--border2)}
+    .badge.arrived{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,0.25)}
+    .badge.in_progress{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(96,165,250,0.25)}
+    .badge.waiting_parts{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(234,179,8,0.25)}
+    .badge.completed{background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,0.25)}
+    .badge.payment_received{background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,0.25)}
+    .badge.cancelled,.badge.rejected{background:var(--bg3);color:var(--muted);border:1px solid var(--border)}
+    .job-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px 16px;margin:14px 0;padding:12px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+    .meta-item{display:flex;flex-direction:column}
+    .meta-item .m-label{font-size:10px;font-weight:600;letter-spacing:0.4px;color:var(--muted);text-transform:uppercase;margin-bottom:2px}
+    .meta-item .m-value{font-size:13px;font-weight:500;color:var(--ink)}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+    .action-btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;border:1px solid var(--border2);background:var(--bg);font:600 13px 'Inter',sans-serif;cursor:pointer;transition:all 0.2s;color:var(--ink)}
+    .action-btn:hover{border-color:#555;background:var(--bg3);color:#fff;transform:translateY(-1px)}
+    .action-btn.primary{background:#fff;color:#000;border-color:#fff}
+    .action-btn.primary:hover{background:#e5e5e5}
+    .action-btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+    .no-action{font-size:12px;color:var(--muted);margin-top:14px;font-weight:500}
+    .tl{margin-top:14px;border-left:2px solid var(--border);margin-left:7px}
+    .tl-item{position:relative;padding:0 0 12px 22px}
+    .tl-item:last-child{padding-bottom:0}
+    .tl-item::before{content:'';position:absolute;left:-7px;top:4px;width:12px;height:12px;border-radius:50%;background:var(--bg2);border:2px solid var(--muted2)}
+    .tl-item.current::before{border-color:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,0.12)}
+    .tl-title{font-size:12.5px;color:var(--ink2);font-weight:600}
+    .tl-title b{color:#fff}
+    .tl-sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+    .tl-time{font-size:10.5px;color:var(--muted2);margin-top:1px}
+    .empty{text-align:center;color:var(--muted);padding:60px 20px;border:1px dashed var(--border2);border-radius:16px}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#fff;color:#000;padding:13px 26px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;transition:all 0.25s;z-index:100;pointer-events:none}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
+    .demo-banner.show{display:block}
+    .spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--ink2);border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block;vertical-align:-4px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:680px){.nav{padding:0 16px}.brand-by{display:none}.brand-signature{height:26px}.wrap{padding:20px 14px 50px}}
+  </style>
+</head>
+<body>
+<div class="demo-banner" id="demoBanner">Demo Mode — Changes are not saved. <span style="background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px">READ ONLY</span></div>
+
+<nav class="nav">
+  <a class="brand" href="/tech-dashboard.html">cool<b>care</b><span class="brand-by">by</span><img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
+  <div class="nav-right">
+    <div class="user-chip"><span class="u-avatar" id="userAvatar">T</span><span id="userName">Technician</span></div>
+    <button class="logout" onclick="logout()">Log Out</button>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="page-header">
+    <div>
+      <h1>My Jobs</h1>
+      <div class="sub" id="lastUpdated">Live repair lifecycle — updates reach the customer and owner instantly.</div>
+    </div>
+  </div>
+
+  <div class="stats" id="statsRow">
+    <div class="stat"><div class="s-label">Active Jobs</div><div class="s-value" id="st-active">—</div><div class="s-sub">in the shop right now</div></div>
+    <div class="stat"><div class="s-label">In Progress</div><div class="s-value blue" id="st-inprogress">—</div><div class="s-sub">repairs being worked on</div></div>
+    <div class="stat"><div class="s-label">Waiting For Parts</div><div class="s-value yellow" id="st-parts">—</div><div class="s-sub">paused until parts arrive</div></div>
+    <div class="stat"><div class="s-label">Assigned To Me</div><div class="s-value green" id="st-mine">—</div><div class="s-sub">jobs with my name on them</div></div>
+  </div>
+
+  <div class="jobs" id="jobsList">
+    <div class="empty"><span class="spinner"></span> &nbsp;Loading your jobs…</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const token = localStorage.getItem('cc_token');
+  if (!token) window.location.href = '/login.html';
+
+  const isDemo = localStorage.getItem('cc_is_demo') === 'true';
+  if (isDemo) document.getElementById('demoBanner').classList.add('show');
+
+  let jobs = [];
+  let expanded = new Set();
+
+  // ── Identity ────────────────────────────────────────────────────────────────
+  function renderIdentity() {
+    const user = JSON.parse(localStorage.getItem('cc_user') || '{}');
+    const shop = JSON.parse(localStorage.getItem('cc_shop') || '{}');
+    const name = user.name || shop.shopName || 'Technician';
+    document.getElementById('userName').textContent = name;
+    document.getElementById('userAvatar').textContent = (name || 'T').charAt(0).toUpperCase();
+    document.title = `CoolCare | Jobs — ${name}`;
+  }
+
+  function logout() {
+    fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
+    localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user'); localStorage.removeItem('cc_is_demo');
+    window.location.href = '/login.html';
+  }
+
+  function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  function fmtStatus(s) { return String(s || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '); }
+
+  // ── Status actions (the full lifecycle) ─────────────────────────────────────
+  const TECH_ACTIONS = {
+    assigned:      [{ label: 'Start Journey',      status: 'on_the_way',     cls: '', primary: false }],
+    on_the_way:    [{ label: 'Mark Arrived',       status: 'arrived',        cls: '', primary: false }],
+    arrived:       [{ label: 'Start Repair',       status: 'in_progress',    cls: '', primary: true }],
+    in_progress:   [{ label: 'Waiting For Parts',  status: 'waiting_parts',  cls: '', primary: false },
+                    { label: 'Complete Repair',    status: 'completed',      cls: '', primary: true }],
+    waiting_parts: [{ label: 'Repair In Progress', status: 'in_progress',    cls: '', primary: false },
+                    { label: 'Complete Repair',    status: 'completed',      cls: '', primary: true }],
+    completed:     [{ label: 'Collect Payment',    status: 'payment_received', cls: '', primary: true }],
+  };
+
+  // ── Load jobs + stats ──────────────────────────────────────────────────────
+  async function loadAll() {
+    try {
+      const [jobsRes, statsRes] = await Promise.all([
+        fetch('/api/technician?action=jobs', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/technician?action=stats', { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (jobsRes.status === 401 || statsRes.status === 401) { window.location.href = '/login.html'; return; }
+      const jobsData = await jobsRes.json();
+      const statsData = await statsRes.json();
+      jobs = jobsData.jobs || [];
+      renderStats(statsData);
+      renderJobs();
+      document.getElementById('lastUpdated').textContent = `Live repair lifecycle — updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Status changes reach the customer, owner and AI instantly.`;
+    } catch (err) {
+      console.error('[tech] Load error:', err);
+      document.getElementById('jobsList').innerHTML = '<div class="empty">Failed to load jobs. Please refresh.</div>';
+    }
+  }
+
+  function renderStats(s) {
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? '—'; };
+    set('st-active', s.activeCount);
+    set('st-inprogress', s.statusCounts?.in_progress ?? 0);
+    set('st-parts', s.statusCounts?.waiting_parts ?? 0);
+    set('st-mine', s.assignedToMe != null ? s.assignedToMe : 'All');
+  }
+
+  function renderJobs() {
+    const list = document.getElementById('jobsList');
+    if (!jobs.length) {
+      list.innerHTML = '<div class="empty">No active jobs right now. New bookings will appear here automatically.</div>';
+      return;
+    }
+    list.innerHTML = jobs.map(job => renderJob(job)).join('');
+  }
+
+  function renderJob(job) {
+    const actions = TECH_ACTIONS[job.status] || [];
+    const actionHtml = isDemo
+      ? '<div class="no-action">Demo mode — changes are not saved.</div>'
+      : actions.length
+        ? '<div class="actions">' + actions.map(a =>
+            `<button class="action-btn ${a.primary ? 'primary' : ''}" onclick="updateStatus(${job.id}, '${a.status}')">${escapeHtml(a.label)}</button>`).join('') +
+          '</div>'
+        : (job.status === 'open' || job.status === 'accepted')
+          ? '<div class="no-action">Awaiting technician assignment by the shop.</div>'
+          : '<div class="no-action">No further technician actions for this job.</div>';
+
+    const isCurrent = ['on_the_way','arrived','in_progress','waiting_parts'].includes(job.status);
+    const timelineHtml = job.timeline && job.timeline.length
+      ? '<div class="tl">' + job.timeline.map((e, i) => `
+          <div class="tl-item ${i === job.timeline.length - 1 ? 'current' : ''}">
+            <div class="tl-title">${escapeHtml(e.action === 'status_change' ? 'Status: ' + fmtStatus(e.new_value) : fmtStatus(e.action))}</div>
+            ${e.notes ? `<div class="tl-sub">${escapeHtml(e.notes)}</div>` : ''}
+            <div class="tl-time">${e.performed_by ? escapeHtml(e.performed_by) + ' · ' : ''}${new Date(e.created_at).toLocaleDateString()} ${new Date(e.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>`).join('') + '</div>'
+      : '';
+
+    return `
+    <div class="job" id="job-${job.id}">
+      <div class="job-head">
+        <div>
+          <div class="job-id">#${job.id} · booked ${new Date(job.created_at).toLocaleDateString()}</div>
+          <div class="job-name">${escapeHtml(job.customer_name || job.customer_number)}</div>
+          <div class="job-service">${escapeHtml(job.service_type || 'Service')}</div>
+        </div>
+        <span class="badge ${job.status}">${fmtStatus(job.status)}</span>
+      </div>
+      <div class="job-meta">
+        <div class="meta-item"><span class="m-label">Phone</span><span class="m-value">${escapeHtml(job.customer_phone || job.customer_number || '—')}</span></div>
+        <div class="meta-item"><span class="m-label">Address</span><span class="m-value">${escapeHtml(job.address || job.area || '—')}</span></div>
+        <div class="meta-item"><span class="m-label">Preferred Time</span><span class="m-value">${escapeHtml(job.urgency || '—')}</span></div>
+        <div class="meta-item"><span class="m-label">Technician</span><span class="m-value">${escapeHtml(job.assigned_technician_name || job.technician_name || 'Unassigned')}</span></div>
+      </div>
+      ${actionHtml}
+      ${timelineHtml}
+    </div>`;
+  }
+
+  // ── Status update (shared lifecycle on the backend) ─────────────────────────
+  async function updateStatus(bookingId, status) {
+    const btn = document.querySelector(`#job-${bookingId} .action-btn`);
+    if (btn) { btn.disabled = true; }
+    try {
+      const res = await fetch('/api/technician', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'update', bookingId, status }),
+      });
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      if (!res.ok) { showToast('Error: ' + (data.error || 'Update failed')); return; }
+      showToast(`Status updated to "${fmtStatus(status)}"`);
+      // Reload jobs + stats so the card, timeline and counts all refresh together.
+      loadAll();
+    } catch (err) {
+      console.error('[tech] Update error:', err);
+      showToast('Network error. Please try again.');
+    }
+  }
+
+  renderIdentity();
+  loadAll();
+  setInterval(loadAll, 30000); // auto-refresh so the owner + technician stay in sync
+</script>
+</body>
+</html>

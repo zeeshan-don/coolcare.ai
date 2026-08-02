@@ -61,7 +61,8 @@ const password = z
 
 const bookingStatus = z.enum([
   "open", "accepted", "rejected", "assigned",
-  "on_the_way", "arrived", "completed", "cancelled",
+  "on_the_way", "arrived", "in_progress", "waiting_parts",
+  "completed", "cancelled", "payment_received",
 ]);
 
 const pagination = z.object({
@@ -108,6 +109,7 @@ const signupSchema = z.object({
 const bookingUpdateSchema = z.object({
   bookingId: z.coerce.number().int().positive("bookingId is required"),
   status: bookingStatus.optional(),
+  notes: z.string().max(2000).trim().optional().nullable(),
   technicianName: z.string().max(100).trim().optional().nullable(),
   technicianId: z.coerce.number().int().positive().optional().nullable(),
   technicianNotes: z.string().max(2000).optional().nullable(),

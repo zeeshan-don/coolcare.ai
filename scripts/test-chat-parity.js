@@ -280,6 +280,12 @@ function fakeIntent(text) {
   if (t.includes("cost") || t.includes("price") || t.includes("charge") || t.includes("how much")) return "price_enquiry";
   if (t.includes("technician") && (t.includes("who") || t.includes("assigned") || t.includes("name"))) return "technician_status";
   if (t.includes("when") || t.includes("eta") || t.includes("arrive")) return "eta";
+  // Repair lifecycle intents — order matters: more specific matches first so
+  // "is my repair completed?" → completion_status (not repair_status).
+  if (t.includes("payment") || t.includes("paid")) return "payment_status";
+  if (t.includes("parts")) return "waiting_parts_status";
+  if (t.includes("completed") || t.includes("done") || t.includes("finished")) return "completion_status";
+  if (t.includes("repair")) return "repair_status";
   if (t.includes("thank")) return "thanks";
   if (t.includes("complaint") || t.includes("complain")) return "complaint";
   if (t.includes("human") || t.includes("agent") || t.includes("person") || t.includes("support") || t.includes("manager")) return "human_support";
@@ -430,8 +436,9 @@ test("website chat and whatsapp use IDENTICAL flow (only the phone question diff
   assert.ok(waReplies[6].includes("Reply YES"), "confirmation prompt uses YES/NO");
   assert.ok(webReplies[6].includes("Reply YES"), "confirmation prompt uses YES/NO");
 
-  // Confirmation is identical modulo independent booking refs (#1 vs #2).
-  const norm = (s) => String(s).replace(/#\d+/g, "#N");
+  // Confirmation is identical modulo independent booking refs (#1 vs #2) and
+  // the tracker link's booking id (?booking=N).
+  const norm = (s) => String(s).replace(/#\d+/g, "#N").replace(/\?booking=\d+/g, "?booking=N");
   assert.equal(norm(webReplies[7]), norm(waReplies[7]), "confirmation must be identical (modulo independent booking refs)");
   assert.ok(waReplies[7].includes("Booking confirmed"), "yes at confirmation should create the booking");
 });
@@ -574,6 +581,51 @@ test("BOOKING STATUS works after booking and is identical across channels", asyn
   assert.equal(norm(webReply), norm(waReply), "status replies must match across channels");
   assert.ok(waReply.includes("Booking Status"), "should include a status header");
   assert.ok(waReply.includes("#1") || waReply.includes("Ref"), "should reference the booking id");
+});
+
+test("REPAIR LIFECYCLE intents answer from LIVE booking data (never restart)", async () => {
+  const cn = "wa_lifecycle_test";
+  const { state } = await completeBooking(cn, { channel: "whatsapp" });
+  const booking = db.bookings.find((b) => b.customer_number === cn);
+  assert.ok(booking, "booking must exist after confirmation");
+
+  // Pending — "has my repair started?" must say not yet, never restart.
+  let reply = await handleMessage(cn, "has my repair started?", "text", null, { channel: "whatsapp" });
+  assert.ok(reply.includes("Not yet"), "should say the repair hasn't started yet");
+  assert.ok(!reply.includes(WELCOME), "must NOT restart the booking flow");
+  assert.ok(!reply.includes("Which appliance"), "must NEVER re-ask booking details");
+
+  // Technician moves the job to in_progress → the SAME question answers live.
+  booking.status = "in_progress";
+  reply = await handleMessage(cn, "has my repair started?", "text", null, { channel: "whatsapp" });
+  assert.ok(reply.includes("in progress"), "should answer from the LIVE booking status");
+
+  // Completed → completion question is answered naturally with the final cost.
+  booking.status = "completed";
+  booking.final_cost = 650;
+  reply = await handleMessage(cn, "is my repair completed?", "text", null, { channel: "whatsapp" });
+  assert.ok(reply.includes("completed"), "should confirm completion from live data");
+  assert.ok(reply.includes("650"), "should surface the final cost");
+
+  // Waiting for parts.
+  booking.status = "waiting_parts";
+  reply = await handleMessage(cn, "is my repair waiting for parts?", "text", null, { channel: "whatsapp" });
+  assert.ok(reply.includes("waiting for parts"), "should confirm waiting-for-parts from live data");
+
+  // Payment received.
+  booking.status = "payment_received";
+  reply = await handleMessage(cn, "was my payment received?", "text", null, { channel: "whatsapp" });
+  assert.ok(reply.includes("payment"), "should confirm payment received");
+
+  const stAfter = await engine.loadState(cn);
+  assert.equal(stAfter.status, STATUS.BOOKED, "state must remain BOOKED — lifecycle answers never restart the flow");
+});
+
+test("booking confirmation includes the public tracker link", async () => {
+  const cn = "wa_tracker_test";
+  const { reply, state } = await completeBooking(cn, { channel: "whatsapp" });
+  assert.ok(reply.includes("tracker.html"), "confirmation should point at the public tracker page");
+  assert.ok(reply.includes(String(state.booking_id)), "tracker link should carry the booking reference");
 });
 
 test("CANCEL booking works — booking status flips to cancelled, state closes", async () => {

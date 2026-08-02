@@ -6,15 +6,18 @@
 //   GET /api/dashboard                  → anonymized recent bookings widget
 //   GET /api/health  (→ /api/dashboard?route=health)    → health check + diagnostics
 //   GET /api/currency (→ /api/dashboard?route=currency) → currency pricing & rates
+//   GET /api/tracker  (→ /api/dashboard?route=tracker)  → customer booking tracker
 //
 // SECURITY: No auth required (public), but dashboard data is anonymized to
 // protect tenant privacy. Only masked names, no phone numbers, limited to 8
-// recent non-sensitive records.
+// recent non-sensitive records. The tracker only reveals a booking to the
+// customer who can prove the phone number used at booking time.
 
 const { neon } = require("@neondatabase/serverless");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
+const { loadRepairTimeline, statusLabel: repairStatusLabel } = require("./_lib/repair-lifecycle");
 const { CURRENCIES, PLAN_PRICING, getExchangeRates, detectCurrency, detectCountry, getCountryCurrency, getPlanPricingFromDB } = require("./_lib/currency");
 
 // ─── DASHBOARD (public widget) ─────────────────────────────────────────────
@@ -268,10 +271,91 @@ async function handleCurrency(request, response) {
   });
 }
 
+// ─── CUSTOMER BOOKING TRACKER ──────────────────────────────────────────────
+// GET /api/tracker?booking=123&phone=9876543210
+// Public, phone-verified: a booking is ONLY revealed when the caller can prove
+// the phone number used at booking time (customer_phone OR customer_number).
+// The response carries public-safe fields + the full repair timeline — no
+// internal technician notes, no other customers' data.
+function normalizePhoneDigits(raw) {
+  return String(raw || "").replace(/\D/g, "").replace(/^0+/, "") || null;
+}
+
+// Phone match that tolerates country codes: exact digits, or one number being a
+// suffix of the other (e.g. 9876543210 vs 919876543210) once both are ≥ 10 digits.
+function phoneMatches(entered, stored) {
+  if (!entered || !stored) return false;
+  const a = normalizePhoneDigits(entered);
+  const b = normalizePhoneDigits(stored);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  if (a.length >= 10 && b.length >= 10) {
+    return a.endsWith(b) || b.endsWith(a);
+  }
+  return false;
+}
+
+async function handleTracker(request, response) {
+  const bookingId = parseInt(request.query?.booking, 10);
+  const phone = String(request.query?.phone || "").trim();
+  if (!bookingId || isNaN(bookingId) || bookingId <= 0) {
+    return response.status(400).json({ error: "Invalid booking reference" });
+  }
+  if (normalizePhoneDigits(phone)?.length < 10) {
+    return response.status(400).json({ error: "Please enter the phone number used for this booking" });
+  }
+
+  const sql = neon(process.env.DATABASE_URL);
+  const rows = await sql`
+    SELECT b.id, b.customer_number, b.customer_phone, b.customer_name, b.service_type,
+           b.area, b.address, b.urgency, b.status, b.technician_name, b.technician_id,
+           b.estimated_cost, b.final_cost, b.priority, b.source, b.created_at, b.updated_at,
+           t.name AS assigned_technician_name, rs.shop_name
+    FROM bookings b
+    LEFT JOIN technicians t ON t.id = b.technician_id
+    LEFT JOIN repair_shops rs ON rs.id = b.repair_shop_id
+    WHERE b.id = ${bookingId} LIMIT 1
+  `;
+  if (rows.length === 0) {
+    // Same 404 for missing AND mismatched — never reveal whether a ref exists.
+    return response.status(404).json({ error: "Booking not found. Check the reference and phone number." });
+  }
+
+  const b = rows[0];
+  const verified = phoneMatches(phone, b.customer_phone) || phoneMatches(phone, b.customer_number);
+  if (!verified) {
+    return response.status(404).json({ error: "Booking not found. Check the reference and phone number." });
+  }
+
+  const timeline = await loadRepairTimeline(sql, bookingId);
+
+  return response.status(200).json({
+    booking: {
+      id: b.id,
+      status: b.status,
+      statusLabel: repairStatusLabel(b.status),
+      serviceType: b.service_type,
+      area: b.area,
+      address: b.address,
+      urgency: b.urgency,
+      priority: b.priority,
+      technicianName: b.technician_name || b.assigned_technician_name || null,
+      estimatedCost: b.estimated_cost != null ? parseFloat(b.estimated_cost) : null,
+      finalCost: b.final_cost != null ? parseFloat(b.final_cost) : null,
+      source: b.source || null,
+      createdAt: b.created_at,
+      updatedAt: b.updated_at,
+    },
+    shopName: b.shop_name || null,
+    timeline,
+  });
+}
+
 // ─── ROUTER ────────────────────────────────────────────────────────────────
 // Dispatch by ?route= (legacy URLs are rewritten in vercel.json):
 //   /api/health   → ?route=health
 //   /api/currency → ?route=currency
+//   /api/tracker  → ?route=tracker
 //   default       → dashboard widget
 
 module.exports = withErrorHandler(async (request, response) => {
@@ -287,6 +371,7 @@ module.exports = withErrorHandler(async (request, response) => {
   if (!applyLimit(request, response, apiLimiter)) return;
 
   if (route === "currency") return handleCurrency(request, response);
+  if (route === "tracker") return handleTracker(request, response);
 
   return handleDashboard(request, response);
 });

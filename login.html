@@ -136,7 +136,7 @@
     if (!user) return '/shop-dashboard.html';
     const role = user.role || 'owner';
     if (['super_admin', 'admin', 'support'].includes(role)) return '/admin.html';
-    if (role === 'technician') return '/shop-dashboard.html';
+    if (role === 'technician') return '/tech-dashboard.html';
     return '/shop-dashboard.html';
   }
 

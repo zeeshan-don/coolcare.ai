@@ -10,7 +10,7 @@
  * Build the full command-center payload for a shop.
  * @param {Function} sql  neon query function
  * @param {number} shopId
- * @param {object} statusCounts  { open, accepted, assigned, on_the_way, arrived, completed, cancelled, rejected }
+ * @param {object} statusCounts  { open, accepted, rejected, assigned, on_the_way, arrived, in_progress, waiting_parts, completed, cancelled, payment_received }
  * @param {Array} revenueChart   raw 30-day chart rows [{ date, revenue, bookings }]
  * @param {number} todayBookings
  * @param {object} base          { monthlyRevenue, monthBookings }
@@ -35,12 +35,41 @@ async function buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, t
     technicianCount: 0,
     pendingPayments: 0,
     satisfaction: 0,
+    // ── Repair lifecycle analytics ────────────────────────────────────
+    jobsPending: (statusCounts.open || 0) + (statusCounts.accepted || 0),
+    jobsAssigned: statusCounts.assigned || 0,
+    jobsInProgress: (statusCounts.on_the_way || 0) + (statusCounts.arrived || 0) + (statusCounts.in_progress || 0) + (statusCounts.waiting_parts || 0),
+    jobsCompleted: statusCounts.completed || 0,
+    jobsCancelled: (statusCounts.cancelled || 0) + (statusCounts.rejected || 0),
+    avgCompletionHours: null,
+    avgTechResponseMinutes: null,
     aiConversationsToday: 0,
     aiBookingsToday: 0,
     aiSuccessRate: 0,
     hoursSavedToday: 0,
     avgResponseSeconds: 0,
   };
+
+  // ── Average completion time + technician response time (timeline-derived) ──
+  try {
+    const rows = await sql`
+      SELECT
+        (SELECT AVG(EXTRACT(EPOCH FROM (bt.created_at - b.created_at)) / 3600.0)
+         FROM booking_timeline bt JOIN bookings b ON b.id = bt.booking_id
+         WHERE b.repair_shop_id = ${shopId} AND b.status = 'completed'
+           AND bt.new_value = 'completed' AND bt.created_at >= b.created_at) AS avg_completion_hours,
+        (SELECT AVG(EXTRACT(EPOCH FROM (bt2.created_at - b2.created_at)) / 60.0)
+         FROM (SELECT DISTINCT ON (booking_id) booking_id, created_at
+               FROM booking_timeline
+               WHERE new_value = 'assigned' OR action = 'technician_assigned'
+               ORDER BY booking_id, created_at ASC) bt2
+         JOIN bookings b2 ON b2.id = bt2.booking_id
+         WHERE b2.repair_shop_id = ${shopId} AND bt2.created_at >= b2.created_at) AS avg_response_minutes
+    `;
+    const r = rows[0] || {};
+    if (r.avg_completion_hours != null) kpis.avgCompletionHours = Math.round(parseFloat(r.avg_completion_hours) * 10) / 10;
+    if (r.avg_response_minutes != null) kpis.avgTechResponseMinutes = Math.round(parseFloat(r.avg_response_minutes) * 10) / 10;
+  } catch (e) { /* ok */ }
 
   if (revenueChart && revenueChart.length) {
     const t = revenueChart[revenueChart.length - 1];
@@ -114,7 +143,7 @@ async function buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, t
 
   const busyTechIds = new Set();
   try {
-    const busy = await sql`SELECT DISTINCT technician_id FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('assigned','on_the_way','arrived') AND technician_id IS NOT NULL`;
+    const busy = await sql`SELECT DISTINCT technician_id FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('assigned','on_the_way','arrived','in_progress','waiting_parts') AND technician_id IS NOT NULL`;
     busy.forEach((r) => busyTechIds.add(String(r.technician_id)));
   } catch (e) { /* ok */ }
   kpis.techniciansFree = Math.max(0, technicians.length - busyTechIds.size);
@@ -141,6 +170,7 @@ async function buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, t
   if (waiting > 0) priorities.push({ level: "red", count: waiting, text: `${waiting} booking${plural(waiting)} waiting for technician assignment`, action: "Assign →", filter: "open", scrollTo: "bookings" });
   if (kpis.overdueJobs > 0) priorities.push({ level: "red", count: kpis.overdueJobs, text: `${kpis.overdueJobs} overdue repair${plural(kpis.overdueJobs)} need attention today`, action: "Review →", filter: "open", scrollTo: "bookings" });
   if ((statusCounts.open || 0) > 0) priorities.push({ level: "yellow", count: statusCounts.open, text: `${statusCounts.open} customer${plural(statusCounts.open)} waiting for confirmation`, action: "Confirm →", filter: "open", scrollTo: "bookings" });
+  if ((statusCounts.waiting_parts || 0) > 0) priorities.push({ level: "yellow", count: statusCounts.waiting_parts, text: `${statusCounts.waiting_parts} repair${plural(statusCounts.waiting_parts)} waiting for parts`, action: "Track →", filter: "waiting_parts", scrollTo: "bookings" });
   if (kpis.pendingPayments > 0) priorities.push({ level: "yellow", count: kpis.pendingPayments, text: `${kpis.pendingPayments} payment${plural(kpis.pendingPayments)} pending collection`, action: "View →", scrollTo: "bookings" });
   if (kpis.techniciansFree > 0) priorities.push({ level: "green", count: kpis.techniciansFree, text: `${kpis.techniciansFree} technician${plural(kpis.techniciansFree)} available right now`, action: "Dispatch →", scrollTo: "widgets" });
   if (ai.conversationsToday > 0) priorities.push({ level: "green", count: ai.bookingsToday, text: `AI booked ${ai.bookingsToday} job${plural(ai.bookingsToday)} today · responding in ~${kpis.avgResponseSeconds}s`, action: "Details →", scrollTo: "widgets" });
@@ -237,7 +267,7 @@ async function buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, t
  * @returns {Promise<{statusCounts, revenueChart, todayBookings, base}>}
  */
 async function fetchCommandCenterInputs(sql, shopId) {
-  const statusCounts = { open: 0, accepted: 0, assigned: 0, on_the_way: 0, arrived: 0, completed: 0, cancelled: 0, rejected: 0 };
+  const statusCounts = { open: 0, accepted: 0, rejected: 0, assigned: 0, on_the_way: 0, arrived: 0, in_progress: 0, waiting_parts: 0, completed: 0, cancelled: 0, payment_received: 0 };
 
   let revenueChart = [];
   let todayBookings = 0;

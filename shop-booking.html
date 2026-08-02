@@ -54,6 +54,9 @@
     .badge.cancelled,.badge.rejected{background:var(--bg3);color:var(--muted);border:1px solid var(--border)}
     .badge.on_the_way{background:rgba(255,255,255,0.05);color:var(--ink2);border:1px solid var(--border2)}
     .badge.arrived{background:var(--red-bg);color:var(--red);border:1px solid rgba(239,68,68,0.2)}
+    .badge.in_progress{background:rgba(59,130,246,0.08);color:#60a5fa;border:1px solid rgba(59,130,246,0.25)}
+    .badge.waiting_parts{background:rgba(234,179,8,0.08);color:#eab308;border:1px solid rgba(234,179,8,0.25)}
+    .badge.payment_received{background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,0.25)}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
     .card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px 26px;position:relative;overflow:hidden}
     .card::before{display:none}
@@ -162,6 +165,12 @@
       <!-- Populated dynamically -->
     </div>
 
+    <!-- Optional note attached to the next status change (shown on the timeline) -->
+    <div class="card" style="margin-top:10px">
+      <label for="actionNotes">Note for this update (optional)</label>
+      <textarea id="actionNotes" placeholder="e.g. Part ordered from supplier, technician running late, work completed…"></textarea>
+    </div>
+
     <!-- Technician assignment form -->
     <div class="card" style="margin-top:0" id="techForm">
       <h2>Update Technician & Costs</h2>
@@ -268,8 +277,9 @@
     document.getElementById('loadingMsg').style.display = 'none';
     document.getElementById('bookingContent').style.display = 'block';
 
+    const fmtStatus = (s) => String(s || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     document.getElementById('pageTitle').textContent    = `Booking #${booking.id}`;
-    document.getElementById('statusBadge').textContent  = booking.status.replace(/_/g, ' ');
+    document.getElementById('statusBadge').textContent  = fmtStatus(booking.status);
     document.getElementById('statusBadge').className    = `badge ${booking.status}`;
     document.getElementById('createdAt').textContent    = new Date(booking.created_at).toLocaleString();
     document.getElementById('custName').textContent     = booking.customer_name || '—';
@@ -308,16 +318,29 @@
       return;
     }
 
-    container.innerHTML = timeline.map(entry => `
+    const fmtStatus = (s) => String(s || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    container.innerHTML = timeline.map(entry => {
+      const title = entry.action === 'status_change'
+        ? `Status: ${fmtStatus(entry.status_to || entry.new_value)}`
+        : fmtStatus(entry.action || entry.action_type || 'Event');
+      const transition = entry.action === 'status_change' && entry.status_from && entry.status_to && entry.status_from !== entry.status_to
+        ? `<div style="font-size:11px;color:var(--muted2);margin-top:2px;">${fmtStatus(entry.status_from)} → ${fmtStatus(entry.status_to)}</div>`
+        : '';
+      const when = new Date(entry.created_at);
+      const by = entry.performed_by
+        ? `<div style="margin-top:4px;"><small style="color:var(--muted);font-size:11px;">Performed by: <b style="color:var(--ink2);font-weight:600">${escapeHtml(entry.performed_by)}</b></small></div>`
+        : '';
+      return `
       <div style="padding:12px 0;border-bottom:1px solid var(--border);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-          <strong style="font-size:13px;color:var(--ink);">${escapeHtml((entry.action || entry.action_type || '').replace(/_/g, ' '))}</strong>
-          <span style="font-size:11px;color:var(--muted);">${new Date(entry.created_at).toLocaleString()}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;gap:10px;">
+          <strong style="font-size:13px;color:var(--ink);">${escapeHtml(title)}</strong>
+          <span style="font-size:11px;color:var(--muted);white-space:nowrap;">${when.toLocaleDateString()} · ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
+        ${transition}
         ${entry.notes ? `<p style="margin:4px 0 0;font-size:13px;color:var(--ink);">${escapeHtml(entry.notes)}</p>` : ''}
-        ${entry.actor_type ? `<small style="color:var(--muted);font-size:11px;">By: ${escapeHtml(entry.actor_type)}</small>` : ''}
-      </div>
-    `).join('');
+        ${by}
+      </div>`;
+    }).join('');
   }
 
   const SVGS = {
@@ -325,22 +348,33 @@
     x: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
     user: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`,
     truck: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>`,
-    mapPin: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`
+    mapPin: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>`,
+    wrench: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>`,
+    box: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>`,
+    card: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>`
   };
 
+  // Full repair lifecycle: Pending → Assigned → On The Way → Arrived →
+  // In Progress ⇄ Waiting For Parts → Completed → Payment Received.
   const ACTION_FLOWS = {
-    open:       [{ label: 'Accept Booking',       status: 'accepted',   cls: 'primary', icon: SVGS.check },
-                 { label: 'Reject Booking',        status: 'rejected',   cls: 'danger',  icon: SVGS.x }],
-    accepted:   [{ label: 'Assign Technician',    status: 'assigned',   cls: '',         icon: SVGS.user },
-                 { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
-    assigned:   [{ label: 'Technician On The Way', status: 'on_the_way', cls: '',         icon: SVGS.truck },
-                 { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
-    on_the_way: [{ label: 'Mark Arrived',          status: 'arrived',    cls: '',         icon: SVGS.mapPin }],
-    arrived:    [{ label: 'Mark Completed',         status: 'completed',  cls: 'primary', icon: SVGS.check },
-                 { label: 'Cancel Booking',         status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
-    completed:  [],
-    cancelled:  [],
-    rejected:   [],
+    open:           [{ label: 'Accept Booking',        status: 'accepted',   cls: 'primary', icon: SVGS.check },
+                     { label: 'Reject Booking',        status: 'rejected',   cls: 'danger',  icon: SVGS.x }],
+    accepted:       [{ label: 'Assign Technician',     status: 'assigned',   cls: '',         icon: SVGS.user },
+                     { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
+    assigned:       [{ label: 'Technician On The Way', status: 'on_the_way', cls: '',         icon: SVGS.truck },
+                     { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
+    on_the_way:     [{ label: 'Mark Arrived',          status: 'arrived',    cls: '',         icon: SVGS.mapPin },
+                     { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
+    arrived:        [{ label: 'Start Repair',          status: 'in_progress', cls: '',        icon: SVGS.wrench },
+                     { label: 'Cancel Booking',        status: 'cancelled',   cls: 'danger',  icon: SVGS.x }],
+    in_progress:    [{ label: 'Waiting For Parts',     status: 'waiting_parts', cls: '',      icon: SVGS.box },
+                     { label: 'Complete Repair',       status: 'completed',   cls: 'primary', icon: SVGS.check }],
+    waiting_parts:  [{ label: 'Repair In Progress',    status: 'in_progress', cls: '',        icon: SVGS.wrench },
+                     { label: 'Complete Repair',       status: 'completed',   cls: 'primary', icon: SVGS.check }],
+    completed:      [{ label: 'Collect Payment',       status: 'payment_received', cls: '',  icon: SVGS.card }],
+    payment_received: [],
+    cancelled:      [],
+    rejected:       [],
   };
 
   function renderActions() {
@@ -367,6 +401,8 @@
     const technicianName = status === 'assigned'
       ? document.getElementById('technicianName').value.trim() || undefined
       : undefined;
+    // Optional note recorded on the timeline with the status change
+    const notes = document.getElementById('actionNotes')?.value.trim() || undefined;
 
     try {
       const res = await fetch('/api/shop', {
@@ -375,7 +411,7 @@
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'update', bookingId: booking.id, status, technicianName }),
+        body: JSON.stringify({ action: 'update', bookingId: booking.id, status, technicianName, notes }),
       });
       if (res.status === 401) { window.location.href = '/login.html'; return; }
       const data = await res.json();
@@ -386,6 +422,8 @@
       booking = data.booking;
       showToast(`Status updated to "${status.replace(/_/g,' ')}" ✓`);
       renderBooking();
+      const notesField = document.getElementById('actionNotes');
+      if (notesField) notesField.value = '';
     } catch (err) {
       console.error('[booking] Update error:', err);
       showToast('Network error. Please try again.');

@@ -134,6 +134,7 @@ Then add it to Vercel:
 
 ### Database
 - `migration-repair-shop-auth.sql` — Run this in Neon SQL console
+- `migration-repair-lifecycle.sql` — Run this in Neon SQL console (extends the booking status set with `in_progress`, `waiting_parts`, `payment_received` + repair-timeline indexes + optional `users.technician_id`). Safe to re-run.
 
 ---
 
@@ -142,11 +143,14 @@ Then add it to Vercel:
 Once everything is deployed:
 
 - [ ] Run `migration-repair-shop-auth.sql` in Neon
+- [ ] Run `migration-repair-lifecycle.sql` in Neon
 - [ ] Add `JWT_SECRET` to Vercel
 - [ ] Redeploy on Vercel
 - [ ] Test shop signup works
 - [ ] Test shop login works
 - [ ] Test job status update sends WhatsApp notification
+- [ ] Test the repair lifecycle: Pending → Assigned → On The Way → Arrived → In Progress → Completed (timeline events + customer notifications)
+- [ ] Test the Technician Dashboard (`/tech-dashboard.html`) — technician login shows active jobs and status buttons
 
 ---
 

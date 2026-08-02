@@ -18,7 +18,8 @@
 
 const { neon } = require("@neondatabase/serverless");
 const { requireAuth, requireRole, requirePlatformAdmin, requireSuperAdmin, requireActiveSubscription, logAdminAction, isDemoShop } = require("./_lib/auth");
-const { notifyStatusChange, sendEmail, sendWhatsApp } = require("./_lib/notify");
+const { sendEmail, sendWhatsApp } = require("./_lib/notify");
+const { insertTimelineEvent, ACTORS, loadRepairTimeline, applyBookingStatusChange } = require("./_lib/repair-lifecycle");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, aiSettingsSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
@@ -185,7 +186,7 @@ async function handleDashboard(request, response, sql, shopId, auth) {
   const total = parseInt(countResult[0]?.total || "0", 10);
 
   const counts = await sql`SELECT status, COUNT(*) as count FROM bookings WHERE repair_shop_id = ${shopId} GROUP BY status`;
-  const statusCounts = { open: 0, accepted: 0, assigned: 0, on_the_way: 0, arrived: 0, completed: 0, cancelled: 0, rejected: 0 };
+  const statusCounts = { open: 0, accepted: 0, rejected: 0, assigned: 0, on_the_way: 0, arrived: 0, in_progress: 0, waiting_parts: 0, completed: 0, cancelled: 0, payment_received: 0 };
   counts.forEach((r) => { if (statusCounts[r.status] !== undefined) statusCounts[r.status] = parseInt(r.count, 10); });
 
   const revenueResult = await sql`
@@ -199,7 +200,7 @@ async function handleDashboard(request, response, sql, shopId, auth) {
   const todayResult = await sql`SELECT COUNT(*) as count FROM bookings WHERE repair_shop_id = ${shopId} AND created_at >= date_trunc('day', now())`;
   const todayBookings = parseInt(todayResult[0]?.count || "0", 10);
 
-  const pendingResult = await sql`SELECT COUNT(*) as count FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('open', 'accepted', 'assigned', 'on_the_way', 'arrived')`;
+  const pendingResult = await sql`SELECT COUNT(*) as count FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('open', 'accepted', 'assigned', 'on_the_way', 'arrived', 'in_progress', 'waiting_parts')`;
   const pendingJobs = parseInt(pendingResult[0]?.count || "0", 10);
 
   const weeklyResult = await sql`
@@ -330,8 +331,7 @@ async function handleBookingDetail(request, response, sql, shopId, auth) {
   `;
   if (bookings.length === 0) return response.status(404).json({ error: "Booking not found or access denied" });
 
-  let timeline = [];
-  try { timeline = await sql`SELECT * FROM booking_timeline WHERE booking_id = ${bookingId} ORDER BY created_at ASC`; } catch (e) { /* table may not exist */ }
+  const timeline = await loadRepairTimeline(sql, bookingId);
 
   let technicians = [];
   try { technicians = await sql`SELECT id, name, phone, specialization FROM technicians WHERE repair_shop_id = ${shopId} AND active = true ORDER BY name`; } catch (e) { /* may not have repair_shop_id */ }
@@ -384,7 +384,8 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
   const booking = rows[0];
   const oldStatus = booking.status;
   const updates = {};
-  if (data.status) updates.status = data.status;
+  // Status is applied through the shared repair lifecycle (status + timeline +
+  // notification in one place) — everything else is a plain field update.
   if (data.technicianName !== undefined) updates.technician_name = data.technicianName || null;
   if (data.technicianId !== undefined) updates.technician_id = data.technicianId ? parseInt(data.technicianId, 10) : null;
   if (data.technicianNotes !== undefined) updates.technician_notes = data.technicianNotes || null;
@@ -396,33 +397,39 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
   if (body.customerNotes !== undefined) updates.customer_notes = body.customerNotes || null;
   if (body.photoUrls !== undefined) updates.photo_urls = Array.isArray(body.photoUrls) ? body.photoUrls : null;
 
-  if (Object.keys(updates).length === 0) return response.status(400).json({ error: "No fields to update were provided" });
-
-  const ALLOWED_COLS = new Set(["status","technician_name","technician_id","technician_notes","estimated_cost","final_cost","priority","reschedule_date","invoice_number","customer_notes","photo_urls"]);
+  const ALLOWED_COLS = new Set(["technician_name","technician_id","technician_notes","estimated_cost","final_cost","priority","reschedule_date","invoice_number","customer_notes","photo_urls"]);
   const setParts = []; const setValues = [];
   for (const [col, val] of Object.entries(updates)) { if (!ALLOWED_COLS.has(col)) continue; setValues.push(val); setParts.push(`${col} = $${setValues.length}`); }
-  if (setParts.length === 0) return response.status(400).json({ error: "No valid fields provided" });
 
-  setValues.push(data.bookingId, shopId);
-  await sql(`UPDATE bookings SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length - 1} AND repair_shop_id = $${setValues.length}`, setValues);
+  if (setParts.length > 0) {
+    setValues.push(data.bookingId, shopId);
+    await sql(`UPDATE bookings SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length - 1} AND repair_shop_id = $${setValues.length}`, setValues);
+  } else if (!data.status) {
+    return response.status(400).json({ error: "No fields to update were provided" });
+  }
 
+  // ── Repair lifecycle status change (single shared path) ──────────────────
+  // Updates bookings.status, records the status_change timeline event with the
+  // actor + optional notes, and notifies the customer on meaningful milestones.
   if (data.status && data.status !== oldStatus) {
-    await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, actor_id) VALUES (${data.bookingId}, 'status_change', ${oldStatus}, ${data.status}, 'shop', ${shopId})`;
+    await applyBookingStatusChange(sql, {
+      bookingId: data.bookingId,
+      newStatus: data.status,
+      actorType: ACTORS.SHOP,
+      actorId: shopId,
+      notes: data.notes || undefined,
+    });
   }
-  if (data.technicianName) {
-    await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, actor_id) VALUES (${data.bookingId}, 'technician_assigned', ${booking.technician_name || null}, ${data.technicianName}, 'shop', ${shopId})`;
+
+  if (data.technicianName && data.technicianName !== booking.technician_name) {
+    await insertTimelineEvent(sql, { bookingId: data.bookingId, action: "technician_assigned", oldValue: booking.technician_name || null, newValue: data.technicianName, actorType: ACTORS.SHOP, actorId: shopId });
   }
-  if (data.priority) {
-    await sql`INSERT INTO booking_timeline (booking_id, action, old_value, new_value, actor_type, actor_id) VALUES (${data.bookingId}, 'priority_change', ${booking.priority || 'normal'}, ${data.priority}, 'shop', ${shopId})`;
+  if (data.priority && data.priority !== booking.priority) {
+    await insertTimelineEvent(sql, { bookingId: data.bookingId, action: "priority_change", oldValue: booking.priority || 'normal', newValue: data.priority, actorType: ACTORS.SHOP, actorId: shopId });
   }
 
   const updated = await sql`SELECT b.*, rs.shop_name FROM bookings b LEFT JOIN repair_shops rs ON rs.id = b.repair_shop_id WHERE b.id = ${data.bookingId} LIMIT 1`;
-  let timeline = [];
-  try { timeline = await sql`SELECT * FROM booking_timeline WHERE booking_id = ${data.bookingId} ORDER BY created_at DESC LIMIT 20`; } catch (e) { /* table may not exist */ }
-
-  if (data.status && data.status !== oldStatus) {
-    notifyStatusChange({ ...updated[0], shop_name: booking.shop_name }, data.status).catch((err) => console.error("[shop/update] notify error:", err.message));
-  }
+  const timeline = await loadRepairTimeline(sql, data.bookingId);
 
   console.log(`[shop/update] booking #${data.bookingId} by shop #${shopId}:`, { status: data.status });
   return response.status(200).json({ updated: true, booking: updated[0], timeline });
