@@ -23,6 +23,19 @@ ALTER TABLE conversation_state
 CREATE INDEX IF NOT EXISTS idx_conv_state_channel
   ON conversation_state(channel);
 
+-- Phone number collected during the booking flow. The shared engine
+-- (conversation-engine.js) writes this for BOTH channels — the website widget
+-- asks for it, WhatsApp auto-fills the sender's number. Required here so the
+-- website booking flow does not fail with
+--   column "customer_phone" of relation "conversation_state" does not exist.
+ALTER TABLE conversation_state
+  ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+
+-- Durable copy: copied onto the confirmed booking so the technician can call
+-- the customer back even after the conversation state row is reset.
+ALTER TABLE bookings
+  ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+
 -- ─── 3. bookings: remember where the booking came from ───────────────────────
 ALTER TABLE bookings
   ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'whatsapp'

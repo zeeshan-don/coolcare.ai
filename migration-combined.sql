@@ -1213,7 +1213,21 @@ WHERE pl1.idempotency_key = pl2.idempotency_key
   AND pl1.idempotency_key IS NOT NULL
   AND pl1.id != pl2.id;
 
-ALTER TABLE payment_logs ADD CONSTRAINT IF NOT EXISTS payment_logs_idempotency_key_unique UNIQUE (idempotency_key);
+-- PostgreSQL does NOT support `ADD CONSTRAINT IF NOT EXISTS`.
+-- The idempotent guard below checks information_schema first (same pattern
+-- used elsewhere in this file), so this never fails on re-runs.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.table_constraints
+    WHERE table_schema = 'public'
+      AND table_name = 'payment_logs'
+      AND constraint_name = 'payment_logs_idempotency_key_unique'
+  ) THEN
+    ALTER TABLE payment_logs
+      ADD CONSTRAINT payment_logs_idempotency_key_unique UNIQUE (idempotency_key);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_payment_logs_idempotency_key ON payment_logs (idempotency_key);
 

@@ -7,7 +7,7 @@ second front-end into the same CoolCare AI engine that powers WhatsApp.
 web-bot/
 ├── widget.js          ← The embeddable widget (Shadow DOM, no iframe). Served at /web-bot/widget.js
 ├── shop-widget.html   ← Shop-owner admin page: enable/disable, branding, embed-code generator
-├── website-chat.sql   ← Idempotent DB migration (channel + source columns, widget_settings table)
+├── website-chat.sql   ← Idempotent DB migration (channel + source + customer_phone columns, widget_settings table)
 ├── WEBSITE-CHAT.md    ← Full architecture / API / security / deployment / testing docs
 └── README.md          ← This file
 ```

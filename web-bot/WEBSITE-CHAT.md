@@ -62,6 +62,8 @@ prompts and knowledge-base logic are never duplicated.
 |---|---|
 | `conversations` | `+ channel TEXT DEFAULT 'whatsapp'` (whatsapp \| website) |
 | `conversation_state` | `+ channel TEXT DEFAULT 'whatsapp'` |
+| `conversation_state` | `+ customer_phone TEXT` (shared with WhatsApp — website asks, WhatsApp auto-fills) |
+| `bookings` | `+ customer_phone TEXT` (durable copy for technician call-back) |
 | `bookings` | `+ source TEXT DEFAULT 'whatsapp'` (whatsapp \| website) |
 | `whatsapp_conversations` | `+ channel TEXT DEFAULT 'whatsapp'` (unified dashboard log) |
 | `widget_settings` *(new)* | Per-shop branding: `enabled, business_name, welcome_message, offline_message, primary_color, widget_position, logo_url, theme, show_avatar` |
@@ -177,6 +179,10 @@ widget resolves its API base from its own script URL automatically.
 ## 8. Deployment plan
 
 1. **Migrate DB** — run `website-chat.sql` in Neon.
+   > Already deployed before `customer_phone` existed? Just re-run `website-chat.sql`
+   > (idempotent) or run `migration-customer-phone.sql` at the repo root — it adds the
+   > `customer_phone` columns to `conversation_state` and `bookings` that the shared
+   > engine writes for both channels.
 2. **Deploy backend** — push `api/chat.js`, updated `api/shop.js`,
    `api/_lib/conversation-engine.js`, rewritten `api/whatsapp.js`, updated
    `rate-limit.js`, `demo-data.js` to Vercel.
