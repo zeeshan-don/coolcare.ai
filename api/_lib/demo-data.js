@@ -5,6 +5,8 @@
 // Every demo session gets fresh, realistic data that makes the product
 // feel like it has been used by a real business for months.
 
+const { getAppBaseUrl } = require("./config");
+
 // ═════════════════════════════════════════════════════════════════════════════
 // DATA POOLS
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1864,7 +1866,7 @@ function buildDemoShopSettingsResponse() {
 function buildDemoReferralsResponse() {
   return {
     referralCode: "COOLCARE-DEMO",
-    shareLink: "https://coolcare.ai/shop-signup.html?ref=COOLCARE-DEMO",
+    shareLink: `${getAppBaseUrl()}/shop-signup.html?ref=COOLCARE-DEMO`,
     walletBalance: 1240,
     discountBalance: 500,
     stats: { total: 5, successful: 3, pending: 2, earnings: 750 },
@@ -1966,7 +1968,7 @@ function buildDemoWidgetSettingsResponse() {
       auto_open: false,
       language: "en",
     },
-    embedCode: `<script src="https://coolcare.ai/web-bot/widget.js" data-widget-id="${DEMO.shop.id || 1}"></script>`,
+    embedCode: `<script src="${getAppBaseUrl()}/web-bot/widget.js" data-widget-id="${DEMO.shop.id || 1}"></script>`,
     isDemo: true,
   };
 }

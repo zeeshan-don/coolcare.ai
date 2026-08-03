@@ -35,8 +35,8 @@ function validateOrigin(request, response) {
   const origin = request.headers["origin"] || "";
   const allowed = [
     // Add production domain(s) here
-    // "https://coolcare.ai",
-    // "https://www.coolcare.ai",
+    // "https://coolcare.zeeshstudios.in",
+    // "https://www.coolcare.zeeshstudios.in",
   ];
 
   // In development, allow all origins

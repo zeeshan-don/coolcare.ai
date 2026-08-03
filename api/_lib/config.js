@@ -23,6 +23,7 @@ const OPTIONAL = [
   "RAZORPAY_KEY_SECRET",
   "RESEND_API_KEY",
   "APP_URL",
+  "PUBLIC_WEBSITE_BASE_URL",
   "ADMIN_EMAIL",
   "ADMIN_PASSWORD",
   "SMTP_HOST",
@@ -54,6 +55,37 @@ function envOpt(key, fallback = null) {
   return process.env[key] || fallback;
 }
 
+/**
+ * Base URL for HOSTED SHOP WEBSITES (public, /<slug> pages).
+ * Configurable via PUBLIC_WEBSITE_BASE_URL — e.g.
+ *   PUBLIC_WEBSITE_BASE_URL=https://coolcare.zeeshstudios.in
+ * Falls back to APP_URL when the dedicated var is not set.
+ */
+function getWebsiteBaseUrl() {
+  return process.env.PUBLIC_WEBSITE_BASE_URL || process.env.APP_URL || "";
+}
+
+/**
+ * Base URL for app pages (dashboard, tracker, auth, payments, …).
+ * Uses APP_URL; falls back to PUBLIC_WEBSITE_BASE_URL so a single
+ * configured domain keeps every generated link working.
+ */
+function getAppBaseUrl() {
+  return process.env.APP_URL || process.env.PUBLIC_WEBSITE_BASE_URL || "";
+}
+
+/**
+ * Build the hosted website URL for a shop: ${PUBLIC_WEBSITE_BASE_URL}/${slug}
+ * Returns null when no base URL is configured or the slug is missing
+ * (callers already guard on truthiness before rendering links).
+ */
+function getHostedWebsiteUrl(slug) {
+  if (!slug) return null;
+  const base = getWebsiteBaseUrl().replace(/\/+$/, "");
+  if (!base) return null;
+  return `${base}/${slug}`;
+}
+
 // Check if a feature is configured (e.g. WhatsApp, Stripe)
 function hasFeature(key) {
   return !!process.env[key];
@@ -66,4 +98,13 @@ function mask(value, visibleChars = 4) {
   return value.slice(0, visibleChars) + "***";
 }
 
-module.exports = { validateEnv, env, envOpt, hasFeature, mask };
+module.exports = {
+  validateEnv,
+  env,
+  envOpt,
+  hasFeature,
+  mask,
+  getWebsiteBaseUrl,
+  getAppBaseUrl,
+  getHostedWebsiteUrl,
+};

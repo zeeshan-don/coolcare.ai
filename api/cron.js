@@ -12,6 +12,7 @@ const { withErrorHandler } = require("./_lib/errors");
 const { sendWhatsApp, sendEmail } = require("./_lib/notify");
 const { buildCommandCenterForShop } = require("./_lib/command-center");
 const { htmlEscape } = require("./_lib/security");
+const { getAppBaseUrl } = require("./_lib/config");
 
 // ═══════════════════════════════════════════════════════════════════════════
 // JOB 1 — MORNING DIGEST (was api/cron/digest.js)
@@ -68,7 +69,7 @@ function buildWhatsAppDigest(shop, cc) {
   if (cc.businessHealth) {
     lines.push(`🩺 Business Health: ${cc.businessHealth.score}/100 — ${cc.businessHealth.label}`);
   }
-  lines.push("", `Open your dashboard: ${process.env.APP_URL || "https://coolcare.ai"}/shop-dashboard.html`);
+  lines.push("", `Open your dashboard: ${getAppBaseUrl()}/shop-dashboard.html`);
   return lines.join("\n");
 }
 
@@ -118,7 +119,7 @@ function buildEmailDigest(shop, cc) {
         </tr>
       </table>
 
-      <a href="${process.env.APP_URL || "https://coolcare.ai"}/shop-dashboard.html"
+      <a href="${getAppBaseUrl()}/shop-dashboard.html"
          style="display:block;text-align:center;background:#fff;color:#000;font-weight:700;font-size:14px;padding:14px 24px;border-radius:10px;text-decoration:none;margin-bottom:20px;">Open Command Center →</a>
       <hr style="border:none;border-top:1px solid #222;margin:20px 0;">
       <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
@@ -303,7 +304,7 @@ async function runSubscriptionsJob() {
             <p style="color:#a3a3a3;line-height:1.6;">Hi ${sub.owner_name || sub.shop_name},</p>
             <p style="color:#a3a3a3;line-height:1.6;">Your CoolCare Pro subscription expires in <strong style="color:#fff">${d} day${d > 1 ? "s" : ""}</strong> (${expiryDate}).</p>
             <p style="color:#a3a3a3;line-height:1.6;">Renew now to keep your WhatsApp bot, dashboard, and all features running without interruption.</p>
-            <a href="${process.env.APP_URL || "https://coolcare.ai"}/shop-subscription.html" style="display:inline-block;margin-top:16px;background:#fff;color:#000;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Renew Subscription →</a>
+            <a href="${getAppBaseUrl()}/shop-subscription.html" style="display:inline-block;margin-top:16px;background:#fff;color:#000;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Renew Subscription →</a>
             <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
             <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
           </div></div>`;

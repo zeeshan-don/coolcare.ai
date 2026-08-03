@@ -15,6 +15,7 @@ const { setSecurityHeaders, htmlEscape } = require("./_lib/security");
 const { sendEmail } = require("./_lib/notify");
 const { createOrder, calculateAmount } = require("./_lib/gateway");
 const { detectCountry, getCountryCurrency, getCountryName, CURRENCIES } = require("./_lib/currency");
+const { getAppBaseUrl } = require("./_lib/config");
 const { DEMO, ago, isCacheValid, invalidateDemoCache, perfMark, perfReport } = require("./_lib/demo-data");
 
 // ─── Demo password (never exposed to client) ────────────────────────────────
@@ -621,7 +622,7 @@ async function handleSignup(request, response, body) {
     console.log("[auth/signup] Payment record created:", { paymentDbId, amount, invoiceNumber });
 
     // Create order via gateway
-    const originUrl = request.headers["origin"] || "https://coolcare.ai";
+    const originUrl = request.headers["origin"] || getAppBaseUrl();
     const orderResult = await createOrder({
       shopId: shop.id,
       billingCycle,
@@ -952,12 +953,12 @@ async function handleForgotPassword(request, response, body) {
   }
 
   // Build reset URL
-  const baseUrl = process.env.APP_URL || "https://coolcare.ai";
+  const baseUrl = getAppBaseUrl();
   const resetUrl = `${baseUrl}/reset-password.html?token=${rawToken}`;
 
   // Send email
   const htmlBody = buildResetEmail(userName, resetUrl);
-  const fromEmail = process.env.FROM_EMAIL || "noreply@coolcare.ai";
+  const fromEmail = process.env.FROM_EMAIL || "noreply@coolcare.zeeshstudios.in";
 
   const emailResult = await sendEmail(data.email, "Reset your CoolCare AI Password", htmlBody);
 

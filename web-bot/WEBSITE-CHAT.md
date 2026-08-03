@@ -140,7 +140,7 @@ widget.js
 Install snippet (one line, nothing else):
 
 ```html
-<script src="https://coolcare.ai/web-bot/widget.js" data-shop-id="SHOP_ID"></script>
+<script src="https://coolcare.zeeshstudios.in/web-bot/widget.js" data-shop-id="SHOP_ID"></script>
 ```
 
 ---
@@ -155,8 +155,8 @@ Install snippet (one line, nothing else):
    footer field), publishes.
 5. Floating chat button appears automatically. No backend access required.
 
-For a dedicated domain, point a subdomain (e.g. `widget.coolcare.ai`) at the
-same Vercel deployment and use `https://widget.coolcare.ai/web-bot/widget.js` — the
+For a dedicated domain, point a subdomain (e.g. `widget.coolcare.zeeshstudios.in`) at the
+same Vercel deployment and use `https://widget.coolcare.zeeshstudios.in/web-bot/widget.js` — the
 widget resolves its API base from its own script URL automatically.
 
 ---
@@ -194,7 +194,7 @@ widget resolves its API base from its own script URL automatically.
 5. **Verify widget** — open a shop with widget enabled; run a full booking flow
    from the widget; confirm the booking appears in the dashboard with 🌐 badge
    and a technician is auto-assigned.
-6. Optional: point `widget.coolcare.ai` subdomain at the deployment.
+6. Optional: point `widget.coolcare.zeeshstudios.in` subdomain at the deployment.
 7. Update `DEPLOYMENT-CHECKLIST.md` if desired.
 
 ---

@@ -23,6 +23,7 @@
 const { neon } = require("@neondatabase/serverless");
 const { withErrorHandler } = require("./_lib/errors");
 const { setSecurityHeaders } = require("./_lib/security");
+const { getAppBaseUrl } = require("./_lib/config");
 
 // ─── HTML escape (all DB content is interpolated through this) ───────────────
 function esc(value) {
@@ -379,7 +380,7 @@ function renderWebsite(shop, ai, widget, appUrl) {
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
 
-  const appUrl = process.env.APP_URL || `https://${request.headers.host || "coolcare.ai"}`;
+  const appUrl = getAppBaseUrl() || `https://${request.headers.host || ""}`;
   const slug = String(request.query?.slug || "").trim().toLowerCase();
 
   if (!slug) {

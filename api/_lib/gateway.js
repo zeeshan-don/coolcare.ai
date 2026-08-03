@@ -8,6 +8,7 @@
 const { neon } = require("@neondatabase/serverless");
 const { decrypt } = require("./encrypt");
 const { PLAN_PRICING, getPlanPricingFromDB } = require("./currency");
+const { getAppBaseUrl } = require("./config");
 
 // ─── Config cache (5 min TTL) ───────────────────────────────────────────────
 let gwCache = { data: null, fetchedAt: 0 };
@@ -232,7 +233,7 @@ async function createRazorpayOrder(gw, { shopId, billingCycle, currency, amount,
 
 // ─── Stripe Strategy ────────────────────────────────────────────────────────
 async function createStripeSession(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, originUrl }) {
-  const baseUrl = originUrl || "https://coolcare.ai";
+  const baseUrl = originUrl || getAppBaseUrl();
   try {
     const intervalMap = { monthly: "month", quarterly: "month", halfyearly: "month", yearly: "year" };
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {

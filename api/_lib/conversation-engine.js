@@ -43,6 +43,7 @@
 
 const { neon } = require("@neondatabase/serverless");
 const { insertTimelineEvent, ACTORS } = require("./repair-lifecycle");
+const { getAppBaseUrl } = require("./config");
 
 // ─── Conversation modes ──────────────────────────────────────────────────────
 const MODE = {
@@ -1743,7 +1744,7 @@ async function handleMessage(customerNumber, userText, messageType, mediaData, o
       }
       // Point the customer at the public tracker so they can follow the repair
       // lifecycle without messaging us (both WhatsApp and Website Chat).
-      const trackerUrl = `${process.env.APP_URL || "https://coolcare.ai"}/tracker.html?booking=${bookingId}`;
+      const trackerUrl = `${getAppBaseUrl()}/tracker.html?booking=${bookingId}`;
       const trackerLine = s.trackerMsg ? `\n\n${s.trackerMsg(trackerUrl)}` : "";
       return s.bookingConfirmed(state, bookingId) + trackerLine;
     }

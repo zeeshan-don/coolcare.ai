@@ -44,6 +44,8 @@ Add these to your Vercel project settings:
 | `WHATSAPP_PHONE_NUMBER_ID` | from Meta dashboard | ✓ Already set |
 | `WHATSAPP_API_VERSION` | `v19.0` (optional, defaults) | ⚠ Check |
 | `JWT_SECRET` | Random 32+ char string | ❌ **MUST ADD** |
+| `APP_URL` | `https://coolcare.zeeshstudios.in` | ⚠ Check — base URL for app pages (dashboard, tracker, emails) |
+| `PUBLIC_WEBSITE_BASE_URL` | `https://coolcare.zeeshstudios.in` | ⚠ Check — base URL for hosted shop websites (`/<slug>` links) |
 
 ### Generate JWT_SECRET:
 Run one of these commands locally:

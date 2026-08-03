@@ -16,6 +16,7 @@ const { setSecurityHeaders, verifyWebhookSignature, htmlEscape } = require("../_
 const { PLAN_PRICING, detectCurrency, detectCountry, getCountryCurrency, CURRENCIES, getPlanPricingFromDB } = require("../_lib/currency");
 const { createOrder, calculateAmount, getActiveGateway, getGateway } = require("../_lib/gateway");
 const { notifyAdmin, sendEmail } = require("../_lib/notify");
+const { getAppBaseUrl } = require("../_lib/config");
 
 // Accept "pro" and legacy plan names (backward compat)
 const PLAN_NAMES = ["pro", "starter", "professional", "enterprise"];
@@ -333,7 +334,7 @@ async function handleCheckout(request, response, sql, shopId, body) {
   } catch (e) { /* table may not exist */ }
 
   // Create order via gateway library
-  const originUrl = request.headers["origin"] || "https://coolcare.ai";
+  const originUrl = request.headers["origin"] || getAppBaseUrl();
   const orderResult = await createOrder({
     shopId,
     billingCycle,

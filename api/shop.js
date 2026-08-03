@@ -24,6 +24,7 @@ const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, aiSettingsSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
+const { getHostedWebsiteUrl, getAppBaseUrl } = require("./_lib/config");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
 const { getGatewayList, invalidateCache } = require("./_lib/gateway");
 const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse, buildDemoWidgetSettingsResponse, buildDemoSandboxStatusResponse, buildDemoTechniciansResponse } = require("./_lib/demo-data");
@@ -307,8 +308,7 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     subscriptionRequired = subscriptionStatus !== "active" || (approvalStatus !== "approved" && approvalStatus !== "none");
     websiteEnabled = !!shopCheck[0]?.website_enabled;
     if (websiteEnabled && shopCheck[0]?.slug) {
-      const appUrl = process.env.APP_URL || "https://coolcare.ai";
-      websiteUrl = `${appUrl}/${shopCheck[0].slug}`;
+      websiteUrl = getHostedWebsiteUrl(shopCheck[0].slug);
     }
   } catch (e) { /* ok */ }
 
@@ -1136,7 +1136,7 @@ async function adminApproveShop(request, response, sql, body, actorType, actorId
         <li>🔧 Booking Management</li>
         <li>💬 WhatsApp Integration</li>
       </ul>
-      <p style="margin:24px 0 0;"><a href="${process.env.APP_URL || 'https://coolcare.ai'}/shop-dashboard.html"
+      <p style="margin:24px 0 0;"><a href="${getAppBaseUrl()}/shop-dashboard.html"
         style="display:inline-block;background:#fff;color:#000;font-weight:600;font-size:14px;padding:12px 32px;border-radius:8px;text-decoration:none;">Go to Dashboard</a></p>
       <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
       <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
@@ -1147,7 +1147,7 @@ async function adminApproveShop(request, response, sql, body, actorType, actorId
 
   // Send WhatsApp notification
   try {
-    const waMsg = `✅ *CoolCare Account Approved!*\n\nHi ${shop.owner_name}, your account has been approved! You can now use the AI chatbot, dashboard, and all booking features.\n\nStart here: ${process.env.APP_URL || 'https://coolcare.ai'}/shop-dashboard.html`;
+    const waMsg = `✅ *CoolCare Account Approved!*\n\nHi ${shop.owner_name}, your account has been approved! You can now use the AI chatbot, dashboard, and all booking features.\n\nStart here: ${getAppBaseUrl()}/shop-dashboard.html`;
     if (shop.mobile) await sendWhatsApp(shop.mobile, waMsg);
   } catch (e) { console.warn("[shop/approve] WhatsApp failed:", e.message); }
 
@@ -1664,7 +1664,7 @@ async function handleReferrals(request, response, sql, shopId) {
 
   return response.status(200).json({
     referralCode,
-    shareLink: `${process.env.APP_URL || 'https://coolcare.ai'}/shop-signup.html?ref=${referralCode || ''}`,
+    shareLink: `${getAppBaseUrl()}/shop-signup.html?ref=${referralCode || ''}`,
     walletBalance: parseFloat(shop[0]?.wallet_balance || 0),
     discountBalance: parseFloat(shop[0]?.discount_balance || 0),
     stats,
@@ -1899,8 +1899,7 @@ async function handleGetShopSettings(request, response, sql, shopId) {
   const s = shop[0] || null;
   let websiteUrl = null;
   if (s?.website_enabled && s?.slug) {
-    const appUrl = process.env.APP_URL || "https://coolcare.ai";
-    websiteUrl = `${appUrl}/${s.slug}`;
+    websiteUrl = getHostedWebsiteUrl(s.slug);
   }
   return response.status(200).json({ settings: s, websiteUrl });
 }
@@ -1986,13 +1985,12 @@ async function handleGetWidgetSettings(request, response, sql, shopId) {
     websiteEnabled = !!shopRow[0]?.website_enabled;
     slug = shopRow[0]?.slug || null;
     if (websiteEnabled && slug) {
-      const appUrl = process.env.APP_URL || "https://coolcare.ai";
-      websiteUrl = `${appUrl}/${slug}`;
+      websiteUrl = getHostedWebsiteUrl(slug);
     }
   } catch (e) { /* column may not exist yet */ }
 
   // Compute the embed snippet for this shop
-  const appUrl = process.env.APP_URL || "https://coolcare.ai";
+  const appUrl = getAppBaseUrl();
   const embedCode = `<script src="${appUrl}/web-bot/widget.js" data-widget-id="${shopId}"></script>`;
 
   return response.status(200).json({ settings, embedCode, websiteEnabled, websiteUrl });

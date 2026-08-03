@@ -12,6 +12,7 @@ const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { sendWhatsApp } = require("./_lib/notify");
+const { getAppBaseUrl } = require("./_lib/config");
 const { insertTimelineEvent, ACTORS } = require("./_lib/repair-lifecycle");
 const { validate } = require("./_lib/validate");
 const { z } = require("zod");
@@ -127,7 +128,7 @@ async function handleBookService(request, response, sql, shopId, body) {
     `• Slot: ${slot}\n` +
     (bookingId ? `• Ref #: ${bookingId}\n` : "") +
     `\nA technician will be in touch shortly. Thank you for choosing CoolCare! 🙏` +
-    (bookingId ? `\n\nTrack your repair anytime: ${process.env.APP_URL || "https://coolcare.ai"}/tracker.html?booking=${bookingId}` : "");
+    (bookingId ? `\n\nTrack your repair anytime: ${getAppBaseUrl()}/tracker.html?booking=${bookingId}` : "");
 
   const waResult = await sendWhatsApp(customerNumber, msg);
   if (!waResult.ok) {

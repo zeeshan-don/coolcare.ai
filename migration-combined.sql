@@ -382,9 +382,16 @@ INSERT INTO platform_settings (key, value) VALUES
   ('announcement',        '{"value": "", "active": false}'),
   ('whatsapp_settings',   '{"access_token": "", "phone_number_id": "", "api_version": "v19.0"}'),
   ('ai_settings',         '{"groq_api_key": "", "model": "llama3-8b-8192", "system_prompt": ""}'),
-  ('email_settings',      '{"from_email": "noreply@coolcare.ai", "smtp_host": "", "smtp_port": "587"}'),
+  ('email_settings',      '{"from_email": "noreply@coolcare.zeeshstudios.in", "smtp_host": "", "smtp_port": "587"}'),
   ('default_currency',    '{"value": "USD"}')
 ON CONFLICT (key) DO NOTHING;
+
+-- 4c. Sweep any pre-existing email_settings rows still holding the old default
+--     domain so re-runs of this migration also update already-seeded installs.
+UPDATE platform_settings
+SET value = value::jsonb || '{"from_email": "noreply@coolcare.zeeshstudios.in"}'::jsonb
+WHERE key = 'email_settings'
+  AND value::jsonb->>'from_email' = 'noreply@coolcare.ai';
 
 -- 4d. Expand subscription_plans with additional fields
 ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS description TEXT;

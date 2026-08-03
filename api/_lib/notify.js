@@ -72,7 +72,7 @@ async function sendWhatsApp(to, body) {
 
 // ─── Send Email (Resend API → SMTP fallback) ────────────────────────────────
 async function sendEmail(to, subject, htmlBody) {
-  const fromEmail = process.env.FROM_EMAIL || "noreply@coolcare.ai";
+  const fromEmail = process.env.FROM_EMAIL || "noreply@coolcare.zeeshstudios.in";
 
   // Primary: Resend API (recommended for Vercel serverless)
   const resendKey = process.env.RESEND_API_KEY;

@@ -15,7 +15,7 @@ web-bot/
 ## Install on any website
 
 ```html
-<script src="https://coolcare.ai/web-bot/widget.js" data-shop-id="SHOP_ID"></script>
+<script src="https://coolcare.zeeshstudios.in/web-bot/widget.js" data-shop-id="SHOP_ID"></script>
 ```
 
 ## Where the API lives

@@ -3,7 +3,7 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Embed on ANY website with a single script tag:
  *
- *   <script src="https://coolcare.ai/web-bot/widget.js" data-shop-id="SHOP_ID"></script>
+ *   <script src="https://coolcare.zeeshstudios.in/web-bot/widget.js" data-shop-id="SHOP_ID"></script>
  *
  * - No iframe. Renders inside a Shadow DOM so it can never clash with the
  *   host page's CSS/JS. Feels native.
