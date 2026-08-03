@@ -2018,6 +2018,31 @@ function buildDemoSandboxStatusResponse() {
 // EXPORTS — updated
 // ═════════════════════════════════════════════════════════════════════════════
 
+/**
+ * Build the technician roster response for demo mode.
+ * Matches handleTechniciansList() in api/shop.js — real names/phones/skills,
+ * with per-technician active-job counts derived from the demo bookings.
+ */
+function buildDemoTechniciansResponse() {
+  const ACTIVE_STATUSES = ["assigned", "on_the_way", "arrived", "in_progress", "waiting_parts"];
+  const technicians = TECHNICIANS.map((t, i) => {
+    const activeJobs = BOOKINGS.filter((b) => b.techIdx === i && ACTIVE_STATUSES.includes(b.status)).length;
+    return {
+      id: i + 1,
+      name: t.name,
+      phone: t.phone,
+      email: t.email,
+      services: t.services,
+      specialization: t.specialization,
+      active: t.active,
+      active_jobs: activeJobs,
+      total_jobs: BOOKINGS.filter((b) => b.techIdx === i).length,
+      created_at: new Date(Date.now() - (i + 3) * 86400000 * 30).toISOString(),
+    };
+  });
+  return { technicians };
+}
+
 module.exports = {
   DEMO,
   ago,
@@ -2043,4 +2068,5 @@ module.exports = {
   buildDemoSubscriptionResponse,
   buildDemoWidgetSettingsResponse,
   buildDemoSandboxStatusResponse,
+  buildDemoTechniciansResponse,
 };

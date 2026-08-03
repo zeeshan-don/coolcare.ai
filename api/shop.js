@@ -26,7 +26,7 @@ const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
 const { getGatewayList, invalidateCache } = require("./_lib/gateway");
-const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse, buildDemoWidgetSettingsResponse, buildDemoSandboxStatusResponse } = require("./_lib/demo-data");
+const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse, buildDemoWidgetSettingsResponse, buildDemoSandboxStatusResponse, buildDemoTechniciansResponse } = require("./_lib/demo-data");
 const { buildRealCommandCenter } = require("./_lib/command-center");
 const { z } = require("zod");
 const bcrypt = require("bcryptjs");
@@ -50,6 +50,20 @@ const planPricingSchema = z.object({
   price_yearly: z.coerce.number().min(0, "Yearly price must be >= 0"),
 });
 
+// ─── Technician roster schemas ───────────────────────────────────────────────
+const technicianCreateSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100).trim(),
+  // Absent keys stay `undefined` so partial updates never wipe existing values.
+  phone: z.string().max(30).optional().nullable().transform((v) => (v === undefined ? undefined : (v == null ? null : String(v).trim()) || null)),
+  email: z.string().max(120).optional().nullable().transform((v) => (v === undefined ? undefined : (v == null ? null : String(v).trim()) || null)),
+  services: z.array(z.string().max(120)).optional().default([]),
+  specialization: z.array(z.string().max(120)).optional().default([]),
+  active: z.boolean().optional().default(true),
+});
+const technicianUpdateSchema = technicianCreateSchema.partial().extend({
+  id: z.coerce.number().int().positive("id is required"),
+});
+
 // Admin GET actions
 const ADMIN_GET_ACTIONS = new Set(["admin", "admin-users", "admin-plans", "admin-pricing", "admin-payments", "admin-settings", "admin-analytics", "admin-gateways", "admin-subscriptions", "admin-invoices", "admin-payment-logs", "admin-pending-activations", "admin-subscription-plans"]);
 // Admin POST actions
@@ -65,7 +79,9 @@ const ADMIN_POST_ACTIONS = new Set([
 const GATED_POST_ACTIONS = new Set(["update"]);
 const GATED_GET_ACTIONS = new Set(["export"]);
 // Non-gated shop GET actions (view-only, always allowed)
-const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close", "widget-settings", "sandbox-status", "sandbox-ticket"]);
+const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close", "widget-settings", "sandbox-status", "sandbox-ticket", "technicians"]);
+// Technician roster writes (shop staff)
+const TECH_POST_ACTIONS = new Set(["create-technician", "update-technician", "delete-technician", "toggle-technician"]);
 
 // Prompt/engine version surfaced in the Developer Sandbox panel
 const PROMPT_VERSION = "llama-3.3-70b-versatile · engine v1.0";
@@ -122,6 +138,8 @@ module.exports = withErrorHandler(async (request, response) => {
       if (!sub) return;
       if (action === "update") return handleBookingUpdate(request, response, sql, shopId, body);
     }
+    // Technician roster actions
+    if (TECH_POST_ACTIONS.has(action)) return handleTechnicianRoster(request, response, sql, shopId, action, body);
     // Non-gated POST actions
     if (action === "save-ai-settings") return handleSaveAiSettings(request, response, sql, shopId, body);
     if (action === "save-shop-settings") return handleSaveShopSettings(request, response, sql, shopId, body);
@@ -433,6 +451,138 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
 
   console.log(`[shop/update] booking #${data.bookingId} by shop #${shopId}:`, { status: data.status });
   return response.status(200).json({ updated: true, booking: updated[0], timeline });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TECHNICIAN ROSTER (Add / Edit / Suspend / Delete)
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleTechniciansList(request, response, sql, shopId) {
+  // created_at only exists after migration-technician-roster.sql — fall back
+  // gracefully (repo convention) in case it hasn't been applied yet.
+  let rows = [];
+  try {
+    rows = await sql`
+      SELECT t.id, t.name, t.phone, t.email, t.services, t.specialization, t.active, t.created_at,
+             (SELECT COUNT(*) FROM bookings b WHERE b.technician_id = t.id
+                AND b.status IN ('assigned','on_the_way','arrived','in_progress','waiting_parts')) AS active_jobs,
+             (SELECT COUNT(*) FROM bookings b WHERE b.technician_id = t.id) AS total_jobs
+      FROM technicians t
+      WHERE t.repair_shop_id = ${shopId}
+      ORDER BY t.name ASC
+    `;
+  } catch (e) {
+    console.warn("[shop/technicians] created_at may be missing, using fallback:", e.message);
+    rows = await sql`
+      SELECT t.id, t.name, t.phone, t.email, t.services, t.specialization, t.active,
+             (SELECT COUNT(*) FROM bookings b WHERE b.technician_id = t.id
+                AND b.status IN ('assigned','on_the_way','arrived','in_progress','waiting_parts')) AS active_jobs,
+             (SELECT COUNT(*) FROM bookings b WHERE b.technician_id = t.id) AS total_jobs
+      FROM technicians t
+      WHERE t.repair_shop_id = ${shopId}
+      ORDER BY t.name ASC
+    `;
+  }
+  return response.status(200).json({ technicians: rows });
+}
+
+async function handleTechnicianRoster(request, response, sql, shopId, action, body) {
+  switch (action) {
+    case "create-technician": return handleCreateTechnician(request, response, sql, shopId, body);
+    case "update-technician": return handleUpdateTechnician(request, response, sql, shopId, body);
+    case "toggle-technician": return handleToggleTechnician(request, response, sql, shopId, body);
+    case "delete-technician": return handleDeleteTechnician(request, response, sql, shopId, body);
+    default: return response.status(400).json({ error: "Unknown technician action" });
+  }
+}
+
+async function handleCreateTechnician(request, response, sql, shopId, body) {
+  const data = validate({ body }, response, technicianCreateSchema);
+  if (!data) return;
+
+  // Enforce plan max_technicians (null = unlimited)
+  try {
+    const shop = await sql`
+      SELECT sp.max_technicians FROM repair_shops rs
+      LEFT JOIN subscriptions s ON s.repair_shop_id = rs.id AND s.status = 'active'
+      LEFT JOIN subscription_plans sp ON sp.id = s.plan_id
+      WHERE rs.id = ${shopId} LIMIT 1
+    `;
+    const max = shop[0]?.max_technicians;
+    if (max != null) {
+      const count = await sql`SELECT COUNT(*) as c FROM technicians WHERE repair_shop_id = ${shopId}`;
+      if (parseInt(count[0]?.c || "0", 10) >= max) {
+        return response.status(403).json({
+          error: `Your plan allows a maximum of ${max} technicians. Upgrade your plan to add more.`,
+          errorType: "plan_limit",
+          maxTechnicians: max,
+        });
+      }
+    }
+  } catch (e) { /* plan check is non-fatal */ }
+
+  const rows = await sql`
+    INSERT INTO technicians (repair_shop_id, name, phone, email, services, specialization, active, created_at, updated_at)
+    VALUES (${shopId}, ${data.name}, ${data.phone ?? null}, ${data.email ?? null}, ${data.services || []}, ${data.specialization || []}, ${data.active !== false}, now(), now())
+    RETURNING id, name, phone, email, services, specialization, active, created_at
+  `;
+  console.log(`[shop] technician created #${rows[0].id} (${data.name}) for shop #${shopId}`);
+  return response.status(201).json({ technician: rows[0] });
+}
+
+async function handleUpdateTechnician(request, response, sql, shopId, body) {
+  const data = validate({ body }, response, technicianUpdateSchema);
+  if (!data) return;
+
+  const existing = await sql`SELECT id FROM technicians WHERE id = ${data.id} AND repair_shop_id = ${shopId} LIMIT 1`;
+  if (existing.length === 0) return response.status(404).json({ error: "Technician not found" });
+
+  const fieldMap = { name: "name", phone: "phone", email: "email", services: "services", specialization: "specialization", active: "active" };
+  const setParts = []; const setValues = [];
+  // Only write fields the client actually sent. The parsed `data` carries zod
+  // defaults (active=true, services=[]) that must NOT overwrite stored values
+  // on a partial update — otherwise editing just the name would unsuspend a
+  // suspended technician and wipe their services/specialization.
+  for (const [k, col] of Object.entries(fieldMap)) {
+    if (Object.prototype.hasOwnProperty.call(body, k) && body[k] !== undefined) {
+      setValues.push(k === "active" ? !!data[k] : data[k]);
+      setParts.push(`${col} = $${setValues.length}`);
+    }
+  }
+  if (setParts.length === 0) return response.status(400).json({ error: "No fields to update" });
+
+  setValues.push(data.id, shopId);
+  await sql(`UPDATE technicians SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length - 1} AND repair_shop_id = $${setValues.length}`, setValues);
+
+  const updated = await sql`SELECT id, name, phone, email, services, specialization, active, created_at FROM technicians WHERE id = ${data.id} LIMIT 1`;
+  console.log(`[shop] technician updated #${data.id} for shop #${shopId}`);
+  return response.status(200).json({ updated: true, technician: updated[0] });
+}
+
+async function handleToggleTechnician(request, response, sql, shopId, body) {
+  const id = parseInt(body.id, 10);
+  if (!id) return response.status(400).json({ error: "id required" });
+  const existing = await sql`SELECT id, active FROM technicians WHERE id = ${id} AND repair_shop_id = ${shopId} LIMIT 1`;
+  if (existing.length === 0) return response.status(404).json({ error: "Technician not found" });
+  const next = body.active !== undefined ? !!body.active : !existing[0].active;
+  await sql`UPDATE technicians SET active = ${next}, updated_at = now() WHERE id = ${id} AND repair_shop_id = ${shopId}`;
+  console.log(`[shop] technician #${id} ${next ? "activated" : "suspended"} for shop #${shopId}`);
+  return response.status(200).json({ updated: true, active: next });
+}
+
+async function handleDeleteTechnician(request, response, sql, shopId, body) {
+  const id = parseInt(body.id, 10);
+  if (!id) return response.status(400).json({ error: "id required" });
+  const existing = await sql`SELECT id, name FROM technicians WHERE id = ${id} AND repair_shop_id = ${shopId} LIMIT 1`;
+  if (existing.length === 0) return response.status(404).json({ error: "Technician not found" });
+
+  // Unassign the technician from active jobs first (keeps history intact,
+  // only releases the assignment), then remove the roster record.
+  await sql`UPDATE bookings SET technician_id = NULL
+    WHERE technician_id = ${id} AND repair_shop_id = ${shopId}
+      AND status IN ('assigned','on_the_way','arrived','in_progress','waiting_parts','accepted')`;
+  await sql`DELETE FROM technicians WHERE id = ${id} AND repair_shop_id = ${shopId}`;
+  console.log(`[shop] technician deleted #${id} (${existing[0].name}) for shop #${shopId}`);
+  return response.status(200).json({ message: "Technician deleted" });
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1433,6 +1583,7 @@ async function handleShopGet(request, response, sql, shopId, auth, action) {
         },
         isDemo: true,
       });
+      case "technicians": return response.status(200).json(buildDemoTechniciansResponse());
       default: return response.status(400).json({ error: "Unknown GET action" });
     }
   }
@@ -1446,6 +1597,7 @@ async function handleShopGet(request, response, sql, shopId, auth, action) {
     case "shop-settings": return handleGetShopSettings(request, response, sql, shopId);
     case "conversation-transcript": return handleConversationTranscript(request, response, sql, shopId);
     case "conversation-analytics": return handleConversationAnalytics(request, response, sql, shopId);
+    case "technicians": return handleTechniciansList(request, response, sql, shopId);
     case "widget-settings": return handleGetWidgetSettings(request, response, sql, shopId);
     case "sandbox-status": return handleSandboxStatus(request, response, sql, shopId);
     case "sandbox-ticket": return handleSandboxTicket(request, response, sql, shopId);

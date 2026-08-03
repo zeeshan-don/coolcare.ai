@@ -108,6 +108,7 @@
 </nav>
 <div class="mobile-menu" id="mobileMenu">
   <a href="/shop-dashboard.html">Dashboard</a>
+  <a href="/shop-team.html">Technicians</a>
   <a href="/shop-ai-settings.html">AI Settings</a>
   <a href="/shop-settings.html">Settings</a>
   <a href="/shop-referrals.html">Referrals</a>
@@ -177,8 +178,11 @@
       <div id="demoDisableMsg" style="display:none;color:var(--green);font-size:13px;font-weight:500;text-align:center;padding:12px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.2);border-radius:10px;margin-bottom:14px">🔒 This is a demo account. Changes are not saved.</div>
       <div class="grid" style="gap:12px">
         <div class="field">
-          <label for="technicianName">Technician Name</label>
-          <input id="technicianName" type="text" placeholder="Full name">
+          <label for="technicianId">Technician</label>
+          <select id="technicianId" style="background:var(--bg);color:var(--ink);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;font:inherit;width:100%">
+            <option value="">— Unassigned —</option>
+          </select>
+          <div style="font-size:11.5px;color:var(--muted2);margin-top:5px">Pick from your team. Manage the roster in <a href="/shop-team.html" style="color:var(--ink2);text-decoration:underline">Technicians</a>.</div>
         </div>
         <div class="field">
           <label for="estCostInput">Estimated Cost (₹)</label>
@@ -299,7 +303,25 @@
     }
 
     // Pre-fill the update form
-    document.getElementById('technicianName').value = booking.technician_name || '';
+    const techSelect = document.getElementById('technicianId');
+    const roster = window.techniciansData || [];
+    const selectedId = booking.technician_id ? String(booking.technician_id) : '';
+    const legacyName = !selectedId && booking.technician_name;
+    // Legacy bookings may carry a technician name without a roster id. Show it
+    // as a (selected) option so it is never silently lost, and keep it
+    // unchanged unless the shop explicitly reassigns.
+    let techOpts = legacyName
+      ? `<option value="" selected>${escapeHtml(booking.technician_name)} (name only)</option>`
+      : '<option value="">— Unassigned —</option>';
+    roster.forEach(t => {
+      techOpts += `<option value="${t.id}" ${String(t.id) === selectedId ? 'selected' : ''}>${escapeHtml(t.name)}${t.phone ? ' · ' + escapeHtml(t.phone) : ''}</option>`;
+    });
+    // If the assigned technician is not in the active roster (e.g. suspended),
+    // keep showing them so the current assignment is never silently dropped.
+    if (selectedId && !roster.some(t => String(t.id) === selectedId) && booking.technician_name) {
+      techOpts += `<option value="${selectedId}" selected>${escapeHtml(booking.technician_name)} (suspended)</option>`;
+    }
+    if (techSelect) techSelect.innerHTML = techOpts;
     document.getElementById('estCostInput').value   = booking.estimated_cost || '';
     document.getElementById('finalCostInput').value = booking.final_cost || '';
     document.getElementById('notesInput').value     = booking.technician_notes || '';
@@ -397,9 +419,13 @@
     const buttons = document.querySelectorAll('.action-btn');
     buttons.forEach(b => b.disabled = true);
 
-    // When assigning, include technician name from the form if filled
-    const technicianName = status === 'assigned'
-      ? document.getElementById('technicianName').value.trim() || undefined
+    // When assigning, use the roster selection so the booking links to a real
+    // technician record (drives the technician dashboard + auto-assign logic).
+    const sel = document.getElementById('technicianId');
+    const isAssigning = status === 'assigned';
+    const technicianId = isAssigning && sel && sel.value ? parseInt(sel.value, 10) : undefined;
+    const technicianName = technicianId && sel.options[sel.selectedIndex]
+      ? sel.options[sel.selectedIndex].textContent.split(' · ')[0].trim()
       : undefined;
     // Optional note recorded on the timeline with the status change
     const notes = document.getElementById('actionNotes')?.value.trim() || undefined;
@@ -411,7 +437,7 @@
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'update', bookingId: booking.id, status, technicianName, notes }),
+        body: JSON.stringify({ action: 'update', bookingId: booking.id, status, technicianName, technicianId, notes }),
       });
       if (res.status === 401) { window.location.href = '/login.html'; return; }
       const data = await res.json();
@@ -441,13 +467,25 @@
     btn.disabled = true;
     btn.textContent = 'Saving…';
 
+    const sel = document.getElementById('technicianId');
     const body = {
       bookingId:      booking.id,
-      technicianName: document.getElementById('technicianName').value.trim() || undefined,
       estimatedCost:  document.getElementById('estCostInput').value  || undefined,
       finalCost:      document.getElementById('finalCostInput').value || undefined,
       technicianNotes: document.getElementById('notesInput').value.trim() || undefined,
     };
+    // Only touch the assignment when the shop actually changed it. This keeps
+    // legacy name-only assignments intact if the dropdown is left untouched.
+    const originalId = booking.technician_id ? String(booking.technician_id) : '';
+    if (sel && sel.value !== originalId) {
+      if (sel.value) {
+        body.technicianId = parseInt(sel.value, 10);
+        body.technicianName = sel.options[sel.selectedIndex].textContent.split(' · ')[0].trim();
+      } else {
+        body.technicianId = null;
+        body.technicianName = null;
+      }
+    }
     // Remove undefined keys
     Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
 

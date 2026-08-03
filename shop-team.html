@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Technicians — CoolCare</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0a0a0a;--bg2:#111111;--bg3:#1a1a1a;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--muted2:#525252;--green:#22c55e;--green-bg:#0a1a0a;--red:#ef4444;--red-bg:#1a0a0a;--yellow:#eab308;--yellow-bg:rgba(234,179,8,0.08);--blue:#60a5fa;--blue-bg:rgba(96,165,250,0.08);--radius:12px}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,sans-serif}
+    h1,h2,h3,.brand{font-family:'Inter',system-ui,sans-serif;font-weight:700}
+    a{color:var(--ink2);text-decoration:none;transition:color 0.2s}a:hover{color:#fff}
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
+    .brand{font-weight:700;letter-spacing:0.5px;font-size:24px;color:#fff;text-transform:lowercase;display:flex;align-items:center}.brand b{color:#fff;font-weight:900}
+    .brand-by{font-weight:400;color:#9CA3AF;font-size:14px;opacity:.75;margin-left:8px;margin-right:12px}
+    .brand-signature{height:36px;width:auto;vertical-align:middle}
+    .nav-right{display:flex;align-items:center;gap:12px}
+    .back{font-size:12px;font-weight:600;color:var(--muted)}
+    .back:hover{color:#fff}
+    .hamburger{display:none;flex-direction:column;gap:4px;cursor:pointer;padding:8px;background:none;border:none}
+    .hamburger span{display:block;width:20px;height:2px;background:var(--ink2);border-radius:2px;transition:all 0.3s}
+    .hamburger.open span:nth-child(1){transform:rotate(45deg) translate(4px,4px)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:rotate(-45deg) translate(4px,-4px)}
+    .mobile-menu{display:none;position:fixed;top:72px;left:0;right:0;background:rgba(10,10,10,0.98);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:49;padding:12px 20px;flex-direction:column;gap:4px}
+    .mobile-menu.open{display:flex}
+    .mobile-menu a,.mobile-menu button{display:block;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;color:var(--ink2);background:transparent;border:none;text-align:left;cursor:pointer;transition:all 0.2s;width:100%;text-decoration:none}
+    .mobile-menu a:hover,.mobile-menu button:hover{background:var(--bg3);color:#fff}
+    .mobile-menu .divider{border-top:1px solid var(--border);margin:6px 0}
+    .wrap{max-width:1100px;margin:auto;padding:28px 24px 70px}
+    .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+    .page-head h1{font-size:30px;letter-spacing:-0.6px;margin:0 0 4px;color:#fff}
+    .page-head p{color:var(--muted);margin:0;font-size:13.5px}
+    .btn{display:inline-flex;align-items:center;gap:7px;font:600 13px 'Inter',sans-serif;padding:10px 18px;border-radius:10px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--ink2);transition:all 0.2s}
+    .btn:hover{border-color:#555;color:#fff;background:var(--bg3);transform:translateY(-1px)}
+    .btn-primary{background:#fff;color:#000;border-color:#fff}
+    .btn-primary:hover{background:#e5e5e5;border-color:#e5e5e5}
+    .btn-danger{color:var(--red);border-color:rgba(239,68,68,0.25)}
+    .btn-danger:hover{background:var(--red-bg);border-color:var(--red)}
+    .btn-sm{font-size:12px;padding:6px 11px;border-radius:8px}
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:22px}
+    .stat{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:18px 20px}
+    .stat .s-label{font-size:10.5px;font-weight:600;letter-spacing:0.5px;color:var(--muted);text-transform:uppercase;margin-bottom:3px}
+    .stat .s-value{font-size:26px;font-weight:800;letter-spacing:-0.5px;color:#fff;line-height:1.2}
+    .stat .s-value.green{color:var(--green)}
+    .stat .s-value.yellow{color:var(--yellow)}
+    .stat .s-value.blue{color:var(--blue)}
+    .stat .s-sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;padding:12px 16px;border-bottom:1px solid var(--border);background:var(--bg3)}
+    td{padding:13px 16px;border-bottom:1px solid var(--border);color:var(--ink2);vertical-align:middle}
+    tr:last-child td{border-bottom:0}
+    tbody tr{transition:background 0.15s}
+    tbody tr:hover{background:var(--bg3)}
+    .t-name{display:flex;align-items:center;gap:11px}
+    .t-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#2a2a2a,#1a1a1a);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font:800 13px 'Inter',sans-serif;color:#fff;flex-shrink:0}
+    .t-avatar.on{background:linear-gradient(135deg,rgba(34,197,94,0.25),#1a1a1a);border-color:rgba(34,197,94,0.4)}
+    .t-avatar.off{opacity:.5}
+    .t-name .nm{font-weight:600;color:#fff}
+    .t-name .em{font-size:11.5px;color:var(--muted)}
+    .tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:11px;color:var(--ink2);margin:2px 3px 2px 0;white-space:nowrap}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:7px;font-size:11px;font-weight:600;letter-spacing:0.2px}
+    .badge.on{background:var(--green-bg);color:var(--green);border:1px solid rgba(34,197,94,0.2)}
+    .badge.off{background:var(--bg3);color:var(--muted);border:1px solid var(--border)}
+    .badge.busy{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(234,179,8,0.2)}
+    .badge.free{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(96,165,250,0.2)}
+    .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+    .act{font:600 11px 'Inter',sans-serif;padding:5px 9px;border-radius:7px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--ink2);transition:all 0.2s;margin-right:4px}
+    .act:hover{background:var(--bg4,var(--bg3));border-color:#555;color:#fff}
+    .act.danger:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+    .empty{text-align:center;color:var(--muted);padding:56px 20px}
+    .empty .big{font-size:34px;margin-bottom:10px}
+    .empty p{margin:4px 0}
+    .empty .btn{margin-top:16px}
+    .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:#fff;color:#000;padding:13px 26px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;transition:all 0.25s;z-index:300;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.78);display:none;align-items:center;justify-content:center;z-index:200;backdrop-filter:blur(4px)}
+    .modal-backdrop.open{display:flex}
+    .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:28px;width:min(540px,92vw);max-height:88vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,0.6)}
+    .modal h2{margin:0 0 18px;font-size:19px;color:#fff}
+    .field{margin-bottom:14px}
+    label{display:block;font-weight:500;font-size:13px;margin-bottom:5px;color:var(--ink2)}
+    input,select,textarea{width:100%;border:1px solid var(--border2);border-radius:10px;padding:11px 13px;font:400 14px/1.4 'Inter',sans-serif;background:var(--bg);color:var(--ink);transition:border-color 0.2s}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:#555;box-shadow:0 0 0 1px #555}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+    .hint{font-size:11.5px;color:var(--muted2);margin-top:5px}
+    .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
+    .demo-banner.show{display:block}
+    .demo-banner span{background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px}
+    @media(max-width:680px){
+      .wrap{padding:20px 14px 50px}
+      .page-head h1{font-size:24px}
+      .back{display:none}
+      .hamburger{display:flex}
+      .brand-signature{height:26px}
+      .stats{grid-template-columns:repeat(2,1fr)}
+    }
+  </style>
+</head>
+<body>
+<div class="demo-banner" id="demoBanner">
+  🧪 Demo Mode — Changes are not saved. <span>READ ONLY</span>
+</div>
+<nav class="nav">
+  <a class="brand" href="/shop-dashboard.html">cool<b>care</b><span class="brand-by">by</span><img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
+  <div class="nav-right">
+    <a class="back" href="/shop-dashboard.html">← Dashboard</a>
+    <button class="hamburger" id="hamburger" onclick="toggleMobileMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/shop-dashboard.html">Dashboard</a>
+  <a href="/shop-team.html">Technicians</a>
+  <a href="/shop-channels.html">Communication Channels</a>
+  <a href="/shop-ai-settings.html">AI Settings</a>
+  <a href="/shop-settings.html">Settings</a>
+  <a href="/shop-referrals.html">Referrals</a>
+  <a href="/shop-notifications.html">Notifications</a>
+  <div class="divider"></div>
+  <button onclick="logout()">Log Out</button>
+</div>
+
+<div class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>👨‍🔧 Technicians</h1>
+      <p>Manage your service team — they get assigned to bookings and track jobs on the technician dashboard.</p>
+    </div>
+    <button class="btn btn-primary" onclick="openAddModal()">+ Add Technician</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="s-label">Total Team</div><div class="s-value" id="stTotal">—</div><div class="s-sub">on your roster</div></div>
+    <div class="stat"><div class="s-label">Active</div><div class="s-value green" id="stActive">—</div><div class="s-sub">available for assignment</div></div>
+    <div class="stat"><div class="s-label">Busy Now</div><div class="s-value yellow" id="stBusy">—</div><div class="s-sub">with active jobs</div></div>
+    <div class="stat"><div class="s-label">Free</div><div class="s-value blue" id="stFree">—</div><div class="s-sub">ready for new work</div></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr><th>Technician</th><th>Contact</th><th>Specialization</th><th>Services</th><th>Jobs</th><th>Status</th><th style="text-align:right">Actions</th></tr>
+      </thead>
+      <tbody id="techBody">
+        <tr><td colspan="7" class="empty">Loading technicians…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add / Edit Technician Modal -->
+<div class="modal-backdrop" id="techModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="modalTitle">Add Technician</h2>
+    <input type="hidden" id="editTechId">
+    <div class="field"><label>Full Name *</label><input id="tName" type="text" placeholder="e.g. Rajesh Kumar" maxlength="100"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="field"><label>Phone</label><input id="tPhone" type="tel" placeholder="+91 98765 43210"></div>
+      <div class="field"><label>Email</label><input id="tEmail" type="email" placeholder="rajesh@example.com"></div>
+    </div>
+    <div class="field">
+      <label>Specialization <span style="font-weight:400;color:var(--muted)">(comma separated)</span></label>
+      <input id="tSpecialization" type="text" placeholder="AC Repair, HVAC, Gas Refill" value="">
+      <div class="hint">Used to match the right technician to each job.</div>
+    </div>
+    <div class="field">
+      <label>Services <span style="font-weight:400;color:var(--muted)">(comma separated)</span></label>
+      <input id="tServices" type="text" placeholder="AC Repair, AC Service, Refrigerator Repair" value="">
+      <div class="hint">Services this technician can handle — used for auto-assignment.</div>
+    </div>
+    <div class="field"><label>Status</label>
+      <select id="tActive">
+        <option value="true">Active — available for jobs</option>
+        <option value="false">Suspended — not taking jobs</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTechnician()">Save Technician</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const token = localStorage.getItem('cc_token');
+  if (!token) window.location.href = '/login.html';
+
+  // ── Demo mode check ──────────────────────────────────────────────────────
+  const isDemo = localStorage.getItem('cc_is_demo') === 'true';
+  if (isDemo) document.getElementById('demoBanner').classList.add('show');
+
+  let technicians = [];
+
+  function toggleMobileMenu() {
+    document.getElementById('mobileMenu').classList.toggle('open');
+    document.getElementById('hamburger').classList.toggle('open');
+  }
+  document.addEventListener('click', function(e) {
+    const menu = document.getElementById('mobileMenu');
+    const hamburger = document.getElementById('hamburger');
+    if (!hamburger.contains(e.target) && !menu.contains(e.target) && menu.classList.contains('open')) {
+      menu.classList.remove('open');
+      hamburger.classList.remove('open');
+    }
+  });
+
+  function logout() {
+    fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
+    localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user'); localStorage.removeItem('cc_is_demo');
+    window.location.href = '/login.html';
+  }
+
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmt(s) { return String(s ?? '').trim(); }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  function closeModal() { document.getElementById('techModal').classList.remove('open'); }
+
+  function openAddModal() {
+    document.getElementById('modalTitle').textContent = 'Add Technician';
+    document.getElementById('editTechId').value = '';
+    document.getElementById('tName').value = '';
+    document.getElementById('tPhone').value = '';
+    document.getElementById('tEmail').value = '';
+    document.getElementById('tSpecialization').value = '';
+    document.getElementById('tServices').value = '';
+    document.getElementById('tActive').value = 'true';
+    document.getElementById('techModal').classList.add('open');
+    setTimeout(() => document.getElementById('tName').focus(), 60);
+  }
+
+  function openEditModal(t) {
+    document.getElementById('modalTitle').textContent = 'Edit Technician';
+    document.getElementById('editTechId').value = t.id;
+    document.getElementById('tName').value = t.name || '';
+    document.getElementById('tPhone').value = t.phone || '';
+    document.getElementById('tEmail').value = t.email || '';
+    document.getElementById('tSpecialization').value = (t.specialization || []).join(', ');
+    document.getElementById('tServices').value = (t.services || []).join(', ');
+    document.getElementById('tActive').value = t.active ? 'true' : 'false';
+    document.getElementById('techModal').classList.add('open');
+    setTimeout(() => document.getElementById('tName').focus(), 60);
+  }
+
+  function parseList(str) {
+    return String(str || '').split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  function renderStats() {
+    const total = technicians.length;
+    const active = technicians.filter(t => t.active).length;
+    const busy = technicians.filter(t => t.active && t.active_jobs > 0).length;
+    document.getElementById('stTotal').textContent = total;
+    document.getElementById('stActive').textContent = active;
+    document.getElementById('stBusy').textContent = busy;
+    document.getElementById('stFree').textContent = Math.max(0, active - busy);
+  }
+
+  function renderTable() {
+    const body = document.getElementById('techBody');
+    if (!technicians.length) {
+      body.innerHTML = '<tr><td colspan="7" class="empty"><div class="big">👨‍🔧</div><p><b style="color:#fff">No technicians yet</b></p><p>Add your first technician to start assigning bookings.</p><button class="btn btn-primary" onclick="openAddModal()">+ Add Technician</button></td></tr>';
+      renderStats();
+      return;
+    }
+    body.innerHTML = technicians.map(t => {
+      const specTags = (t.specialization || []).slice(0, 3).map(s => `<span class="tag">${esc(s)}</span>`).join('');
+      const servTags = (t.services || []).slice(0, 3).map(s => `<span class="tag">${esc(s)}</span>`).join('');
+      const status = t.active
+        ? (t.active_jobs > 0 ? '<span class="badge busy"><span class="dot" style="background:var(--yellow)"></span>Busy</span>' : '<span class="badge free"><span class="dot" style="background:var(--blue)"></span>Free</span>')
+        : '<span class="badge off"><span class="dot" style="background:var(--muted2)"></span>Suspended</span>';
+      return `<tr>
+        <td><div class="t-name"><span class="t-avatar ${t.active ? 'on' : 'off'}">${esc((t.name || 'T').charAt(0).toUpperCase())}</span><div><div class="nm">${esc(t.name)}</div>${t.email ? `<div class="em">${esc(t.email)}</div>` : ''}</div></div></td>
+        <td>${t.phone ? esc(t.phone) : '<span style="color:var(--muted2)">—</span>'}</td>
+        <td>${specTags || '<span style="color:var(--muted2)">—</span>'}</td>
+        <td>${servTags || '<span style="color:var(--muted2)">—</span>'}</td>
+        <td><b style="color:#fff">${t.active_jobs || 0}</b> active<br><span style="font-size:11px;color:var(--muted2)">${t.total_jobs || 0} total</span></td>
+        <td>${status}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="act" onclick="openEditModal(technicians.find(x=>x.id===${t.id}))">✎ Edit</button>
+          ${t.active
+            ? `<button class="act" onclick="toggleTech(${t.id}, false)">Suspend</button>`
+            : `<button class="act" style="color:var(--green);border-color:rgba(34,197,94,0.25)" onclick="toggleTech(${t.id}, true)">Activate</button>`}
+          <button class="act danger" onclick="deleteTech(${t.id})">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+    renderStats();
+  }
+
+  async function loadTechnicians() {
+    try {
+      const res = await fetch('/api/shop?action=technicians', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const data = await res.json();
+      technicians = data.technicians || [];
+      renderTable();
+    } catch (err) {
+      console.error('[team] Load error:', err);
+      document.getElementById('techBody').innerHTML = '<tr><td colspan="7" class="empty">Failed to load technicians. Please refresh.</td></tr>';
+    }
+  }
+
+  async function saveTechnician() {
+    if (isDemo) { showToast('🔒 This is a demo account. Changes are not saved.'); return; }
+    const name = document.getElementById('tName').value.trim();
+    if (!name) { showToast('Name is required'); return; }
+
+    const id = document.getElementById('editTechId').value;
+    const body = {
+      name,
+      phone: document.getElementById('tPhone').value.trim() || null,
+      email: document.getElementById('tEmail').value.trim() || null,
+      specialization: parseList(document.getElementById('tSpecialization').value),
+      services: parseList(document.getElementById('tServices').value),
+      active: document.getElementById('tActive').value === 'true',
+    };
+    if (id) body.id = parseInt(id, 10);
+
+    const btn = document.querySelector('#techModal .btn-primary');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const res = await fetch('/api/shop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: id ? 'update-technician' : 'create-technician', ...body }),
+      });
+      const data = await res.json();
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      if (!res.ok) {
+        if (data.errorType === 'plan_limit') { showToast(data.error); }
+        else { showToast('Error: ' + (data.error || 'Save failed')); }
+        return;
+      }
+      showToast(id ? 'Technician updated ✓' : 'Technician added ✓');
+      closeModal();
+      loadTechnicians();
+    } catch (err) {
+      console.error('[team] Save error:', err);
+      showToast('Network error. Please try again.');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save Technician';
+    }
+  }
+
+  async function toggleTech(id, active) {
+    if (isDemo) { showToast('🔒 This is a demo account. Changes are not saved.'); return; }
+    try {
+      const res = await fetch('/api/shop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'toggle-technician', id, active }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast('Error: ' + (data.error || 'Update failed')); return; }
+      showToast(active ? 'Technician activated ✓' : 'Technician suspended');
+      loadTechnicians();
+    } catch (err) { showToast('Network error. Please try again.'); }
+  }
+
+  async function deleteTech(id) {
+    if (isDemo) { showToast('🔒 This is a demo account. Changes are not saved.'); return; }
+    const t = technicians.find(x => x.id === id);
+    if (!confirm(`Delete ${t ? t.name : 'this technician'}? Active job assignments will be released. This cannot be undone.`)) return;
+    try {
+      const res = await fetch('/api/shop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'delete-technician', id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast('Error: ' + (data.error || 'Delete failed')); return; }
+      showToast('Technician deleted');
+      loadTechnicians();
+    } catch (err) { showToast('Network error. Please try again.'); }
+  }
+
+  loadTechnicians();
+</script>
+</body>
+</html>
