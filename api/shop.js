@@ -73,7 +73,7 @@ const ADMIN_POST_ACTIONS = new Set([
   "create-plan", "edit-plan", "delete-plan", "duplicate-plan", "save-plan-pricing", "save-settings",
   "extend-subscription", "change-plan",
   "save-gateway", "toggle-gateway",
-  "toggle-plan-pricing",
+  "toggle-plan-pricing", "toggle-website",
 ]);
 // Gated shop actions (require active subscription)
 const GATED_POST_ACTIONS = new Set(["update"]);
@@ -297,12 +297,19 @@ async function handleDashboard(request, response, sql, shopId, auth) {
   let subscriptionStatus = "active";
   let approvalStatus = "approved";
   let rejectionReason = null;
+  let websiteEnabled = false;
+  let websiteUrl = null;
   try {
-    const shopCheck = await sql`SELECT subscription_status, approval_status, rejection_reason FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    const shopCheck = await sql`SELECT subscription_status, approval_status, rejection_reason, website_enabled, slug FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
     subscriptionStatus = shopCheck[0]?.subscription_status || "inactive";
     approvalStatus = shopCheck[0]?.approval_status || "none";
     rejectionReason = shopCheck[0]?.rejection_reason || null;
     subscriptionRequired = subscriptionStatus !== "active" || (approvalStatus !== "approved" && approvalStatus !== "none");
+    websiteEnabled = !!shopCheck[0]?.website_enabled;
+    if (websiteEnabled && shopCheck[0]?.slug) {
+      const appUrl = process.env.APP_URL || "https://coolcare.ai";
+      websiteUrl = `${appUrl}/${shopCheck[0].slug}`;
+    }
   } catch (e) { /* ok */ }
 
   return response.status(200).json({
@@ -322,6 +329,8 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     subscriptionStatus,
     approvalStatus,
     rejectionReason,
+    websiteEnabled,
+    websiteUrl,
     isDemo: !!auth.isDemo,
   });
 }
@@ -1001,6 +1010,9 @@ async function handleAdminPost(request, response, sql, auth, body) {
     // ── Settings ────────────────────────────────────────────────
     case "save-settings": return adminSaveSettings(request, response, sql, body, actorType, actorId, ip);
 
+    // ── Website feature flag (admin override) ─────────────────
+    case "toggle-website": return adminToggleWebsite(sql, response, body, actorType, actorId, ip);
+
     // ── Subscription management ──────────────────────────────
     case "extend-subscription": return adminExtendSubscription(sql, response, body, actorType, actorId, ip);
     case "change-plan": return adminChangePlan(sql, response, body, actorType, actorId, ip);
@@ -1019,6 +1031,14 @@ async function handleAdminPost(request, response, sql, auth, body) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // SHOP ADMIN ACTIONS
 // ═══════════════════════════════════════════════════════════════════════════════
+async function adminToggleWebsite(sql, response, body, actorType, actorId, ip) {
+  const shopId = body.shopId;
+  if (!shopId) return response.status(400).json({ error: "shopId required" });
+  const enabled = body.enabled === true;
+  await sql`UPDATE repair_shops SET website_enabled = ${enabled}, updated_at = now() WHERE id = ${shopId}`;
+  await logAdminAction(sql, { actorType, actorId, action: "toggle_website", targetType: "shop", targetId: shopId, details: { website_enabled: enabled }, ip });
+  return response.status(200).json({ message: enabled ? "Hosted website enabled" : "Hosted website disabled", websiteEnabled: enabled });
+}
 async function adminSuspendShop(sql, response, body, actorType, actorId, ip) {
   const shopId = body.shopId;
   if (!shopId) return response.status(400).json({ error: "shopId required" });
@@ -1075,6 +1095,20 @@ async function adminApproveShop(request, response, sql, body, actorType, actorId
   const shop = shopRows[0];
 
   await sql`UPDATE repair_shops SET is_active = true, subscription_status = 'active', approval_status = 'approved', approved_at = now(), approved_by = ${actorId}, rejection_reason = NULL, updated_at = now() WHERE id = ${shopId}`;
+
+  // ── Website access: enable the hosted website when the shop's plan is Pro ──
+  try {
+    const plan = await sql`
+      SELECT sp.features FROM subscriptions s
+      JOIN subscription_plans sp ON sp.id = s.plan_id
+      WHERE s.repair_shop_id = ${shopId} AND s.status = 'active'
+      ORDER BY s.created_at DESC LIMIT 1
+    `;
+    const features = plan[0]?.features;
+    const feats = typeof features === "string" ? JSON.parse(features) : (features || {});
+    const websiteOn = !!(feats.hosted_website || feats.website_enabled || feats.website);
+    await sql`UPDATE repair_shops SET website_enabled = ${websiteOn}, updated_at = now() WHERE id = ${shopId}`;
+  } catch (e) { console.warn("[shop/approve] website_enabled plan check failed:", e.message); }
   
   // Log action
   await logAdminAction(sql, { actorType, actorId, action: "approve_shop", targetType: "shop", targetId: shopId, details: { approval: 'granted' }, ip });
@@ -1859,17 +1893,35 @@ async function handleGetShopSettings(request, response, sql, shopId) {
   const shop = await sql`
     SELECT id, shop_name, owner_name, email, mobile, city, address, services_offered,
            service_areas, gst_number, logo_url, language, timezone, currency, business_hours,
-           digest_enabled, digest_time
+           digest_enabled, digest_time, slug, website_enabled
     FROM repair_shops WHERE id = ${shopId} LIMIT 1
   `;
-  return response.status(200).json({ settings: shop[0] || null });
+  const s = shop[0] || null;
+  let websiteUrl = null;
+  if (s?.website_enabled && s?.slug) {
+    const appUrl = process.env.APP_URL || "https://coolcare.ai";
+    websiteUrl = `${appUrl}/${s.slug}`;
+  }
+  return response.status(200).json({ settings: s, websiteUrl });
 }
 
 async function handleSaveShopSettings(request, response, sql, shopId, body) {
   const updates = {};
   const fields = { shop_name: 'shop_name', owner_name: 'owner_name', mobile: 'mobile',
     address: 'address', city: 'city', gst_number: 'gst_number', logo_url: 'logo_url',
-    language: 'language', timezone: 'timezone', currency: 'currency' };
+    language: 'language', timezone: 'timezone', currency: 'currency', slug: 'slug' };
+
+  // Slug is sanitized on the server (lowercase, alphanumerics + dashes only)
+  if (typeof body.slug === "string") {
+    const slug = body.slug.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+    if (slug && slug.length <= 100) {
+      // Uniqueness check
+      try {
+        const dup = await sql`SELECT id FROM repair_shops WHERE slug = ${slug} AND id <> ${shopId} LIMIT 1`;
+        if (dup.length === 0) updates.slug = slug;
+      } catch (e) { /* column may not exist yet */ }
+    }
+  }
 
   for (const [bodyKey, col] of Object.entries(fields)) {
     if (body[bodyKey] !== undefined) updates[col] = body[bodyKey];
@@ -1925,11 +1977,25 @@ async function handleGetWidgetSettings(request, response, sql, shopId) {
     };
   }
 
+  // Hosted website feature flag (Website Chat is a Pro feature)
+  let websiteEnabled = false;
+  let websiteUrl = null;
+  let slug = null;
+  try {
+    const shopRow = await sql`SELECT slug, website_enabled FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    websiteEnabled = !!shopRow[0]?.website_enabled;
+    slug = shopRow[0]?.slug || null;
+    if (websiteEnabled && slug) {
+      const appUrl = process.env.APP_URL || "https://coolcare.ai";
+      websiteUrl = `${appUrl}/${slug}`;
+    }
+  } catch (e) { /* column may not exist yet */ }
+
   // Compute the embed snippet for this shop
   const appUrl = process.env.APP_URL || "https://coolcare.ai";
   const embedCode = `<script src="${appUrl}/web-bot/widget.js" data-widget-id="${shopId}"></script>`;
 
-  return response.status(200).json({ settings, embedCode });
+  return response.status(200).json({ settings, embedCode, websiteEnabled, websiteUrl });
 }
 
 async function handleSaveWidgetSettings(request, response, sql, shopId, body) {

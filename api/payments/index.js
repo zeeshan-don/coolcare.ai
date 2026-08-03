@@ -20,11 +20,25 @@ const { notifyAdmin, sendEmail } = require("../_lib/notify");
 // Accept "pro" and legacy plan names (backward compat)
 const PLAN_NAMES = ["pro", "starter", "professional", "enterprise"];
 const normalizePlanName = (name) => {
-  if (!name || name === "pro") return "pro";
+  if (!name) return "pro";
+  const n = String(name).toLowerCase();
+  if (n === "pro" || n === "starter") return n;
   // Legacy plan names → map to pro
-  if (["starter", "professional", "enterprise"].includes(name)) return "pro";
-  return name;
+  if (["professional", "enterprise"].includes(n)) return "pro";
+  return n;
 };
+
+// Does a plan include the hosted website (Pro)? Drives the website_enabled flag.
+async function planHasWebsite(sql, planId) {
+  try {
+    const rows = await sql`SELECT features FROM subscription_plans WHERE id = ${planId} LIMIT 1`;
+    const features = rows[0]?.features;
+    const feats = typeof features === "string" ? JSON.parse(features) : (features || {});
+    return !!(feats.hosted_website || feats.website_enabled || feats.website);
+  } catch (e) {
+    return false;
+  }
+}
 
 const checkoutSchema = z.object({
   planName: z.enum(PLAN_NAMES).optional().default("pro"),
@@ -255,7 +269,7 @@ async function handleCheckout(request, response, sql, shopId, body) {
       
       await sql`
         UPDATE repair_shops SET subscription_status = 'active', approval_status = 'approved',
-          is_active = true, updated_at = now()
+          is_active = true, website_enabled = ${await planHasWebsite(sql, planId)}, updated_at = now()
         WHERE id = ${shopId}
       `;
       
@@ -304,7 +318,7 @@ async function handleCheckout(request, response, sql, shopId, body) {
   const payment = await sql`
     INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description, metadata)
     VALUES (${shopId}, 'pending', ${currency}, ${finalAmount}, 'pending', ${invoiceNumber},
-            ${`CoolCare Pro — ${billingCycle}`},
+            ${`CoolCare ${planName === "pro" ? "Pro" : "Starter"} — ${billingCycle}`},
             ${JSON.stringify({ billingCycle, planName, promoCodeId, discount })}::jsonb)
     RETURNING id
   `;
@@ -578,7 +592,11 @@ async function activateSubscription(sql, shopId, planName, billingCycle, gateway
     action = existing.length > 0 ? "reactivated" : "activated";
   }
 
-  await sql`UPDATE repair_shops SET subscription_status = 'pending_approval', approval_status = 'pending', suspended_at = NULL, suspension_reason = NULL, updated_at = now() WHERE id = ${shopId}`;
+  // Website access follows the plan: Pro → website_enabled, Starter → disabled.
+  // The admin approval step re-evaluates this, but pre-set it so a payment alone
+  // never leaves a stale flag behind.
+  const websiteOn = await planHasWebsite(sql, planId);
+  await sql`UPDATE repair_shops SET subscription_status = 'pending_approval', approval_status = 'pending', suspended_at = NULL, suspension_reason = NULL, website_enabled = ${websiteOn}, updated_at = now() WHERE id = ${shopId}`;
 
   try {
     await sql`

@@ -216,8 +216,8 @@ async function requireActiveSubscription(auth, sql, response) {
         ORDER BY created_at DESC LIMIT 1
       `;
       if (sub.length > 0 && new Date(sub[0].current_period_end) < new Date()) {
-        // Expired — update status
-        await sql`UPDATE repair_shops SET subscription_status = 'expired', updated_at = now() WHERE id = ${shopId}`;
+        // Expired — update status + revoke the hosted website feature flag
+        await sql`UPDATE repair_shops SET subscription_status = 'expired', website_enabled = false, updated_at = now() WHERE id = ${shopId}`;
         await sql`UPDATE subscriptions SET status = 'expired', updated_at = now() WHERE repair_shop_id = ${shopId} AND status IN ('active', 'pending_approval') AND current_period_end < now()`;
         response.status(403).json({
           error: "Your subscription has expired. Please renew to continue.",

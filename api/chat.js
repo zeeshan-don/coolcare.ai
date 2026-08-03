@@ -246,17 +246,23 @@ async function isShopOpenNow(sql, shopId, aiSettings) {
 }
 
 // ─── Validate shop for widget access ─────────────────────────────────────────
+// Website chat is enabled when EITHER:
+//   • the shop turned on the standalone widget (widget_settings.enabled), OR
+//   • the shop has the hosted website active (website_enabled = true — Pro
+//     plan). The hosted website ships with chat built in, so it must work
+//     even before the owner toggles the external-widget switch.
 async function validateShop(sql, shopId, widget) {
   const rows = await sql`
     SELECT id, is_active, suspended_at, subscription_status, approval_status,
-           shop_name, logo_url
+           shop_name, logo_url, website_enabled
     FROM repair_shops WHERE id = ${shopId} LIMIT 1
   `;
   const shop = rows[0];
   if (!shop || !shop.is_active || shop.suspended_at) {
     const e = new Error("Shop not found or inactive"); e.statusCode = 404; throw e;
   }
-  if (widget !== undefined && !widget.enabled) {
+  const chatOn = (widget !== undefined && widget.enabled) || !!shop.website_enabled;
+  if (widget !== undefined && !chatOn) {
     const e = new Error("Website chat is disabled for this shop"); e.statusCode = 403; throw e;
   }
   const subOk = shop.subscription_status === "active" || shop.subscription_status === "trial";
@@ -277,8 +283,16 @@ async function handleGet(request, response) {
 
   // Config request (default)
   if (!request.query?.action || request.query.action === "config") {
-    // Even if disabled, return config so the widget can hide itself.
-    if (!widget.enabled) return response.status(200).json({ enabled: false, shopId });
+    // Even if disabled, return config so the widget can hide itself — unless
+    // the hosted website is active (Pro): then chat is part of the site.
+    if (!widget.enabled) {
+      try {
+        const shopRows = await sql`SELECT website_enabled FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+        if (!shopRows[0]?.website_enabled) return response.status(200).json({ enabled: false, shopId });
+      } catch (e) {
+        return response.status(200).json({ enabled: false, shopId });
+      }
+    }
     const shop = await validateShop(sql, shopId, widget);
     const aiSettings = await loadShopKnowledge(shopId);
     const isOpen = await isShopOpenNow(sql, shopId, aiSettings);
@@ -351,8 +365,8 @@ async function handlePost(request, response) {
   // without letting strangers bypass a shop's disabled-widget gate.
   const widget = await loadWidgetSettings(sql, shopId);
   const isSandbox = await isSandboxTicketValid(body.sandboxToken, shopId);
-  await validateShop(sql, shopId, action === "upload" || isSandbox ? undefined : widget);
-  if (!widget.enabled && action !== "upload" && !isSandbox) {
+  const shop = await validateShop(sql, shopId, action === "upload" || isSandbox ? undefined : widget);
+  if (!widget.enabled && !shop.website_enabled && action !== "upload" && !isSandbox) {
     return response.status(403).json({ error: "Website chat is disabled for this shop" });
   }
 

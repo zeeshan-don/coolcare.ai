@@ -22,6 +22,8 @@
     { "source": "/api/payments/webhook", "destination": "/api/payments?route=webhook" },
     { "source": "/widget.js", "destination": "/web-bot/widget.js" },
     { "source": "/shop-widget.html", "destination": "/web-bot/shop-widget.html" },
-    { "source": "/shop-widget", "destination": "/web-bot/shop-widget.html" }
+    { "source": "/shop-widget", "destination": "/web-bot/shop-widget.html" },
+    { "source": "/:slug", "destination": "/api/website?slug=:slug" },
+    { "source": "/:slug/", "destination": "/api/website?slug=:slug" }
   ]
 }

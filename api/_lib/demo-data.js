@@ -993,6 +993,8 @@ const DEMO = {
     city: "Bengaluru",
     state: "Karnataka",
     pincode: "560038",
+    slug: "coolcare-demo",
+    website_enabled: true,
     service_areas: BENGALURU_AREAS.slice(0, 15),
     services_offered: [
       "AC Repair & Service",

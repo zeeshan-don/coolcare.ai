@@ -230,8 +230,9 @@ async function runSubscriptionsJob() {
       `;
 
       for (const sub of expired) {
+        // Hosted website is a subscription feature — revoke it on expiry.
         await sql`
-          UPDATE repair_shops SET subscription_status = 'expired', updated_at = now()
+          UPDATE repair_shops SET subscription_status = 'expired', website_enabled = false, updated_at = now()
           WHERE id = ${sub.repair_shop_id}
         `;
         try {

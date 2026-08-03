@@ -151,6 +151,18 @@
         </div>
       </div>
 
+      <div class="section-label">Choose Your Plan</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px">
+        <button type="button" class="plan-chip" data-signup-plan="starter" onclick="selectSignupPlan('starter')" style="width:100%;background:var(--bg);border:2px solid var(--border2);border-radius:12px;padding:16px;cursor:pointer;text-align:left;transition:all 0.2s">
+          <div style="font-weight:700;color:#fff;font-size:15px">Starter <span style="color:var(--ink2);font-weight:400">$20/mo</span></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Dashboard, WhatsApp AI, team, analytics</div>
+        </button>
+        <button type="button" class="plan-chip" data-signup-plan="pro" onclick="selectSignupPlan('pro')" style="width:100%;background:var(--bg);border:2px solid var(--border2);border-radius:12px;padding:16px;cursor:pointer;text-align:left;transition:all 0.2s">
+          <div style="font-weight:700;color:#fff;font-size:15px">Pro <span style="color:var(--ink2);font-weight:400">$25/mo</span></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Everything in Starter, plus hosted website + chat</div>
+        </button>
+      </div>
+
       <!-- Promo Code Section -->
       <div class="section-label">Have a Promo Code?</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
@@ -189,7 +201,21 @@
   const urlParams = new URLSearchParams(window.location.search);
   const urlBilling = urlParams.get('billing') || 'monthly';
   const urlCurrency = urlParams.get('currency') || localStorage.getItem('cc_currency') || 'USD';
-  console.log('[signup] URL plan info:', { billing: urlBilling, currency: urlCurrency });
+  const urlPlan = urlParams.get('plan') || 'pro';
+  let selectedSignupPlan = (urlPlan === 'starter' || urlPlan === 'pro') ? urlPlan : 'pro';
+  console.log('[signup] URL plan info:', { plan: selectedSignupPlan, billing: urlBilling, currency: urlCurrency });
+
+  function selectSignupPlan(plan) {
+    selectedSignupPlan = (plan === 'starter' || plan === 'pro') ? plan : 'pro';
+    document.querySelectorAll('.plan-chip').forEach(b => {
+      const on = b.dataset.signupPlan === selectedSignupPlan;
+      b.style.borderColor = on ? 'var(--green)' : 'var(--border2)';
+      b.style.background = on ? 'rgba(34,197,94,0.05)' : 'var(--bg)';
+    });
+    const nameEl = document.getElementById('promoPlanName');
+    if (nameEl) nameEl.textContent = selectedSignupPlan === 'starter' ? 'CoolCare Starter' : 'CoolCare Pro';
+  }
+  selectSignupPlan(selectedSignupPlan);
 
   // Redirect if already logged in
   if (localStorage.getItem('cc_token')) window.location.href = '/shop-dashboard.html';
@@ -206,11 +232,22 @@
 
   // Plan pricing for promo code display (frontend calculates for display only)
   const PLAN_PRICING = {
-    USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
-    INR: { monthly: 1299, quarterly: 3156, halfyearly: 6625, yearly: 12470 },
-    AED: { monthly: 75, quarterly: 202.5, halfyearly: 382.5, yearly: 720 },
-    KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
+    starter: {
+      USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
+      INR: { monthly: 1199, quarterly: 3237, halfyearly: 6115, yearly: 11508 },
+      AED: { monthly: 75, quarterly: 202.5, halfyearly: 382.5, yearly: 720 },
+      KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
+    },
+    pro: {
+      USD: { monthly: 25, quarterly: 67.5, halfyearly: 127.5, yearly: 240 },
+      INR: { monthly: 1499, quarterly: 4047, halfyearly: 7644, yearly: 14390 },
+      AED: { monthly: 90, quarterly: 243, halfyearly: 459, yearly: 864 },
+      KWD: { monthly: 7.5, quarterly: 20.25, halfyearly: 38.25, yearly: 72 },
+    },
   };
+  function signupPlanPrices() {
+    return PLAN_PRICING[selectedSignupPlan] || PLAN_PRICING.pro;
+  }
 
   function showAlert(msg, type) {
     alert.textContent = msg;
@@ -392,7 +429,7 @@
     appliedPromoData = null;
     
     // Get the display price for this billing cycle
-    const prices = PLAN_PRICING[detectedCurrency || 'USD'] || PLAN_PRICING.USD;
+    const prices = signupPlanPrices()[detectedCurrency || 'USD'] || signupPlanPrices().USD;
     const amount = prices[urlBilling] || prices.monthly;
     
     try {
@@ -476,8 +513,8 @@
     const servicesOffered = [...document.querySelectorAll('#servicesGrid input:checked')].map(c => c.value);
     const promoCodeInput = document.getElementById('promoCode').value.trim().toUpperCase();
 
-    // Determine plan from URL or default to 'pro' (paid)
-    const planName     = 'pro';
+    // Determine plan from the selector (default 'pro')
+    const planName     = selectedSignupPlan;
     const billingCycle = urlBilling;
     const currency     = detectedCurrency || urlCurrency;
     const selectedCountry = detectedCountry;

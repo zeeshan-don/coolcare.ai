@@ -1188,19 +1188,34 @@ async function createBooking(customerNumber, state) {
       notes: `Booking created via ${channel === "website" ? "website chat" : "WhatsApp"}`,
     });
 
-    // Try to auto-assign technician
-    const techs = await sql`
-      SELECT id FROM technicians WHERE active = true
-      AND EXISTS (SELECT 1 FROM unnest(services) s WHERE lower(s) LIKE lower(${"%" + (state.appliance ?? "") + "%"}))
-      LIMIT 1
-    `;
+    // Try to auto-assign technician — ALWAYS from the REAL roster record:
+    // scoped to this shop's technicians (falling back to global ones) and the
+    // booking row stores the real technician_name so every surface (dashboard,
+    // tracker, timeline, AI status replies) shows the actual assigned person.
+    let techs = [];
+    if (state.repair_shop_id) {
+      techs = await sql`
+        SELECT id FROM technicians WHERE active = true
+        AND (repair_shop_id = ${state.repair_shop_id} OR repair_shop_id IS NULL)
+        AND EXISTS (SELECT 1 FROM unnest(services) s WHERE lower(s) LIKE lower(${"%" + (state.appliance ?? "") + "%"}))
+        ORDER BY (repair_shop_id = ${state.repair_shop_id}) DESC
+        LIMIT 1
+      `;
+    } else {
+      techs = await sql`
+        SELECT id FROM technicians WHERE active = true
+        AND EXISTS (SELECT 1 FROM unnest(services) s WHERE lower(s) LIKE lower(${"%" + (state.appliance ?? "") + "%"}))
+        LIMIT 1
+      `;
+    }
     if (techs.length > 0) {
-      await sql`UPDATE bookings SET technician_id = ${techs[0].id}, status = 'assigned' WHERE id = ${bookingId}`;
       const techRow = await sql`SELECT name FROM technicians WHERE id = ${techs[0].id} LIMIT 1`;
+      const techName = techRow[0]?.name || null;
+      await sql`UPDATE bookings SET technician_id = ${techs[0].id}, technician_name = ${techName}, status = 'assigned' WHERE id = ${bookingId}`;
       await insertTimelineEvent(sql, {
         bookingId,
         action: "technician_assigned",
-        newValue: techRow[0]?.name || null,
+        newValue: techName,
         actorType: ACTORS.SYSTEM,
         notes: "Technician auto-assigned by the system",
       });

@@ -40,6 +40,15 @@ function generateReferralCode() {
   return 'COOLCARE-' + code;
 }
 
+// Generate a shop's hosted-website URL slug from its name (lowercase, kebab)
+function slugify(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100);
+}
+
 module.exports = withErrorHandler(async (request, response) => {
   setSecurityHeaders(response);
   if (!allowMethods(request, response, "POST")) return;
@@ -210,6 +219,16 @@ async function handleSignup(request, response, body) {
     if (existing.length > 0) referralCode = generateReferralCode(); // retry once
   } catch (e) { /* column may not exist yet */ }
 
+  // ── Website slug (hosted website URL path) — unique per shop ────────────
+  let slug = slugify(data.shopName) || "shop";
+  try {
+    let slugBase = slug;
+    let i = 2;
+    while ((await sql`SELECT 1 FROM repair_shops WHERE slug = ${slug} LIMIT 1`).length > 0) {
+      slug = slugBase + "-" + i++;
+    }
+  } catch (e) { /* column may not exist yet */ }
+
   // Check for referral code in signup data
   let referredBy = null;
   if (body.referralCode) {
@@ -244,12 +263,12 @@ async function handleSignup(request, response, body) {
       (shop_name, owner_name, email, mobile, password_hash,
        address, city, service_areas, services_offered, role,
        subscription_status, referral_code, referred_by,
-       selected_country, selected_currency)
+       selected_country, selected_currency, slug, website_enabled)
     VALUES
       (${data.shopName}, ${data.ownerName}, ${data.email}, ${data.mobile}, ${passwordHash},
        ${data.address || null}, ${data.city}, ${safeServiceAreas}, ${safeServicesOffered}, 'owner',
        'inactive', ${referralCode}, ${referredBy},
-       ${selectedCountry}, ${currency})
+       ${selectedCountry}, ${currency}, ${slug}, false)
     RETURNING id, shop_name, owner_name, email, mobile, city, created_at
   `;
   const shop = rows[0];
@@ -1046,7 +1065,7 @@ async function handleDemoPreload(request, response) {
            address, city, state, pincode, service_areas, services_offered, role,
            subscription_status, is_demo, is_active, referral_code,
            approval_status, gst_number, business_hours, language, timezone,
-           selected_country, selected_currency)
+           selected_country, selected_currency, slug, website_enabled)
         VALUES
           (${DEMO.shop.shop_name}, ${DEMO.shop.owner_name}, ${DEMO.shop.email}, ${DEMO.shop.mobile},
            ${passwordHash}, ${DEMO.shop.address}, ${DEMO.shop.city},
@@ -1055,7 +1074,7 @@ async function handleDemoPreload(request, response) {
            'active', true, true, 'DEMO-0001',
            'approved', ${DEMO.shop.gst_number || '29ABCDE1234F1Z5'},
            ${JSON.stringify(DEMO.shop.business_hours)}::jsonb, 'en', 'Asia/Kolkata',
-           'IN', 'INR')
+           'IN', 'INR', 'coolcare-demo', true)
         RETURNING id
       `;
       demoShopId = shopRows[0].id;
@@ -1297,7 +1316,7 @@ async function handleDemoLogin(request, response) {
                address, city, state, pincode, service_areas, services_offered, role,
                subscription_status, is_demo, is_active, referral_code,
                approval_status, gst_number, business_hours, language, timezone,
-               selected_country, selected_currency)
+               selected_country, selected_currency, slug, website_enabled)
             VALUES
               (${DEMO.shop.shop_name}, ${DEMO.shop.owner_name}, ${DEMO.shop.email}, ${DEMO.shop.mobile},
                ${passwordHash}, ${DEMO.shop.address}, ${DEMO.shop.city},
@@ -1306,7 +1325,7 @@ async function handleDemoLogin(request, response) {
                'active', true, true, 'DEMO-0001',
                'approved', ${DEMO.shop.gst_number || '29ABCDE1234F1Z5'},
                ${JSON.stringify(DEMO.shop.business_hours)}::jsonb, 'en', 'Asia/Kolkata',
-               'IN', 'INR')
+               'IN', 'INR', 'coolcare-demo', true)
             RETURNING id
           `;
           demoShopId = shopRows[0].id;

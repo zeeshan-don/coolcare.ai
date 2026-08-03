@@ -174,8 +174,12 @@
   <div class="section" id="renewSection" style="display:none">
     <div class="renew-section">
       <h2>🚀 Choose your renewal plan</h2>
-      <p>Select billing cycle and currency to renew your CoolCare Pro subscription. Have a promo code? Enter it below.</p>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+      <p>Select a plan, billing cycle and currency. Have a promo code? Enter it below.</p>
+      <div style="display:flex;gap:10px;justify-content:center;margin-bottom:20px;flex-wrap:wrap">
+        <button class="btn btn-primary" data-plan="starter" onclick="selectPlan('starter')">Starter — $20/mo</button>
+        <button class="btn" data-plan="pro" onclick="selectPlan('pro')">Pro — $25/mo <span style="color:var(--green);font-size:10px">Website included</span></button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;justify-content:center">
         <button class="btn btn-primary" data-cycle="monthly" onclick="selectCycle('monthly')">Monthly</button>
         <button class="btn" data-cycle="quarterly" onclick="selectCycle('quarterly')">Quarterly <span style="color:var(--green);font-size:10px">-10%</span></button>
         <button class="btn" data-cycle="halfyearly" onclick="selectCycle('halfyearly')">Half-Yearly <span style="color:var(--green);font-size:10px">-15%</span></button>
@@ -266,16 +270,37 @@ function logout() {
   window.location.href = '/login.html';
 }
 
+let selectedPlan = 'pro';
 let selectedCycle = 'monthly';
 let selectedCurrency = 'USD';
 let currentSub = null;
 
 const PLAN_PRICING = {
-  USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
-  INR: { monthly: 1299, quarterly: 3156, halfyearly: 6625, yearly: 12470 },
-  AED: { monthly: 75, quarterly: 202.5, halfyearly: 382.5, yearly: 720 },
-  KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
+  starter: {
+    USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
+    INR: { monthly: 1199, quarterly: 3237, halfyearly: 6115, yearly: 11508 },
+    AED: { monthly: 75, quarterly: 202.5, halfyearly: 382.5, yearly: 720 },
+    KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
+  },
+  pro: {
+    USD: { monthly: 25, quarterly: 67.5, halfyearly: 127.5, yearly: 240 },
+    INR: { monthly: 1499, quarterly: 4047, halfyearly: 7644, yearly: 14390 },
+    AED: { monthly: 90, quarterly: 243, halfyearly: 459, yearly: 864 },
+    KWD: { monthly: 7.5, quarterly: 20.25, halfyearly: 38.25, yearly: 72 },
+  },
 };
+
+function planPrices() {
+  return PLAN_PRICING[selectedPlan] || PLAN_PRICING.pro;
+}
+
+function selectPlan(plan) {
+  selectedPlan = (plan === 'starter' || plan === 'pro') ? plan : 'pro';
+  document.querySelectorAll('#renewSection .btn[data-plan]').forEach(b => {
+    b.className = (b.dataset.plan === selectedPlan) ? 'btn btn-primary' : 'btn';
+  });
+  updatePrices();
+}
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmt(n) { return (parseFloat(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -396,7 +421,7 @@ function selectCycle(cycle) {
 
 function updatePrices() {
   selectedCurrency = document.getElementById('renewCurrency').value;
-  const prices = PLAN_PRICING[selectedCurrency] || PLAN_PRICING.USD;
+  const prices = planPrices()[selectedCurrency] || planPrices().USD;
   const amount = prices[selectedCycle] || prices.monthly;
   const symbols = { USD: '$', INR: '₹', AED: 'د.إ ', KWD: 'KD ' };
   document.getElementById('priceDisplay').textContent = `${symbols[selectedCurrency] || ''}${fmt(amount)} / ${selectedCycle}`;
@@ -409,6 +434,7 @@ async function renewSubscription() {
 
   try {
     await CoolCareCheckout.start({
+      planName: selectedPlan,
       billingCycle: selectedCycle,
       currency: selectedCurrency,
       onError: function(msg) {
@@ -574,7 +600,7 @@ async function applyPromoCode() {
   appliedPromoData = null;
   
   // Get selected plan pricing
-  const prices = PLAN_PRICING[selectedCurrency] || PLAN_PRICING.USD;
+  const prices = planPrices()[selectedCurrency] || planPrices().USD;
   const amount = prices[selectedCycle] || prices.monthly;
   
   try {
@@ -643,7 +669,7 @@ async function renewSubscription() {
   if (appliedPromoData && (appliedPromoData.isSupportToken || appliedPromoData.isFreeTrial || appliedPromoData.isLifetime)) {
     // Support token / free trial / lifetime — redeem via promotions API
     try {
-      const prices = PLAN_PRICING[selectedCurrency] || PLAN_PRICING.USD;
+      const prices = planPrices()[selectedCurrency] || planPrices().USD;
       const amount = prices[selectedCycle] || prices.monthly;
       
       const res = await fetch('/api/promotions', {
@@ -655,6 +681,7 @@ async function renewSubscription() {
         body: JSON.stringify({
           action: 'redeem',
           code: document.getElementById('promoCode').value.trim().toUpperCase(),
+          planName: selectedPlan,
           billingCycle: selectedCycle,
           amount: amount,
           currency: selectedCurrency,
@@ -683,6 +710,7 @@ async function renewSubscription() {
   // Normal checkout flow (handles partial discount + zero-amount discount)
   try {
     await CoolCareCheckout.start({
+      planName: selectedPlan,
       billingCycle: selectedCycle,
       currency: selectedCurrency,
       couponCode: appliedPromoData ? document.getElementById('promoCode').value.trim().toUpperCase() : undefined,

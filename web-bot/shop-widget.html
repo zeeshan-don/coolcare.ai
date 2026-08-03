@@ -90,6 +90,16 @@
   <h1>🌐 Website Chat</h1>
   <p class="sub">Put the CoolCare AI assistant on your own website. One AI engine, one dashboard — same as WhatsApp, now on your site.</p>
 
+  <div class="card" id="proGate" style="display:none;border-color:rgba(234,179,8,0.25);background:rgba(234,179,8,0.05)">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:240px">
+        <div style="font-weight:700;font-size:14px;color:#fff">Website Chat is a Pro feature</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:2px">Upgrade to the Pro plan to enable website chat and your hosted website.</div>
+      </div>
+      <a href="/shop-subscription.html" style="display:inline-block;background:#fff;color:#000;font:600 12px 'Inter',sans-serif;padding:10px 18px;border-radius:10px;text-decoration:none">Upgrade to Pro →</a>
+    </div>
+  </div>
+
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <h2 style="margin:0">Widget Status</h2>
@@ -315,6 +325,14 @@ async function loadSettings() {
     if (res.status === 401) { window.location.href = '/login.html'; return; }
     const data = await res.json();
     const s = data.settings || {};
+
+    // Pro gating — Website Chat is a Pro feature (website_enabled flag)
+    if (data.websiteEnabled === false) {
+      document.getElementById('proGate').style.display = 'block';
+      document.querySelectorAll('.card input, .card textarea, .card select, .btn').forEach(el => el.disabled = true);
+      return;
+    }
+
     shopId = (data.shopId || data.settings?.repair_shop_id || localStorage.getItem('cc_shop') && JSON.parse(localStorage.getItem('cc_shop')).id) || 1;
     // Derive shopId from token payload if possible
     try {

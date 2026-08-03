@@ -9,8 +9,8 @@
     return localStorage.getItem('cc_token');
   }
 
-  function savePendingCheckout(billingCycle, currency, country) {
-    sessionStorage.setItem('cc_checkout_pending', JSON.stringify({ billingCycle, currency, country, ts: Date.now() }));
+  function savePendingCheckout(billingCycle, currency, country, planName) {
+    sessionStorage.setItem('cc_checkout_pending', JSON.stringify({ billingCycle, currency, country, planName: planName || 'pro', ts: Date.now() }));
   }
 
   function loadPendingCheckout() {
@@ -43,13 +43,17 @@
     });
   }
 
+  function planLabel(planName) {
+    return planName === 'starter' ? 'Starter' : 'Pro';
+  }
+
   function openRazorpay(data, shop) {
     var options = {
       key: data.keyId,
       order_id: data.orderId,
       currency: data.currency,
       name: 'CoolCare',
-      description: 'CoolCare Pro — ' + (data.billingCycle || 'monthly'),
+      description: 'CoolCare ' + planLabel(data.planName) + ' — ' + (data.billingCycle || 'monthly'),
       handler: function () {
         window.location.href = '/payment-success.html';
       },
@@ -65,7 +69,7 @@
         name: shop && shop.owner_name ? shop.owner_name : '',
       },
       notes: {
-        plan: 'pro',
+        plan: data.planName || 'pro',
         billing_cycle: data.billingCycle || 'monthly',
       },
     };
@@ -81,6 +85,7 @@
     var billingCycle = opts.billingCycle || 'monthly';
     var currency = (opts.currency || localStorage.getItem('cc_currency') || 'USD').toUpperCase();
     var country = opts.country || localStorage.getItem('cc_country') || null;
+    var planName = opts.planName || 'pro';
     var onError = opts.onError || function (msg) { alert(msg); };
     var onStart = opts.onStart || function () {};
     var onSuccess = opts.onSuccess || null;
@@ -88,9 +93,9 @@
 
     var token = getToken();
     if (!token) {
-      var redirectUrl = '/shop-signup.html?billing=' + encodeURIComponent(billingCycle) + '&currency=' + encodeURIComponent(currency);
+      var redirectUrl = '/shop-signup.html?billing=' + encodeURIComponent(billingCycle) + '&currency=' + encodeURIComponent(currency) + '&plan=' + encodeURIComponent(planName);
       if (country) redirectUrl += '&country=' + encodeURIComponent(country);
-      savePendingCheckout(billingCycle, currency, country);
+      savePendingCheckout(billingCycle, currency, country, planName);
       window.location.href = redirectUrl;
       return;
     }
@@ -100,7 +105,7 @@
     try {
       var body = {
         action: 'checkout',
-        planName: 'pro',
+        planName: planName,
         billingCycle: billingCycle,
         currency: currency,
       };
@@ -167,6 +172,7 @@
     await startCheckout({
       billingCycle: pending.billingCycle,
       currency: pending.currency,
+      planName: pending.planName || 'pro',
     });
     return true;
   }

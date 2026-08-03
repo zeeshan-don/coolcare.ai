@@ -105,6 +105,15 @@
   </div>
 
   <div class="card">
+    <h2>Hosted Website <span id="websiteStatusPill" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid var(--border2);color:var(--muted);vertical-align:middle">Not available</span></h2>
+    <p style="color:var(--ink2);font-size:13px;margin:-4px 0 16px;">Your hosted website is included with the <b style="color:#fff">Pro</b> plan. Every booking made on it lands straight in your dashboard.</p>
+    <div class="field"><label>Website address (slug)</label><input id="slug" type="text" placeholder="my-repair-shop" maxlength="100"><div style="color:var(--muted);font-size:11px;margin-top:4px">Lowercase letters, numbers and dashes. The website appears at /&lt;slug&gt;.</div></div>
+    <div id="websiteUrlBox" style="display:none;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;font-size:13px">
+      <span style="color:var(--muted)">Live at </span><a id="websiteUrl" href="#" target="_blank" rel="noopener" style="color:var(--green);font-weight:600"></a>
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Localization</h2>
     <div class="grid">
       <div class="field"><label>Language</label>
@@ -192,10 +201,23 @@ async function loadSettings() {
     if (res.status === 401) { window.location.href = '/login.html'; return; }
     const data = await res.json();
     const s = data.settings || {};
-    ['shop_name','owner_name','mobile','email','address','city','gst_number','logo_url'].forEach(f => {
+    ['shop_name','owner_name','mobile','email','address','city','gst_number','logo_url','slug'].forEach(f => {
       const el = document.getElementById(f);
       if (el && s[f] !== undefined && s[f] !== null) el.value = s[f];
     });
+    // Hosted website status
+    const pill = document.getElementById('websiteStatusPill');
+    const urlBox = document.getElementById('websiteUrlBox');
+    if (s.website_enabled) {
+      if (pill) { pill.textContent = 'Live'; pill.style.color = 'var(--green)'; pill.style.borderColor = 'rgba(34,197,94,0.35)'; pill.style.background = 'rgba(34,197,94,0.08)'; }
+      if (urlBox && data.websiteUrl) {
+        urlBox.style.display = 'block';
+        document.getElementById('websiteUrl').textContent = data.websiteUrl;
+        document.getElementById('websiteUrl').href = data.websiteUrl;
+      }
+    } else {
+      if (pill) { pill.textContent = 'Pro feature'; pill.style.color = 'var(--muted)'; }
+    }
     if (s.language) document.getElementById('language').value = s.language;
     if (s.currency) document.getElementById('currency').value = s.currency;
     if (s.timezone) document.getElementById('timezone').value = s.timezone;
@@ -212,7 +234,7 @@ async function saveSettings() {
   const btn = document.getElementById('saveBtn');
   btn.disabled = true; btn.textContent = 'Saving…';
   const body = {};
-  ['shop_name','owner_name','mobile','address','city','gst_number','logo_url','language','currency','timezone'].forEach(f => {
+  ['shop_name','owner_name','mobile','address','city','gst_number','logo_url','language','currency','timezone','slug'].forEach(f => {
     const el = document.getElementById(f);
     if (el) body[f] = el.value;
   });

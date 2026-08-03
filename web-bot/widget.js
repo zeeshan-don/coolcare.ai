@@ -35,6 +35,10 @@
   var forceEnable = script.getAttribute("data-force-enable") === "1" ||
     script.getAttribute("data-force-enable") === "true";
   var sandboxToken = script.getAttribute("data-sandbox-token") || "";
+  // Hosted shop websites pass data-auto-open="1" so the chat opens by default
+  // on the landing page (bookings start right away).
+  var forcedAutoOpen = script.getAttribute("data-auto-open") === "1" ||
+    script.getAttribute("data-auto-open") === "true";
 
   // Sandbox token may be refreshed by the host page while the widget is open —
   // prefer the freshest value so long testing sessions don't hit token expiry.
@@ -639,7 +643,7 @@
         initInteractions();
         startSession();
         // Auto-open the chat window when configured (or in the sandbox preview)
-        if (config.autoOpen || forceEnable) {
+        if (config.autoOpen || forceEnable || forcedAutoOpen) {
           setTimeout(function () {
             open = true;
             setBubbleOpen(true);
@@ -815,4 +819,16 @@
     else fn();
   }
   ready(boot);
+
+  // ── Public API ─────────────────────────────────────────────────────────────
+  // Lets the host page (e.g. the CoolCare hosted website's "Book Service" CTA)
+  // open the chat window programmatically.
+  window.__coolcareWidget = {
+    open: function () {
+      if (!booted) return;
+      open = true;
+      setBubbleOpen(true);
+      if (inputEl) inputEl.focus();
+    },
+  };
 })();

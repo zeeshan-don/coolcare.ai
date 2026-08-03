@@ -284,6 +284,7 @@
     <a href="/shop-channels.html" class="nav-link">Communication Channels</a>
     <a href="/web-bot/shop-widget.html" class="nav-link">Website Chat</a>
     <a href="/shop-settings.html" class="nav-link">Settings</a>
+    <a href="#" class="nav-link" id="websiteLink" style="display:none" target="_blank" rel="noopener">My Website ↗</a>
     <div class="bell" onclick="window.location.href='/shop-notifications.html'" title="Notifications">🔔<span class="bell-count" id="bellCount" style="display:none">0</span></div>
     <button class="logout-btn" id="logoutBtn" onclick="logout()">Log Out</button>
     <button class="hamburger" id="hamburger" onclick="toggleMobileMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
@@ -624,8 +625,19 @@
 
       if (data.shop) {
         document.getElementById('shopName').textContent = data.shop.shop_name || '';
-        localStorage.setItem('cc_shop', JSON.stringify({ shopName: data.shop.shop_name }));
+        localStorage.setItem('cc_shop', JSON.stringify({ shopName: data.shop.shop_name, websiteUrl: data.websiteUrl || '' }));
         setGreeting(data.shop.owner_name || data.shop.shop_name);
+      }
+
+      // Hosted website link — Pro feature (website_enabled flag)
+      const websiteLink = document.getElementById('websiteLink');
+      if (websiteLink) {
+        if (data.websiteEnabled && data.websiteUrl) {
+          websiteLink.href = data.websiteUrl;
+          websiteLink.style.display = '';
+        } else {
+          websiteLink.style.display = 'none';
+        }
       }
 
       renderPipeline(data.counts || {});
@@ -934,40 +946,6 @@
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 350); }, 6000);
   }
 
-  // Demo live simulation — the business keeps moving while you watch
-  const DEMO_SERVICES = ['AC Repair & Service', 'Washing Machine Repair', 'Refrigerator Not Cooling', 'AC Gas Refill', 'Geyser Repair', 'Microwave Repair', 'RO Purifier Service', 'TV Screen Issue'];
-  const DEMO_AREAS = ['Indiranagar', 'Koramangala', 'Whitefield', 'HSR Layout', 'Jayanagar', 'Marathahalli', 'JP Nagar', 'Bellandur'];
-  const DEMO_NAMES = ['Aarav Mehta', 'Sneha Kulkarni', 'Ravi Verma', 'Priya Nair', 'Arjun Reddy', 'Kavya Iyer', 'Mohammed Khan', 'Divya Sharma', 'Sanjay Patel', 'Ananya Rao'];
-  const DEMO_TECHS = ['Rajesh Kumar', 'Suresh Patel', 'Amit Singh', 'Deepa Iyer', 'Prakash Rao', 'Kavita Nair'];
-  const DEMO_ACTIONS = ['booking_created', 'ai_booked_service', 'payment_received', 'technician_assigned', 'job_completed'];
-  let demoSimIdx = 0;
-
-  function simulateLiveEvent() {
-    const action = DEMO_ACTIONS[demoSimIdx++ % DEMO_ACTIONS.length];
-    const name = DEMO_NAMES[demoSimIdx % DEMO_NAMES.length];
-    const event = {
-      action,
-      customerName: name,
-      serviceType: DEMO_SERVICES[demoSimIdx % DEMO_SERVICES.length],
-      area: DEMO_AREAS[demoSimIdx % DEMO_AREAS.length],
-      newValue: action === 'payment_received' ? '₹' + (Math.floor(Math.random() * 2500) + 800) : action === 'technician_assigned' ? DEMO_TECHS[demoSimIdx % DEMO_TECHS.length] : null,
-      createdAt: new Date().toISOString(),
-    };
-    pushLiveToast(event);
-    // Prepend into the visible timeline for the "business is moving" feeling
-    const el = document.getElementById('activityFeed');
-    const meta = TL_META[action] || DEFAULT_TL;
-    const sub = action === 'payment_received'
-      ? `<b>${esc(event.newValue)}</b> from ${esc(name)}`
-      : `<b>${esc(name)}</b> · ${esc(event.serviceType)}${event.area ? ` · ${esc(event.area)}` : ''}`;
-    const item = document.createElement('div');
-    item.className = 'tl-item ' + meta.cls;
-    item.style.animation = 'none';
-    item.innerHTML = `<div class="tl-head"><span class="tl-ico">${meta.icon}</span>${meta.title(event)}</div><div class="tl-sub">${sub}</div><div class="tl-time">just now</div>`;
-    el.prepend(item);
-    while (el.children.length > 8) el.removeChild(el.lastChild);
-  }
-
   // ── Customer history ───────────────────────────────────────────────────────
   function renderCustomerHistory(customers) {
     const el = document.getElementById('customerTable');
@@ -1140,7 +1118,6 @@
 
   loadDashboard();
   setInterval(loadDashboard, 30000);
-  if (isDemo) setInterval(simulateLiveEvent, 16000);
 </script>
 </body>
 </html>
