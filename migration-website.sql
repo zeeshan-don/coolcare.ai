@@ -119,6 +119,39 @@ ON CONFLICT (plan_id, currency) DO UPDATE SET
   updated_at       = now();
 
 -- =============================================================================
+-- 2c. BACKFILL website_enabled FOR ALREADY-ELIGIBLE SHOPS
+-- =============================================================================
+-- The website_enabled column defaults to false, so shops that existed BEFORE
+-- this migration keep it false even when they are paying Pro customers with an
+-- active subscription. Without this, api/website.js serves "Website not
+-- available" (404) for those shops forever.
+--
+-- This restores the flag for any shop whose CURRENT state says it is eligible:
+--   • shop.subscription_status = 'active'   (what the website route checks)
+--   • an active subscription on a plan whose features include hosted_website
+--     (Pro) / website_enabled / website.
+--
+-- Safe to re-run and only ever sets the flag to true — it never disables an
+-- existing website. (A later subscription expiry disables it via api/cron.js.)
+UPDATE repair_shops rs
+SET website_enabled = true, updated_at = now()
+WHERE rs.subscription_status = 'active'
+  AND rs.website_enabled = false
+  AND EXISTS (
+    SELECT 1
+    FROM subscriptions s
+    JOIN subscription_plans sp ON sp.id = s.plan_id
+    WHERE s.repair_shop_id = rs.id
+      AND s.status = 'active'
+      AND COALESCE(
+            (sp.features->>'hosted_website')::boolean,
+            (sp.features->>'website_enabled')::boolean,
+            (sp.features->>'website')::boolean,
+            false
+          )
+  );
+
+-- =============================================================================
 -- 3. PERMANENT TEST SHOP (slug: testshop)
 -- =============================================================================
 -- Customer-facing website: /testshop
