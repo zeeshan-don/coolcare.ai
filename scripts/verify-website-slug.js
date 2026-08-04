@@ -122,7 +122,7 @@ async function main() {
     if (!s.website_enabled) {
       console.log("   Fix: enable website_enabled for this shop (Pro plan only).");
       console.log("        → Admin: POST /api/shop  { action: \"toggle-website\", shopId: X, enabled: true }");
-      console.log("        → or re-run migration-website.sql (now backfills eligible shops),");
+      console.log("        → or re-run migration-combined.sql (now backfills eligible shops),");
       console.log("        → or: UPDATE repair_shops SET website_enabled = true WHERE id = " + s.id + ";");
     }
     if (s.subscription_status !== "active") {

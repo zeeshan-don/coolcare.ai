@@ -1,4 +1,4 @@
-// Verify the Test Shop password hash used in migration-website.sql
+// Verify the Test Shop password hash used in migration-combined.sql
 const b = require("bcryptjs");
 
 const hash = "$2a$12$fZkKrivuI3ER/ZcAc77uX.Jo85x0ajOCZt9Xb60NMjgWqOM0tmb22";

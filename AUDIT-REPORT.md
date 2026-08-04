@@ -119,5 +119,5 @@ Legend: ✅ Working · ⚠️ Partial · ❌ Broken/Placeholder · ➖ Not appli
 2. **New `shop-team.html`** — full technician management page (list / add / edit / suspend / delete with confirmation).
 3. **Dashboard wiring** — "Manage" link on the Technicians widget + "Team" in nav & mobile menus.
 4. **Booking assignment** — roster dropdown instead of free text; assigns real `technician_id`.
-5. **Migration** — `migration-technician-roster.sql` ensures roster columns/indexes and `created_at/updated_at`.
+5. **Migration** — `migration-combined.sql` (Section 26) ensures roster columns/indexes and `created_at/updated_at`.
 6. **Demo parity** — demo mode now returns roster data so the page behaves identically (writes blocked, as designed).

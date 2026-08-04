@@ -56,7 +56,11 @@ prompts and knowledge-base logic are never duplicated.
 
 ---
 
-## 2. Database changes (`website-chat.sql`)
+## 2. Database changes (`migration-combined.sql` → Section 23)
+
+> The website-chat migration was merged into the single schema/migration file
+> at the repo root. Run the whole file (idempotent) — Section 23 covers all of
+> the table changes below.
 
 | Table | Change |
 |---|---|
@@ -71,7 +75,7 @@ prompts and knowledge-base logic are never duplicated.
 All statements are idempotent (`IF NOT EXISTS`). Run once in the Neon console:
 
 ```sql
-\i website-chat.sql   -- or paste the file contents
+\i migration-combined.sql   -- or paste the file contents
 ```
 
 ---
@@ -105,7 +109,8 @@ shared engine instead of containing it.
 | `web-bot/widget.js` *(new)* | The embeddable widget (see §5) — served at `/web-bot/widget.js` |
 
 > 📁 All website-chat feature files live in the `web-bot/` folder:
-> `widget.js`, `shop-widget.html`, `website-chat.sql`, `WEBSITE-CHAT.md`, `README.md`.
+> `widget.js`, `shop-widget.html`, `WEBSITE-CHAT.md`, `README.md`.
+> (The DB migration lives in `migration-combined.sql` at the repo root.)
 > The public API (`api/chat.js`) stays in `api/` because Vercel only deploys
 > serverless functions from that directory. See `web-bot/README.md`.
 
@@ -178,11 +183,11 @@ widget resolves its API base from its own script URL automatically.
 
 ## 8. Deployment plan
 
-1. **Migrate DB** — run `website-chat.sql` in Neon.
-   > Already deployed before `customer_phone` existed? Just re-run `website-chat.sql`
-   > (idempotent) or run `migration-customer-phone.sql` at the repo root — it adds the
-   > `customer_phone` columns to `conversation_state` and `bookings` that the shared
-   > engine writes for both channels.
+1. **Migrate DB** — run `migration-combined.sql` in Neon.
+   > Already deployed before `customer_phone` existed? Just re-run
+   > `migration-combined.sql` (idempotent) — it includes the `customer_phone`
+   > columns on `conversation_state` and `bookings` (Sections 21/27) that the
+   > shared engine writes for both channels.
 2. **Deploy backend** — push `api/chat.js`, updated `api/shop.js`,
    `api/_lib/conversation-engine.js`, rewritten `api/whatsapp.js`, updated
    `rate-limit.js`, `demo-data.js` to Vercel.
@@ -252,7 +257,7 @@ widget resolves its API base from its own script URL automatically.
   typing, seen status, business hours, history, handoff).
 - **`web-bot/shop-widget.html`** — admin page with embed-code generator.
 - **`shop-dashboard.html`** — source badges + nav link.
-- **`web-bot/website-chat.sql`** — idempotent migration.
+- **`migration-combined.sql`** — idempotent migration (Section 23: website chat).
 
 All of the above (except `api/chat.js`, which Vercel requires in `api/`) are
 consolidated in the `web-bot/` folder.

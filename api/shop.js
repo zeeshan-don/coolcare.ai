@@ -488,7 +488,7 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
 // TECHNICIAN ROSTER (Add / Edit / Suspend / Delete)
 // ═══════════════════════════════════════════════════════════════════════════════
 async function handleTechniciansList(request, response, sql, shopId) {
-  // created_at only exists after migration-technician-roster.sql — fall back
+  // created_at only exists after the technician roster migration (migration-combined.sql §26) — fall back
   // gracefully (repo convention) in case it hasn't been applied yet.
   let rows = [];
   try {

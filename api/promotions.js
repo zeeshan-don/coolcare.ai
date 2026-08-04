@@ -172,7 +172,7 @@ module.exports = withErrorHandler(async (request, response) => {
     return response.status(503).json({
       error: "Promotions system is not available. The required database table 'promotion_codes' has not been created.",
       code: "TABLE_NOT_FOUND",
-      detail: "Run the migration: node scripts/run-migration.js migration-promotion-codes.sql",
+      detail: "Run the migration: node scripts/run-migration.js migration-combined.sql",
     });
   }
 

@@ -2,6 +2,8 @@
 // Run: node scripts/run-migration.js
 // Requires DATABASE_URL environment variable to be set.
 // Alternatively: DATABASE_URL=postgres://... node scripts/run-migration.js
+//
+// Defaults to migration-combined.sql (the single merged schema/migration file).
 
 const { neon } = require("@neondatabase/serverless");
 const fs = require("fs");
@@ -16,9 +18,9 @@ async function main() {
   }
 
   const sql = neon(databaseUrl);
-  // Accept migration filename as argument, default to promotion codes
+  // Accept migration filename as argument, default to the merged schema/migration file
   const args = process.argv.slice(2);
-  const migrationFile = args[0] || "migration-promotion-codes.sql";
+  const migrationFile = args[0] || "migration-combined.sql";
   const migrationPath = path.join(__dirname, "..", migrationFile);
   const migrationSql = fs.readFileSync(migrationPath, "utf-8");
 

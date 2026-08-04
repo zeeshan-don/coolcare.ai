@@ -22,6 +22,11 @@
 --   migration-create-missing-tables.sql
 --   migration-fix-demo-schema.sql
 --   migration-fix-repair-shops-columns.sql
+--   migration-customer-phone.sql
+--   migration-repair-lifecycle.sql
+--   migration-technician-roster.sql
+--   migration-website.sql
+--   web-bot/website-chat.sql
 -- =============================================================================
 -- Safe to run multiple times: ALL operations use IF NOT EXISTS / IF EXISTS
 -- / ON CONFLICT DO NOTHING guards throughout.
@@ -565,24 +570,15 @@ INSERT INTO platform_settings (key, value) VALUES
 ON CONFLICT (key) DO NOTHING;
 
 -- 5g. Seed CoolCare Pro plan
+-- NOTE: the matching subscription_plan_prices INSERT for 'pro' lives in
+-- Section 6 (after that table is created) so this file runs cleanly from
+-- scratch on a fresh database.
 INSERT INTO subscription_plans (name, display_name, price_monthly_usd, price_yearly_usd, max_bookings, max_technicians, features, description, max_staff, whatsapp_conversations, ai_credits, trial_days, currency)
 VALUES ('pro', 'CoolCare Pro', 20.00, 192.00, NULL, NULL,
   '{"whatsapp_bot": true, "dashboard": true, "notifications": true, "analytics": true, "priority_support": true, "custom_ai": true, "unlimited_bookings": true}',
   'Everything you need to run your repair shop with AI-powered automation.',
   NULL, NULL, NULL, 14, 'USD')
 ON CONFLICT (name) DO NOTHING;
-
-INSERT INTO subscription_plan_prices (plan_id, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
-SELECT sp.id, v.currency, v.price_monthly, v.price_quarterly, v.price_halfyearly, v.price_yearly
-FROM subscription_plans sp
-CROSS JOIN (VALUES
-  ('INR', 1299.00, 3156.00, 6625.00, 12470.00),
-  ('USD', 20.00, 54.00, 102.00, 192.00),
-  ('AED', 75.00, 202.50, 382.50, 720.00),
-  ('KWD', 6.00, 16.20, 30.60, 57.60)
-) AS v(currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
-WHERE sp.name = 'pro'
-ON CONFLICT (plan_id, currency) DO NOTHING;
 
 
 -- =============================================================================
@@ -604,6 +600,20 @@ CREATE TABLE IF NOT EXISTS subscription_plan_prices (
 
 CREATE INDEX IF NOT EXISTS idx_subscription_plan_prices_currency ON subscription_plan_prices(currency);
 CREATE INDEX IF NOT EXISTS idx_subscription_plan_prices_plan_currency ON subscription_plan_prices(plan_id, currency);
+
+-- Seed pricing for the 'pro' plan (moved here from Section 5g so the table
+-- exists before this INSERT — keeps the file runnable on a fresh database)
+INSERT INTO subscription_plan_prices (plan_id, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
+SELECT sp.id, v.currency, v.price_monthly, v.price_quarterly, v.price_halfyearly, v.price_yearly
+FROM subscription_plans sp
+CROSS JOIN (VALUES
+  ('INR', 1299.00, 3156.00, 6625.00, 12470.00),
+  ('USD', 20.00, 54.00, 102.00, 192.00),
+  ('AED', 75.00, 202.50, 382.50, 720.00),
+  ('KWD', 6.00, 16.20, 30.60, 57.60)
+) AS v(currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
+WHERE sp.name = 'pro'
+ON CONFLICT (plan_id, currency) DO NOTHING;
 
 -- Seed pricing values for all core plans and supported currencies
 WITH plans AS (
@@ -1675,8 +1685,368 @@ ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS digest_time TEXT NOT NULL DEFA
 ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS digest_sent_at TIMESTAMPTZ;
 
 -- =============================================================================
+-- SECTION 23: WEBSITE LIVE CHAT CHANNELS (web-bot/website-chat.sql)
+-- =============================================================================
+-- Adds a second communication channel (🌐 Website) beside (💬 WhatsApp).
+-- One database. One AI engine. One dashboard. Two channels.
+
+-- 23a. conversations: tag every message with its source channel
+ALTER TABLE conversations
+  ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'whatsapp'
+  CHECK (channel IN ('whatsapp', 'website'));
+
+CREATE INDEX IF NOT EXISTS idx_conversations_channel
+  ON conversations(channel, created_at);
+
+-- 23b. conversation_state: track which channel owns the session
+ALTER TABLE conversation_state
+  ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'whatsapp'
+  CHECK (channel IN ('whatsapp', 'website'));
+
+CREATE INDEX IF NOT EXISTS idx_conv_state_channel
+  ON conversation_state(channel);
+
+-- 23c. bookings: remember where the booking came from
+ALTER TABLE bookings
+  ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'whatsapp'
+  CHECK (source IN ('whatsapp', 'website'));
+
+CREATE INDEX IF NOT EXISTS idx_bookings_source
+  ON bookings(source, created_at DESC);
+
+-- 23d. whatsapp_conversations: unified message log shows both channels
+ALTER TABLE whatsapp_conversations
+  ADD COLUMN IF NOT EXISTS channel TEXT NOT NULL DEFAULT 'whatsapp'
+  CHECK (channel IN ('whatsapp', 'website'));
+
+CREATE INDEX IF NOT EXISTS idx_wa_conv_channel
+  ON whatsapp_conversations(channel, created_at DESC);
+
+-- 23e. widget_settings: per-shop website chat branding & behavior
+CREATE TABLE IF NOT EXISTS widget_settings (
+  id               SERIAL PRIMARY KEY,
+  repair_shop_id   INTEGER NOT NULL REFERENCES repair_shops(id) ON DELETE CASCADE,
+  enabled          BOOLEAN NOT NULL DEFAULT false,
+  business_name    TEXT,                       -- overrides shop_name in widget
+  welcome_message  TEXT DEFAULT '',            -- shown when chat opens
+  offline_message  TEXT DEFAULT '',
+  primary_color    TEXT NOT NULL DEFAULT '#22c55e',
+  accent_color     TEXT NOT NULL DEFAULT '#16a34a',
+  widget_position  TEXT NOT NULL DEFAULT 'bottom-right'
+                   CHECK (widget_position IN ('bottom-right', 'bottom-left')),
+  logo_url         TEXT DEFAULT '',
+  theme            TEXT NOT NULL DEFAULT 'auto'
+                   CHECK (theme IN ('light', 'dark', 'auto')),
+  show_avatar      BOOLEAN NOT NULL DEFAULT true,
+  auto_open        BOOLEAN NOT NULL DEFAULT false,
+  language         TEXT NOT NULL DEFAULT 'en'
+                   CHECK (language IN ('en', 'hi', 'ta', 'ar', 'auto')),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT unique_widget_settings_shop UNIQUE (repair_shop_id)
+);
+
+-- Backfill new columns for shops that already have a row
+ALTER TABLE widget_settings ADD COLUMN IF NOT EXISTS accent_color TEXT NOT NULL DEFAULT '#16a34a';
+ALTER TABLE widget_settings ADD COLUMN IF NOT EXISTS auto_open BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE widget_settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en'
+  CHECK (language IN ('en', 'hi', 'ta', 'ar', 'auto'));
+
+CREATE INDEX IF NOT EXISTS idx_widget_settings_shop ON widget_settings(repair_shop_id);
+
+-- 23f. Default widget settings row for every existing shop
+INSERT INTO widget_settings (repair_shop_id, enabled, business_name)
+  SELECT rs.id, false, rs.shop_name
+  FROM repair_shops rs
+  WHERE NOT EXISTS (SELECT 1 FROM widget_settings ws WHERE ws.repair_shop_id = rs.id);
+
+
+-- =============================================================================
+-- SECTION 24: HOSTED SHOP WEBSITES + SUBSCRIPTION-BASED ACCESS
+-- (migration-website.sql)
+-- =============================================================================
+
+-- 24a. Slug + website_enabled feature flag
+ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS slug TEXT;
+ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS website_enabled BOOLEAN NOT NULL DEFAULT false;
+
+-- Backfill slugs for shops created before this migration (shop name → slug)
+UPDATE repair_shops
+SET slug = LOWER(REGEXP_REPLACE(TRIM(shop_name), '[^a-z0-9]+', '-', 'g'))
+WHERE slug IS NULL
+  AND shop_name IS NOT NULL
+  AND LOWER(REGEXP_REPLACE(TRIM(shop_name), '[^a-z0-9]+', '-', 'g')) <> '';
+
+-- Guarantee uniqueness on the backfilled slugs
+DO $$
+DECLARE r RECORD;
+BEGIN
+  FOR r IN
+    SELECT id, slug,
+           ROW_NUMBER() OVER (PARTITION BY slug ORDER BY id) AS rn
+    FROM repair_shops
+    WHERE slug IS NOT NULL
+  LOOP
+    IF r.rn > 1 THEN
+      UPDATE repair_shops
+      SET slug = r.slug || '-' || r.rn
+      WHERE id = r.id;
+    END IF;
+  END LOOP;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_repair_shops_slug ON repair_shops(slug);
+
+-- 24b. Starter ($20) & Pro ($25) plans
+UPDATE subscription_plans SET
+  display_name      = 'Starter',
+  price_monthly_usd = 20.00,
+  price_yearly_usd  = 192.00,
+  description       = 'Dashboard, WhatsApp AI, technician management, analytics, business timeline and repair lifecycle.',
+  features          = '{
+    "dashboard": true,
+    "whatsapp_ai": true,
+    "technician_management": true,
+    "analytics": true,
+    "business_timeline": true,
+    "repair_lifecycle": true,
+    "hosted_website": false,
+    "website_chat": false,
+    "public_booking_page": false,
+    "website_customization": false
+  }'::jsonb,
+  is_active = true
+WHERE name = 'starter';
+
+UPDATE subscription_plans SET
+  display_name      = 'Pro',
+  price_monthly_usd = 25.00,
+  price_yearly_usd  = 240.00,
+  description       = 'Everything in Starter, plus a hosted website, website chat, public booking page and website customization.',
+  features          = '{
+    "dashboard": true,
+    "whatsapp_ai": true,
+    "technician_management": true,
+    "analytics": true,
+    "business_timeline": true,
+    "repair_lifecycle": true,
+    "hosted_website": true,
+    "website_chat": true,
+    "public_booking_page": true,
+    "website_customization": true
+  }'::jsonb,
+  is_active = true
+WHERE name = 'pro';
+
+-- Legacy plans are no longer sold (kept for historical subscription records)
+UPDATE subscription_plans SET is_active = false
+WHERE name IN ('professional', 'enterprise');
+
+-- 24c. Multi-currency pricing (Starter $20 / Pro $25)
+INSERT INTO subscription_plan_prices (plan_id, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly, active)
+SELECT sp.id, v.currency, v.price_monthly, v.price_quarterly, v.price_halfyearly, v.price_yearly, true
+FROM subscription_plans sp
+CROSS JOIN (VALUES
+  ('starter', 'USD', 20.00, 54.00, 102.00, 192.00),
+  ('starter', 'INR', 1199.00, 3237.00, 6115.00, 11508.00),
+  ('starter', 'AED', 75.00, 202.50, 382.50, 720.00),
+  ('starter', 'KWD', 6.00, 16.20, 30.60, 57.60),
+  ('pro',     'USD', 25.00, 67.50, 127.50, 240.00),
+  ('pro',     'INR', 1499.00, 4047.00, 7644.00, 14390.00),
+  ('pro',     'AED', 90.00, 243.00, 459.00, 864.00),
+  ('pro',     'KWD', 7.50, 20.25, 38.25, 72.00)
+) AS v(name, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
+WHERE sp.name = v.name
+ON CONFLICT (plan_id, currency) DO UPDATE SET
+  price_monthly    = EXCLUDED.price_monthly,
+  price_quarterly  = EXCLUDED.price_quarterly,
+  price_halfyearly = EXCLUDED.price_halfyearly,
+  price_yearly     = EXCLUDED.price_yearly,
+  active           = true,
+  updated_at       = now();
+
+-- 24d. Backfill website_enabled for already-eligible shops (safe to re-run)
+UPDATE repair_shops rs
+SET website_enabled = true, updated_at = now()
+WHERE rs.subscription_status = 'active'
+  AND rs.website_enabled = false
+  AND EXISTS (
+    SELECT 1
+    FROM subscriptions s
+    JOIN subscription_plans sp ON sp.id = s.plan_id
+    WHERE s.repair_shop_id = rs.id
+      AND s.status = 'active'
+      AND COALESCE(
+            (sp.features->>'hosted_website')::boolean,
+            (sp.features->>'website_enabled')::boolean,
+            (sp.features->>'website')::boolean,
+            false
+          )
+  );
+
+-- 24e. Permanent Test Shop (slug: testshop)
+-- Customer-facing website: /testshop
+-- Login: test@testshop.demo / TestShop2024!
+INSERT INTO repair_shops
+  (shop_name, owner_name, email, mobile, password_hash,
+   address, city, service_areas, services_offered, role,
+   subscription_status, is_active, referral_code, approval_status,
+   logo_url, business_hours, language, timezone,
+   selected_country, selected_currency, slug, website_enabled, is_demo)
+SELECT
+  'Test Shop', 'Test Owner', 'test@testshop.demo', '9000000001',
+  '$2a$12$fZkKrivuI3ER/ZcAc77uX.Jo85x0ajOCZt9Xb60NMjgWqOM0tmb22',
+  '1, Test Street, Test City', 'Test City',
+  ARRAY['Downtown', 'North Side', 'South Side'],
+  ARRAY['AC Repair', 'Refrigerator Repair', 'Washing Machine Repair', 'Geyser Repair', 'Microwave Repair', 'RO Purifier Service'],
+  'owner', 'active', true, 'TESTSHOP-01', 'approved',
+  '', '{"mon":{"open":"09:00","close":"18:00"},"tue":{"open":"09:00","close":"18:00"},"wed":{"open":"09:00","close":"18:00"},"thu":{"open":"09:00","close":"18:00"},"fri":{"open":"09:00","close":"18:00"},"sat":{"open":"10:00","close":"16:00"}}'::jsonb,
+  'en', 'Asia/Kolkata', 'IN', 'INR', 'testshop', true, true
+WHERE NOT EXISTS (SELECT 1 FROM repair_shops WHERE email = 'test@testshop.demo')
+ON CONFLICT (email) DO NOTHING;
+
+-- Subscription + plan record for the Test Shop (Pro plan — website enabled)
+INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway, current_period_start, current_period_end, amount_paid, currency)
+SELECT rs.id, sp.id, 'active', 'monthly', 'test',
+       now() - interval '1 day', now() + interval '30 days', 25.00, 'USD'
+FROM repair_shops rs
+JOIN subscription_plans sp ON sp.name = 'pro'
+WHERE rs.email = 'test@testshop.demo'
+  AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.repair_shop_id = rs.id)
+ON CONFLICT DO NOTHING;
+
+-- AI settings (knowledge base drives the website "About" section + chat)
+INSERT INTO ai_settings (repair_shop_id, greeting_message, business_hours, working_days,
+  supported_services, knowledge_base, fallback_response, transfer_to_human,
+  service_locations, brands_repaired, warranty_policy, inspection_policy,
+  visiting_charges, accepted_payment_methods, languages_spoken, updated_at, created_at)
+SELECT rs.id,
+  'Hi, welcome to Test Shop! I am your AI assistant. How can I help you today?',
+  rs.business_hours,
+  ARRAY['mon','tue','wed','thu','fri','sat'],
+  ARRAY['AC Repair', 'Refrigerator Repair', 'Washing Machine Repair', 'Geyser Repair', 'Microwave Repair', 'RO Purifier Service'],
+  'Test Shop is a full-service appliance repair business. We repair air conditioners, refrigerators, washing machines, geysers, microwaves and RO purifiers with genuine parts and a service warranty.',
+  'I am unable to help with that right now. A team member will get back to you shortly.',
+  true,
+  ARRAY['Downtown', 'North Side', 'South Side'],
+  ARRAY['Samsung', 'LG', 'Whirlpool', 'Voltas', 'Blue Star', 'Havells'],
+  '30-day warranty on all repairs.',
+  'Free inspection; a visit charge applies for no-show service calls.',
+  199,
+  ARRAY['Cash', 'UPI', 'Card', 'Net Banking'],
+  ARRAY['English', 'Hindi'],
+  now(), now()
+FROM repair_shops rs
+WHERE rs.email = 'test@testshop.demo'
+ON CONFLICT (repair_shop_id) DO UPDATE SET
+  greeting_message    = EXCLUDED.greeting_message,
+  business_hours      = EXCLUDED.business_hours,
+  working_days        = EXCLUDED.working_days,
+  supported_services  = EXCLUDED.supported_services,
+  knowledge_base      = EXCLUDED.knowledge_base,
+  service_locations   = EXCLUDED.service_locations,
+  brands_repaired     = EXCLUDED.brands_repaired,
+  warranty_policy     = EXCLUDED.warranty_policy,
+  inspection_policy   = EXCLUDED.inspection_policy,
+  visiting_charges    = EXCLUDED.visiting_charges,
+  accepted_payment_methods = EXCLUDED.accepted_payment_methods,
+  languages_spoken    = EXCLUDED.languages_spoken,
+  updated_at          = now();
+
+-- Widget settings (website chat branding for the Test Shop)
+INSERT INTO widget_settings (repair_shop_id, enabled, business_name, welcome_message, offline_message,
+  primary_color, accent_color, widget_position, logo_url, theme, show_avatar, auto_open, language, updated_at)
+SELECT rs.id, true, rs.shop_name,
+  'Hi, welcome to Test Shop! How can we help you today?',
+  'We have received your request. Our team is currently offline. Your booking has been recorded and a technician will contact you once the business opens.',
+  '#2563eb', '#1e40af', 'bottom-right', rs.logo_url, 'auto', true, false, 'en', now()
+FROM repair_shops rs
+WHERE rs.email = 'test@testshop.demo'
+ON CONFLICT (repair_shop_id) DO UPDATE SET
+  enabled = EXCLUDED.enabled,
+  business_name = EXCLUDED.business_name,
+  welcome_message = EXCLUDED.welcome_message,
+  offline_message = EXCLUDED.offline_message,
+  primary_color = EXCLUDED.primary_color,
+  accent_color = EXCLUDED.accent_color,
+  widget_position = EXCLUDED.widget_position,
+  logo_url = EXCLUDED.logo_url,
+  theme = EXCLUDED.theme,
+  show_avatar = EXCLUDED.show_avatar,
+  auto_open = EXCLUDED.auto_open,
+  language = EXCLUDED.language,
+  updated_at = now();
+
+
+-- =============================================================================
+-- SECTION 25: REPAIR LIFECYCLE MANAGEMENT (migration-repair-lifecycle.sql)
+-- =============================================================================
+
+-- 25a. Extend the bookings status CHECK constraint with the lifecycle statuses
+DO $$
+BEGIN
+  ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_status_check;
+  ALTER TABLE bookings ADD CONSTRAINT bookings_status_check
+    CHECK (status IN (
+      'open','accepted','rejected','assigned','on_the_way','arrived',
+      'in_progress','waiting_parts','completed','cancelled','payment_received'
+    ));
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+-- 25b. Link technician user accounts to a roster record (optional)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS technician_id INTEGER
+  REFERENCES technicians(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_users_technician ON users(technician_id)
+  WHERE technician_id IS NOT NULL;
+
+-- 25c. Timeline lookup performance
+CREATE INDEX IF NOT EXISTS idx_timeline_booking_created
+  ON booking_timeline(booking_id, created_at ASC);
+
+-- 25d. Analytic support: when a booking reached 'assigned' / 'completed'
+CREATE INDEX IF NOT EXISTS idx_timeline_new_value
+  ON booking_timeline(new_value, created_at)
+  WHERE new_value IN ('assigned','completed','payment_received');
+
+
+-- =============================================================================
+-- SECTION 26: TECHNICIAN ROSTER MANAGEMENT (migration-technician-roster.sql)
+-- =============================================================================
+
+-- 26a. Tenant scoping (may already exist from earlier sections)
+ALTER TABLE technicians ADD COLUMN IF NOT EXISTS repair_shop_id INTEGER;
+ALTER TABLE technicians ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE technicians ADD COLUMN IF NOT EXISTS specialization TEXT[];
+
+-- 26b. Timestamps for the roster UI
+ALTER TABLE technicians ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE technicians ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+-- 26c. Indexes
+CREATE INDEX IF NOT EXISTS idx_technicians_shop ON technicians(repair_shop_id);
+CREATE INDEX IF NOT EXISTS idx_technicians_shop_active ON technicians(repair_shop_id, active);
+CREATE INDEX IF NOT EXISTS idx_bookings_technician ON bookings(technician_id);
+
+
+-- =============================================================================
+-- SECTION 27: CUSTOMER PHONE COLUMNS (migration-customer-phone.sql)
+-- =============================================================================
+-- Shared by BOTH channels: the engine writes the collected phone to
+-- conversation_state.customer_phone (working copy) and bookings.customer_phone
+-- (durable copy copied over at booking confirmation).
+
+ALTER TABLE conversation_state
+  ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+
+ALTER TABLE bookings
+  ADD COLUMN IF NOT EXISTS customer_phone TEXT;
+
+
+-- =============================================================================
 -- MIGRATION COMPLETE
 -- =============================================================================
--- All 22 migration files + schema.sql have been merged into this
+-- All 27 migration files + schema.sql have been merged into this
 -- single file. All operations are idempotent (safe to re-run).
 -- =============================================================================

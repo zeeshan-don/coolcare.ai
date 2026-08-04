@@ -18,7 +18,7 @@ All code is committed and pushed to `origin/main` (commit `37f58ec`):
 1. Log in to https://console.neon.tech
 2. Open your CoolCare project database
 3. Go to SQL Editor
-4. Copy and paste the entire contents of `migration-repair-shop-auth.sql`
+4. Copy and paste the entire contents of `migration-combined.sql`
 5. Click **Run**
 
 The migration:
@@ -135,8 +135,7 @@ Then add it to Vercel:
 - `shop-booking.html` — Booking detail & job management
 
 ### Database
-- `migration-repair-shop-auth.sql` — Run this in Neon SQL console
-- `migration-repair-lifecycle.sql` — Run this in Neon SQL console (extends the booking status set with `in_progress`, `waiting_parts`, `payment_received` + repair-timeline indexes + optional `users.technician_id`). Safe to re-run.
+- `migration-combined.sql` — The single merged schema/migration file. Run this in Neon SQL console. All statements are idempotent — safe to re-run.
 
 ---
 
@@ -144,8 +143,7 @@ Then add it to Vercel:
 
 Once everything is deployed:
 
-- [ ] Run `migration-repair-shop-auth.sql` in Neon
-- [ ] Run `migration-repair-lifecycle.sql` in Neon
+- [ ] Run `migration-combined.sql` in Neon
 - [ ] Add `JWT_SECRET` to Vercel
 - [ ] Redeploy on Vercel
 - [ ] Test shop signup works
