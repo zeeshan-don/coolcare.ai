@@ -278,7 +278,7 @@ function fakeIntent(text) {
   if (t.includes("new booking") || t.includes("book another")) return "new_booking";
   if (t.includes("status")) return "booking_status";
   if (t.includes("cost") || t.includes("price") || t.includes("charge") || t.includes("how much")) return "price_enquiry";
-  if (t.includes("technician") && (t.includes("who") || t.includes("assigned") || t.includes("name"))) return "technician_status";
+  if (t.includes("technician") && (t.includes("who") || t.includes("assigned") || t.includes("name") || t.includes("where"))) return "technician_status";
   if (t.includes("when") || t.includes("eta") || t.includes("arrive")) return "eta";
   // Repair lifecycle intents — order matters: more specific matches first so
   // "is my repair completed?" → completion_status (not repair_status).
@@ -621,11 +621,19 @@ test("REPAIR LIFECYCLE intents answer from LIVE booking data (never restart)", a
   assert.equal(stAfter.status, STATUS.BOOKED, "state must remain BOOKED — lifecycle answers never restart the flow");
 });
 
-test("booking confirmation includes the public tracker link", async () => {
-  const cn = "wa_tracker_test";
+test("booking confirmation has no tracking link — customers are told the team will contact them", async () => {
+  const cn = "wa_notracker_test";
   const { reply, state } = await completeBooking(cn, { channel: "whatsapp" });
-  assert.ok(reply.includes("tracker.html"), "confirmation should point at the public tracker page");
-  assert.ok(reply.includes(String(state.booking_id)), "tracker link should carry the booking reference");
+  assert.ok(reply.includes(String(state.booking_id)), "confirmation should carry the booking reference");
+  assert.ok(!reply.includes("tracker.html"), "confirmation must NOT point at a tracking page");
+});
+
+test("WHERE IS MY TECHNICIAN → honest reply + call the shop (no invented locations)", async () => {
+  const cn = "wa_whereistech_test";
+  await completeBooking(cn, { channel: "whatsapp" });
+  const reply = await handleMessage(cn, "where is my technician?", "text", null, { channel: "whatsapp" });
+  assert.ok(/received|contact you|call the shop/i.test(reply), "should answer without inventing a location");
+  assert.ok(!/live|tracker|gps|location now/i.test(reply), "must never claim live tracking");
 });
 
 test("CANCEL booking works — booking status flips to cancelled, state closes", async () => {

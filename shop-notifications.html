@@ -137,11 +137,17 @@ async function loadNotifications() {
     const notifs = data.notifications || [];
     document.getElementById('unreadInfo').textContent = data.unreadCount > 0 ? `${data.unreadCount} unread` : 'All caught up!';
     if (!notifs.length) { list.innerHTML = '<div class="empty">No notifications yet.</div>'; return; }
-    list.innerHTML = notifs.map(n => `<div class="notif${n.is_read ? '' : ' unread'}" onclick="markRead(${n.id}, this)">
-      <div class="notif-title">${n.title || 'Notification'}</div>
-      <div class="notif-msg">${n.message || ''}</div>
-      <div class="notif-time">${timeAgo(new Date(n.created_at))}</div>
-    </div>`).join('');
+    list.innerHTML = notifs.map(n => {
+      const link = n.link || null;
+      const click = link
+        ? `openNotif('${escAttr(link)}', ${n.id}, this)`
+        : `markRead(${n.id}, this)`;
+      return `<div class="notif${n.is_read ? '' : ' unread'}" onclick="${click}" style="cursor:pointer">
+        <div class="notif-title">${esc(n.title || 'Notification')}</div>
+        <div class="notif-msg">${esc(n.message || '')}</div>
+        <div class="notif-time">${timeAgo(new Date(n.created_at))}</div>
+      </div>`;
+    }).join('');
     const total = data.pagination?.total || 0;
     const totalPages = Math.max(1, Math.ceil(total / 20));
     document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
@@ -158,6 +164,18 @@ async function markRead(id, el) {
     fetch('/api/shop', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark-notification-read', notificationId: id }) }).catch(() => {});
   }
 }
+
+// Clicking a notification marks it read and opens the related booking directly.
+function openNotif(link, id, el) {
+  if (el && el.classList.contains('unread')) {
+    el.classList.remove('unread');
+    fetch('/api/shop', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark-notification-read', notificationId: id }) }).catch(() => {});
+  }
+  window.location.href = link;
+}
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 
 async function markAllRead() {
   await fetch('/api/shop', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'mark-notification-read', markAll: true }) });

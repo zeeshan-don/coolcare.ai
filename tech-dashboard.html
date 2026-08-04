@@ -103,10 +103,9 @@
   </div>
 
   <div class="stats" id="statsRow">
-    <div class="stat"><div class="s-label">Active Jobs</div><div class="s-value" id="st-active">—</div><div class="s-sub">in the shop right now</div></div>
-    <div class="stat"><div class="s-label">In Progress</div><div class="s-value blue" id="st-inprogress">—</div><div class="s-sub">repairs being worked on</div></div>
-    <div class="stat"><div class="s-label">Waiting For Parts</div><div class="s-value yellow" id="st-parts">—</div><div class="s-sub">paused until parts arrive</div></div>
+    <div class="stat"><div class="s-label">Active Jobs</div><div class="s-value" id="st-active">—</div><div class="s-sub">jobs in the shop right now</div></div>
     <div class="stat"><div class="s-label">Assigned To Me</div><div class="s-value green" id="st-mine">—</div><div class="s-sub">jobs with my name on them</div></div>
+    <div class="stat"><div class="s-label">Completed</div><div class="s-value blue" id="st-completed">—</div><div class="s-sub">jobs I've finished</div></div>
   </div>
 
   <div class="jobs" id="jobsList">
@@ -155,13 +154,11 @@
 
   // ── Status actions (the full lifecycle) ─────────────────────────────────────
   const TECH_ACTIONS = {
-    assigned:      [{ label: 'Start Journey',      status: 'on_the_way',     cls: '', primary: false }],
-    on_the_way:    [{ label: 'Mark Arrived',       status: 'arrived',        cls: '', primary: false }],
-    arrived:       [{ label: 'Start Repair',       status: 'in_progress',    cls: '', primary: true }],
-    in_progress:   [{ label: 'Waiting For Parts',  status: 'waiting_parts',  cls: '', primary: false },
-                    { label: 'Complete Repair',    status: 'completed',      cls: '', primary: true }],
-    waiting_parts: [{ label: 'Repair In Progress', status: 'in_progress',    cls: '', primary: false },
-                    { label: 'Complete Repair',    status: 'completed',      cls: '', primary: true }],
+    assigned:      [{ label: 'Mark Completed',     status: 'completed',      cls: '', primary: true }],
+    on_the_way:    [{ label: 'Mark Completed',     status: 'completed',      cls: '', primary: true }],
+    arrived:       [{ label: 'Mark Completed',     status: 'completed',      cls: '', primary: true }],
+    in_progress:   [{ label: 'Mark Completed',     status: 'completed',      cls: '', primary: true }],
+    waiting_parts: [{ label: 'Mark Completed',     status: 'completed',      cls: '', primary: true }],
     completed:     [{ label: 'Collect Payment',    status: 'payment_received', cls: '', primary: true }],
   };
 
@@ -188,9 +185,8 @@
   function renderStats(s) {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? '—'; };
     set('st-active', s.activeCount);
-    set('st-inprogress', s.statusCounts?.in_progress ?? 0);
-    set('st-parts', s.statusCounts?.waiting_parts ?? 0);
     set('st-mine', s.assignedToMe != null ? s.assignedToMe : 'All');
+    set('st-completed', s.statusCounts?.completed ?? 0);
   }
 
   function renderJobs() {

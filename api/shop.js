@@ -27,7 +27,7 @@ const { setSecurityHeaders } = require("./_lib/security");
 const { getHostedWebsiteUrl, getAppBaseUrl } = require("./_lib/config");
 const { encrypt, decrypt, mask } = require("./_lib/encrypt");
 const { getGatewayList, invalidateCache } = require("./_lib/gateway");
-const { buildDemoDashboardResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse, buildDemoWidgetSettingsResponse, buildDemoSandboxStatusResponse, buildDemoTechniciansResponse } = require("./_lib/demo-data");
+const { buildDemoDashboardResponse, buildDemoInsightsResponse, buildDemoBookingDetailResponse, buildDemoNotificationsResponse, buildDemoAiSettingsResponse, buildDemoShopSettingsResponse, buildDemoReferralsResponse, buildDemoWhatsAppLogsResponse, buildDemoWhatsAppStatusResponse, buildDemoWhatsAppConnectionResponse, buildDemoSubscriptionResponse, buildDemoWidgetSettingsResponse, buildDemoSandboxStatusResponse, buildDemoTechniciansResponse } = require("./_lib/demo-data");
 const { buildRealCommandCenter } = require("./_lib/command-center");
 const { z } = require("zod");
 const bcrypt = require("bcryptjs");
@@ -80,7 +80,16 @@ const ADMIN_POST_ACTIONS = new Set([
 const GATED_POST_ACTIONS = new Set(["update"]);
 const GATED_GET_ACTIONS = new Set(["export"]);
 // Non-gated shop GET actions (view-only, always allowed)
-const OPEN_GET_ACTIONS = new Set(["dashboard", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close", "widget-settings", "sandbox-status", "sandbox-ticket", "technicians"]);
+const OPEN_GET_ACTIONS = new Set(["dashboard", "insights", "booking", "referrals", "ai-settings", "whatsapp-status", "whatsapp-logs", "whatsapp-connect", "notifications", "shop-settings", "conversation-transcript", "conversation-analytics", "human-handoff-close", "widget-settings", "sandbox-status", "sandbox-ticket", "technicians"]);
+
+// Simplified owner workflow — legacy intermediate statuses roll into the
+// 3-state model (Pending → Assigned → Completed). Used for dashboard filters.
+const STATUS_GROUPS = {
+  pending: ["open", "accepted"],
+  assigned: ["assigned", "on_the_way", "arrived", "in_progress", "waiting_parts"],
+  completed: ["completed", "payment_received"],
+  cancelled: ["cancelled", "rejected"],
+};
 // Technician roster writes (shop staff)
 const TECH_POST_ACTIONS = new Set(["create-technician", "update-technician", "delete-technician", "toggle-technician"]);
 
@@ -103,6 +112,7 @@ module.exports = withErrorHandler(async (request, response) => {
     if (ADMIN_GET_ACTIONS.has(action)) return handleAdminGet(request, response, sql, auth, action);
     // Non-gated actions (view-only or shop config)
     if (action === "dashboard") return handleDashboard(request, response, sql, shopId, auth);
+    if (action === "insights") return handleInsights(request, response, sql, shopId, auth);
     if (action === "booking") return handleBookingDetail(request, response, sql, shopId, auth);
     if (OPEN_GET_ACTIONS.has(action)) return handleShopGet(request, response, sql, shopId, auth, action);
     // Gated actions
@@ -180,7 +190,17 @@ async function handleDashboard(request, response, sql, shopId, auth) {
   // otherwise PostgreSQL declares $1 with no type context → error 42P18.
   const conditions = [`b.repair_shop_id = $1`];
   const sqlParams = [shopId];
-  if (params.status && params.status !== "all") { sqlParams.push(params.status); conditions.push(`b.status = $${sqlParams.length}`); }
+  if (params.status && params.status !== "all") {
+    // Simplified workflow groups (pending / assigned / completed / cancelled)
+    const group = STATUS_GROUPS[params.status];
+    if (group) {
+      sqlParams.push(group);
+      conditions.push(`b.status = ANY($${sqlParams.length}::text[])`);
+    } else {
+      sqlParams.push(params.status);
+      conditions.push(`b.status = $${sqlParams.length}`);
+    }
+  }
   if (params.search) { sqlParams.push(`%${params.search}%`); conditions.push(`(b.customer_name ILIKE $${sqlParams.length} OR b.customer_number ILIKE $${sqlParams.length})`); }
   const whereClause = conditions.join(" AND ");
   const sortCol = ["created_at", "updated_at", "status"].includes(params.sortBy) ? params.sortBy : "created_at";
@@ -272,11 +292,49 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     ORDER BY visit_count DESC, last_visit DESC LIMIT 20
   `;
 
-  // ── Command center: KPIs, priorities, health, AI & technician performance ─
-  const commandCenter = await buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, todayBookings, {
-    monthlyRevenue: parseFloat(revenue.monthly_revenue),
-    monthBookings,
-  });
+  // ── Today's money & motion (action KPIs) ─────────────────────────────────
+  let revenueToday = 0;
+  let completedToday = 0;
+  try {
+    const todayRev = await sql`
+      SELECT COALESCE(SUM(final_cost), 0) AS revenue_today,
+             COUNT(*) AS completed_today
+      FROM bookings
+      WHERE repair_shop_id = ${shopId} AND status = 'completed'
+        AND updated_at >= date_trunc('day', now())
+    `;
+    revenueToday = parseFloat(todayRev[0]?.revenue_today || 0);
+    completedToday = parseInt(todayRev[0]?.completed_today || "0", 10);
+  } catch (e) { /* ok */ }
+
+  let totalCustomers = 0;
+  try {
+    const cust = await sql`SELECT COUNT(DISTINCT customer_number) AS total FROM bookings WHERE repair_shop_id = ${shopId}`;
+    totalCustomers = parseInt(cust[0]?.total || "0", 10);
+  } catch (e) { /* ok */ }
+
+  // Pending bookings waiting for a technician — Today's Priorities (real work)
+  let pendingAssignments = [];
+  try {
+    pendingAssignments = await sql`
+      SELECT id, customer_name, customer_number, service_type, area, created_at
+      FROM bookings
+      WHERE repair_shop_id = ${shopId} AND status IN ('open','accepted')
+      ORDER BY created_at ASC LIMIT 8
+    `;
+  } catch (e) { /* ok */ }
+
+  // ── Today vs the 7-day average (excl. today) — tells the owner if today is
+  // ahead of or behind a normal day. A business signal, not analysis: every
+  // AI/automation/productivity metric lives on the Business Insights page.
+  let revenueDeltaPct = 0;
+  if (revenueChart.length >= 2) {
+    const today = revenueChart[revenueChart.length - 1];
+    const prevSeven = revenueChart.slice(-8, -1);
+    const prevAvg = prevSeven.reduce((s, d) => s + parseFloat(d.revenue || 0), 0) / Math.max(prevSeven.length, 1);
+    revenueDeltaPct = prevAvg > 0 ? Math.round(((parseFloat(today.revenue || 0) - prevAvg) / prevAvg) * 100) : 0;
+    revenueDeltaPct = Math.max(-99, Math.min(199, revenueDeltaPct));
+  }
 
   const shopRows = await sql`
     SELECT id, shop_name, owner_name, email, mobile, city, services_offered, service_areas, role
@@ -315,15 +373,15 @@ async function handleDashboard(request, response, sql, shopId, auth) {
   return response.status(200).json({
     shop: shopRows[0] || null, counts: statusCounts, bookings,
     pagination: { page: params.page, limit: params.limit, total, totalPages: Math.ceil(total / params.limit) },
-    stats: { todayBookings, pendingJobs, completedToday: statusCounts.completed,
+    stats: { todayBookings, pendingJobs, revenueToday, completedToday, revenueDeltaPct,
       totalRevenue: parseFloat(revenue.total_revenue), monthlyRevenue: parseFloat(revenue.monthly_revenue), weeklyRevenue: parseFloat(revenue.weekly_revenue),
-      monthBookings },
+      monthBookings, totalCustomers, customersCount: totalCustomers },
+    pendingAssignments: pendingAssignments.map((p) => ({ id: p.id, customerName: p.customer_name, customerNumber: p.customer_number, serviceType: p.service_type, area: p.area, createdAt: p.created_at })),
     weeklyBookings: weeklyResult,
     revenueChart: revenueChart.map((r) => ({ date: r.date, revenue: parseFloat(r.revenue), bookings: parseInt(r.bookings, 10) })),
     activityFeed: activityFeed.map((a) => ({ id: a.id, bookingId: a.booking_id, action: a.action, oldValue: a.old_value, newValue: a.new_value, customerName: a.customer_name, customerNumber: a.customer_number, serviceType: a.service_type, createdAt: a.created_at })),
     customerHistory: customerHistory.map((c) => ({ name: c.customer_name, phone: c.customer_number, visits: parseInt(c.visit_count, 10), lastVisit: c.last_visit, firstVisit: c.first_visit, totalSpent: parseFloat(c.total_spent) })),
     recentCustomers: recentCustomers.map((c) => ({ name: c.customer_name, phone: c.customer_number, lastBooking: c.last_booking })),
-    ...commandCenter,
     subscription,
     subscriptionRequired,
     subscriptionStatus,
@@ -332,6 +390,123 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     websiteEnabled,
     websiteUrl,
     isDemo: !!auth.isDemo,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BUSINESS INSIGHTS — analysis. Answers "What can I learn from my business?"
+// Hosts everything analysis-y: business health, AI performance, revenue
+// analytics, technician performance and customer insights. The action dashboard
+// (handleDashboard) intentionally does NOT return these.
+// ═══════════════════════════════════════════════════════════════════════════════
+async function handleInsights(request, response, sql, shopId, auth) {
+  if (!allowMethods(request, response, "GET")) return;
+
+  // DEMO MODE: served from the dedicated demo insights payload.
+  if (auth?.isDemo) {
+    return response.status(200).json(buildDemoInsightsResponse());
+  }
+
+  const statusCounts = { open: 0, accepted: 0, rejected: 0, assigned: 0, on_the_way: 0, arrived: 0, in_progress: 0, waiting_parts: 0, completed: 0, cancelled: 0, payment_received: 0 };
+  try {
+    const counts = await sql`SELECT status, COUNT(*) as count FROM bookings WHERE repair_shop_id = ${shopId} GROUP BY status`;
+    counts.forEach((r) => { if (statusCounts[r.status] !== undefined) statusCounts[r.status] = parseInt(r.count, 10); });
+  } catch (e) { /* ok */ }
+
+  // Revenue chart — daily for last 30 days
+  let revenueChart = [];
+  try {
+    revenueChart = await sql`
+      SELECT d.date::date as date,
+             COALESCE(SUM(b.final_cost), 0) as revenue,
+             COUNT(b.id) as bookings
+      FROM generate_series(now() - INTERVAL '29 days', now(), '1 day') d(date)
+      LEFT JOIN bookings b ON b.repair_shop_id = ${shopId}
+        AND b.created_at::date = d.date::date AND b.status = 'completed'
+      GROUP BY d.date ORDER BY d.date ASC
+    `;
+  } catch (e) { /* ok */ }
+
+  let todayBookings = 0;
+  try {
+    const t = await sql`SELECT COUNT(*) AS count FROM bookings WHERE repair_shop_id = ${shopId} AND created_at >= date_trunc('day', now())`;
+    todayBookings = parseInt(t[0]?.count || "0", 10);
+  } catch (e) { /* ok */ }
+
+  let monthlyRevenue = 0, monthBookings = 0;
+  try {
+    const rev = await sql`SELECT COALESCE(SUM(final_cost), 0) AS monthly_revenue FROM bookings WHERE repair_shop_id = ${shopId} AND status = 'completed' AND created_at >= date_trunc('month', now())`;
+    monthlyRevenue = parseFloat(rev[0]?.monthly_revenue || 0);
+  } catch (e) { /* ok */ }
+  try {
+    const m = await sql`SELECT COUNT(*) AS count FROM bookings WHERE repair_shop_id = ${shopId} AND created_at >= date_trunc('month', now())`;
+    monthBookings = parseInt(m[0]?.count || "0", 10);
+  } catch (e) { /* ok */ }
+
+  // ── Customer analytics ────────────────────────────────────────────────────
+  let totalCustomers = 0, repeatCustomers = 0;
+  try {
+    const c = await sql`
+      SELECT COUNT(DISTINCT customer_number) AS total,
+             COUNT(DISTINCT CASE WHEN visit_count > 1 THEN customer_number END) AS repeat_customers
+      FROM (SELECT customer_number, COUNT(*) AS visit_count FROM bookings WHERE repair_shop_id = ${shopId} GROUP BY customer_number) x
+    `;
+    totalCustomers = parseInt(c[0]?.total || "0", 10);
+    repeatCustomers = parseInt(c[0]?.repeat_customers || "0", 10);
+  } catch (e) { /* ok */ }
+
+  let newCustomersMonth = 0;
+  try {
+    const n = await sql`SELECT COUNT(DISTINCT customer_number) AS total FROM bookings WHERE repair_shop_id = ${shopId} AND created_at >= date_trunc('month', now())`;
+    newCustomersMonth = parseInt(n[0]?.total || "0", 10);
+  } catch (e) { /* ok */ }
+
+  let topCustomers = [];
+  try {
+    topCustomers = await sql`
+      SELECT customer_name, customer_number, COUNT(*) AS visits,
+             COALESCE(SUM(final_cost), 0) AS total_spent, MAX(created_at) AS last_visit
+      FROM bookings WHERE repair_shop_id = ${shopId} AND status = 'completed'
+      GROUP BY customer_name, customer_number ORDER BY total_spent DESC LIMIT 10
+    `;
+  } catch (e) { /* ok */ }
+
+  // Monthly trend — last 6 months
+  let monthlyTrend = [];
+  try {
+    monthlyTrend = await sql`
+      SELECT date_trunc('month', created_at)::date AS month,
+             COUNT(*) AS bookings,
+             COALESCE(SUM(CASE WHEN status = 'completed' THEN final_cost ELSE 0 END), 0) AS revenue
+      FROM bookings WHERE repair_shop_id = ${shopId} AND created_at >= now() - INTERVAL '6 months'
+      GROUP BY date_trunc('month', created_at)::date ORDER BY month ASC
+    `;
+  } catch (e) { /* ok */ }
+
+  const commandCenter = await buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, todayBookings, {
+    monthlyRevenue,
+    monthBookings,
+  });
+
+  // Shop header — the page shows the shop name in the top bar.
+  let shopRow = null;
+  try {
+    const shopRows = await sql`SELECT id, shop_name, owner_name FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    shopRow = shopRows[0] || null;
+  } catch (e) { /* ok */ }
+
+  return response.status(200).json({
+    shop: shopRow,
+    ...commandCenter,
+    statusCounts,
+    revenueChart: revenueChart.map((r) => ({ date: r.date, revenue: parseFloat(r.revenue), bookings: parseInt(r.bookings, 10) })),
+    monthlyTrend: monthlyTrend.map((r) => ({ month: r.month, bookings: parseInt(r.bookings, 10), revenue: parseFloat(r.revenue) })),
+    customers: {
+      totalCustomers,
+      repeatCustomers,
+      newCustomersMonth,
+      topCustomers: topCustomers.map((c) => ({ name: c.customer_name, phone: c.customer_number, visits: parseInt(c.visits, 10), totalSpent: parseFloat(c.total_spent), lastVisit: c.last_visit })),
+    },
   });
 }
 
@@ -475,6 +650,32 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
   }
   if (data.priority && data.priority !== booking.priority) {
     await insertTimelineEvent(sql, { bookingId: data.bookingId, action: "priority_change", oldValue: booking.priority || 'normal', newValue: data.priority, actorType: ACTORS.SHOP, actorId: shopId });
+  }
+
+  // ── Shop notifications: Booking Cancelled / Payment Received ────────────
+  // The notification bell must surface these events, and clicking opens the
+  // booking directly. New-booking notifications are created at booking time
+  // (api/bookings.js + conversation-engine) with the same deep link.
+  const bookingLink = `/shop-booking.html?id=${data.bookingId}`;
+  if (data.status === "cancelled" && data.status !== oldStatus) {
+    try {
+      await sql`
+        INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+        VALUES (${shopId}, 'booking_cancelled', 'Booking Cancelled',
+                ${`${booking.customer_name || "A customer"} cancelled ${booking.service_type || "the booking"} (Ref #${data.bookingId}).`},
+                ${bookingLink})
+      `;
+    } catch (e) { console.warn("[shop/update] Cancelled notification failed:", e.message); }
+  }
+  if (data.status === "payment_received" && data.status !== oldStatus) {
+    try {
+      await sql`
+        INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+        VALUES (${shopId}, 'payment_received', 'Payment Received',
+                ${`Payment received from ${booking.customer_name || "customer"} for ${booking.service_type || "the repair"} (Ref #${data.bookingId}).`},
+                ${bookingLink})
+      `;
+    } catch (e) { console.warn("[shop/update] Payment notification failed:", e.message); }
   }
 
   const updated = await sql`SELECT b.*, rs.shop_name FROM bookings b LEFT JOIN repair_shops rs ON rs.id = b.repair_shop_id WHERE b.id = ${data.bookingId} LIMIT 1`;

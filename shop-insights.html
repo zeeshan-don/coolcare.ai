@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CoolCare | Business Insights</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{--bg:#0a0a0a;--bg2:#111111;--bg3:#1a1a1a;--border:#1e1e1e;--border2:#333;--ink:#ededed;--ink2:#a3a3a3;--muted:#737373;--muted2:#525252;--green:#22c55e;--green-bg:#0a1a0a;--red:#ef4444;--red-bg:#1a0a0a;--yellow:#eab308;--yellow-bg:rgba(234,179,8,0.08);--blue:#3b82f6;--blue-bg:rgba(59,130,246,0.1)}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 'Inter',system-ui,sans-serif}
+    h1,h2,h3,.brand{font-family:'Inter',system-ui,sans-serif;font-weight:700}
+    a{color:inherit;text-decoration:none}
+    .nav{height:72px;display:flex;align-items:center;justify-content:space-between;max-width:1280px;margin:auto;padding:0 26px;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);position:sticky;top:0;z-index:50}
+    .brand{font-weight:700;letter-spacing:0.5px;font-size:24px;text-transform:lowercase;color:#fff;display:flex;align-items:center}.brand b{color:#fff;font-weight:900}
+    .brand-by{font-weight:400;color:#9CA3AF;font-size:14px;opacity:.75;margin-left:8px;margin-right:12px}
+    .brand-signature{height:36px;width:auto;vertical-align:middle}
+    .nav-right{display:flex;align-items:center;gap:14px}
+    .shop-name{font-weight:600;font-size:13px;color:var(--muted)}
+    .nav-link{font-size:12px;font-weight:600;color:var(--muted);padding:7px 12px;border:1px solid var(--border2);border-radius:8px;transition:all 0.2s;cursor:pointer;background:transparent}
+    .nav-link:hover{color:#fff;border-color:#555}
+    .nav-link.active{color:#fff;border-color:#fff}
+    .logout-btn{font-size:12px;font-weight:600;color:var(--muted);padding:9px 15px;border:1px solid var(--border2);border-radius:10px;cursor:pointer;background:transparent;transition:all 0.2s}
+    .logout-btn:hover{background:transparent;color:#fff;border-color:#555}
+    .bell{position:relative;cursor:pointer;font-size:18px;padding:6px}
+    .bell-count{position:absolute;top:0;right:0;background:var(--red);color:#fff;font-size:9px;font-weight:700;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+    .hamburger{display:none;flex-direction:column;gap:4px;cursor:pointer;padding:8px;background:none;border:none}
+    .hamburger span{display:block;width:20px;height:2px;background:var(--ink2);border-radius:2px;transition:all 0.3s}
+    .hamburger.open span:nth-child(1){transform:rotate(45deg) translate(4px,4px)}
+    .hamburger.open span:nth-child(2){opacity:0}
+    .hamburger.open span:nth-child(3){transform:rotate(-45deg) translate(4px,-4px)}
+    .mobile-menu{display:none;position:fixed;top:72px;left:0;right:0;background:rgba(10,10,10,0.98);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);z-index:49;padding:12px 20px;flex-direction:column;gap:4px}
+    .mobile-menu.open{display:flex}
+    .mobile-menu a,.mobile-menu button{display:block;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:500;color:var(--ink2);background:transparent;border:none;text-align:left;cursor:pointer;transition:all 0.2s;width:100%;text-decoration:none}
+    .mobile-menu a:hover,.mobile-menu button:hover{background:var(--bg3);color:#fff}
+    .mobile-menu .divider{border-top:1px solid var(--border);margin:6px 0}
+    .wrap{max-width:1280px;margin:auto;padding:26px}
+    .header{margin-bottom:22px}.header h1{font-size:32px;letter-spacing:-1px;margin:0 0 4px;color:#fff}
+    .header p{color:var(--muted);margin:0;font-size:14px;max-width:560px}
+    .back-link{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:16px;transition:color 0.2s}
+    .back-link:hover{color:#fff}
+    .empty{text-align:center;color:var(--muted);padding:36px 18px;font-size:13px}
+
+    /* ── Insight KPI row ────────────────────────────────────────────────── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+    .kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:18px 20px;position:relative;overflow:hidden}
+    .kpi-card .kpi-label{font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--muted);text-transform:uppercase;margin-bottom:3px}
+    .kpi-card .kpi-value{font-size:28px;font-weight:800;letter-spacing:-0.5px;color:#fff;line-height:1.15}
+    .kpi-card .kpi-value.green{color:var(--green)}
+    .kpi-card .kpi-sub{font-size:12px;color:var(--muted);margin-top:7px}
+    .kpi-card .kpi-sub .sub-strong{color:var(--ink2);font-weight:600}
+
+    /* ── Two-column layout ──────────────────────────────────────────────── */
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+    .card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:20px}
+    .card h2{font-size:15px;margin:0 0 14px;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .card h2 .w-badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
+    .card h2 .w-sub{font-size:11px;font-weight:500;color:var(--muted)}
+
+    /* Health ring */
+    .health-top{display:flex;align-items:center;gap:18px;margin-bottom:14px}
+    .ring{position:relative;width:92px;height:92px;flex-shrink:0}
+    .ring svg{transform:rotate(-90deg)}
+    .ring .ring-bg{stroke:var(--bg3);fill:none;stroke-width:9}
+    .ring .ring-fg{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset 1s ease, stroke 0.6s}
+    .ring .ring-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+    .ring .ring-num b{font:800 24px 'Inter',sans-serif;color:#fff;line-height:1}
+    .ring .ring-num span{font:600 9px 'Inter',sans-serif;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-top:2px}
+    .health-label{font:700 15px 'Inter',sans-serif;color:#fff}
+    .health-label .tag{display:inline-block;margin-left:6px;font:700 10px 'Inter',sans-serif;padding:2px 8px;border-radius:20px;vertical-align:middle}
+    .health-label .tag.excellent{background:var(--green-bg);color:var(--green)}
+    .health-label .tag.great{background:var(--blue-bg);color:var(--blue)}
+    .health-label .tag.fair{background:var(--yellow-bg);color:var(--yellow)}
+    .health-label .tag.risk{background:var(--red-bg);color:var(--red)}
+    .health-checks{display:flex;flex-direction:column;gap:7px;margin-top:16px}
+    .h-check{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink2);padding:7px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--border)}
+    .h-check .h-ico{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0}
+    .h-check.ok .h-ico{background:var(--green-bg);color:var(--green)}
+    .h-check.bad .h-ico{background:var(--red-bg);color:var(--red)}
+
+    /* AI performance tiles */
+    .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+    .ai-tile{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:12px 13px}
+    .ai-tile .a-label{font-size:10.5px;font-weight:600;letter-spacing:0.4px;color:var(--muted);text-transform:uppercase}
+    .ai-tile .a-value{font:800 22px 'Inter',sans-serif;color:#fff;letter-spacing:-0.3px;line-height:1.25}
+    .ai-tile .a-value.green{color:var(--green)}
+    .ai-tile .a-sub{font-size:10.5px;color:var(--muted);margin-top:1px}
+    .ai-tile .a-value .unit{font-size:12px;font-weight:600;color:var(--ink2)}
+
+    /* Charts */
+    .chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding:0 4px}
+    .chart-bar{flex:1;background:var(--bg3);border-radius:3px 3px 0 0;min-width:4px;transition:background 0.2s;position:relative}
+    .chart-bar:hover{background:var(--green)}.chart-bar.has-value{background:rgba(34,197,94,0.3)}
+    .chart-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;padding:0 4px}
+    .mt-chart{display:flex;align-items:flex-end;gap:10px;height:120px;padding:0 4px}
+    .mt-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+    .mt-bar{width:100%;border-radius:4px 4px 0 0;background:rgba(59,130,246,0.35);transition:background 0.2s}
+    .mt-col:hover .mt-bar{background:var(--blue)}
+    .mt-label{font-size:10px;color:var(--muted)}
+
+    /* Technician performance */
+    .tech-list{display:flex;flex-direction:column;gap:5px}
+    .tech-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;transition:background 0.2s}
+    .tech-row:hover{background:var(--bg)}
+    .tech-row .t-av{width:28px;height:28px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:700 10px 'Inter',sans-serif;color:var(--ink2);flex-shrink:0}
+    .tech-row .t-name{flex:1;font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .tech-row .t-stat{font-size:11.5px;color:var(--muted);white-space:nowrap}
+    .tech-row .t-stat b{color:var(--ink);font-weight:700}
+    .busy-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .busy-dot.free{background:var(--green)}.busy-dot.busy{background:var(--yellow)}.busy-dot.off{background:var(--muted2)}
+
+    /* Customer + status distribution */
+    .cust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+    .cust-stat{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:12px 14px}
+    .cust-stat .c-label{font-size:10.5px;font-weight:600;letter-spacing:0.4px;color:var(--muted);text-transform:uppercase}
+    .cust-stat .c-value{font:800 20px 'Inter',sans-serif;color:#fff;margin-top:2px}
+    .cust-stat .c-value.green{color:var(--green)}
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;padding:9px 10px;border-bottom:1px solid var(--border)}
+    td{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--ink2)}tr:last-child td{border-bottom:0}
+    .dist-row{display:flex;align-items:center;gap:10px;padding:7px 0}
+    .dist-row .d-label{width:90px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+    .dist-track{flex:1;height:8px;border-radius:6px;background:var(--bg3);overflow:hidden}
+    .dist-fill{height:100%;border-radius:6px;transition:width 0.6s ease}
+    .dist-row .d-count{width:36px;text-align:right;font:700 13px 'Inter',sans-serif;color:#fff}
+
+    @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.cust-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:900px){.grid-2{grid-template-columns:1fr}}
+    @media(max-width:660px){
+      .kpi-grid{grid-template-columns:1fr 1fr;gap:10px}
+      .kpi-card{padding:14px}
+      .kpi-card .kpi-value{font-size:22px}
+      .cust-grid{grid-template-columns:1fr}
+      .nav-right{gap:6px}
+      .brand-signature{height:26px}
+      .shop-name{display:none}
+      .nav-link{display:none}
+      .logout-btn{display:none}
+      .bell{margin-left:auto}
+      .hamburger{display:flex}
+      .header h1{font-size:26px}
+    }
+    .demo-banner{background:rgba(34,197,94,0.08);border-bottom:1px solid rgba(34,197,94,0.2);padding:10px 20px;text-align:center;font-size:13px;font-weight:600;color:var(--green);display:none}
+    .demo-banner.show{display:block}
+    .demo-banner span{background:rgba(34,197,94,0.15);padding:2px 8px;border-radius:4px;font-size:11px;margin-left:6px}
+  </style>
+</head>
+<body>
+<div class="demo-banner" id="demoBanner">🧪 Demo Mode — Changes are not saved. <span>READ ONLY</span></div>
+<nav class="nav">
+  <a class="brand" href="/shop-dashboard.html">cool<b>care</b><span class="brand-by">by</span><img src="/zeesh-signature.png" alt="Zeesh" class="brand-signature"></a>
+  <div class="nav-right">
+    <span class="shop-name" id="shopName">Loading…</span>
+    <a href="/shop-dashboard.html" class="nav-link">Dashboard</a>
+    <a href="/shop-insights.html" class="nav-link active">Insights</a>
+    <a href="/shop-team.html" class="nav-link">Team</a>
+    <a href="/shop-settings.html" class="nav-link">Settings</a>
+    <div class="bell" onclick="window.location.href='/shop-notifications.html'" title="Notifications">🔔<span class="bell-count" id="bellCount" style="display:none">0</span></div>
+    <button class="logout-btn" id="logoutBtn" onclick="logout()">Log Out</button>
+    <button class="hamburger" id="hamburger" onclick="toggleMobileMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/shop-dashboard.html">Dashboard</a>
+  <a href="/shop-insights.html">Business Insights</a>
+  <a href="/shop-team.html">Technicians</a>
+  <a href="/shop-notifications.html">Notifications</a>
+  <div class="divider"></div>
+  <button onclick="logout()">Log Out</button>
+</div>
+
+<div class="wrap">
+  <a class="back-link" href="/shop-dashboard.html">← Back to Dashboard</a>
+  <div class="header">
+    <h1>Business Insights</h1>
+    <p>What can I learn from my business? Performance, health, trends and customer analytics — the analysis lives here so your dashboard stays focused on action.</p>
+  </div>
+
+  <!-- ── Insight KPIs ─────────────────────────────────────────────────── -->
+  <div class="kpi-grid" id="kpiGrid">
+    <div class="kpi-card"><div class="kpi-label">Monthly Revenue</div><div class="kpi-value green" id="kpi-monthly-revenue">—</div><div class="kpi-sub"><span class="sub-strong" id="kpi-month-bookings"></span> this month</div></div>
+    <div class="kpi-card"><div class="kpi-label">Avg Completion Time</div><div class="kpi-value" id="kpi-avg-completion">—</div><div class="kpi-sub">per completed repair</div></div>
+    <div class="kpi-card"><div class="kpi-label">Avg Tech Response</div><div class="kpi-value" id="kpi-avg-response">—</div><div class="kpi-sub">booking → assigned</div></div>
+    <div class="kpi-card"><div class="kpi-label">AI Success Rate</div><div class="kpi-value" id="kpi-ai-rate">—</div><div class="kpi-sub">conversation → booking</div></div>
+  </div>
+
+  <!-- ── Health + AI Performance ──────────────────────────────────────── -->
+  <div class="grid-2">
+    <div class="card">
+      <h2>🩺 Business Health <span class="w-sub" id="healthUpdated"></span></h2>
+      <div class="health-top">
+        <div class="ring">
+          <svg width="92" height="92" viewBox="0 0 92 92">
+            <circle class="ring-bg" cx="46" cy="46" r="38"></circle>
+            <circle class="ring-fg" id="healthRing" cx="46" cy="46" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"></circle>
+          </svg>
+          <div class="ring-num"><b id="healthScore">—</b><span>Score</span></div>
+        </div>
+        <div>
+          <div class="health-label" id="healthLabel">Loading…</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">How your business is running right now</div>
+        </div>
+      </div>
+      <div class="health-checks" id="healthChecks"><div class="empty" style="padding:10px">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <h2>🤖 AI Performance <span class="w-badge">24/7 on WhatsApp</span></h2>
+      <div class="ai-grid" id="aiGrid">
+        <div class="ai-tile"><div class="a-label">Conversations Today</div><div class="a-value" id="ai-convos-today">—</div><div class="a-sub" id="ai-convos-month"></div></div>
+        <div class="ai-tile"><div class="a-label">Bookings by AI</div><div class="a-value green" id="ai-bookings-today">—</div><div class="a-sub" id="ai-bookings-month"></div></div>
+        <div class="ai-tile"><div class="a-label">Human Transfers</div><div class="a-value" id="ai-transfers-today">—</div><div class="a-sub" id="ai-transfers-month"></div></div>
+        <div class="ai-tile"><div class="a-label">Hours Saved</div><div class="a-value green" id="ai-hours-today">—</div><div class="a-sub" id="ai-hours-month"></div></div>
+        <div class="ai-tile"><div class="a-label">Success Rate</div><div class="a-value" id="ai-success-rate">—</div><div class="a-sub">conversation → booking</div></div>
+        <div class="ai-tile"><div class="a-label">Avg Response</div><div class="a-value" id="ai-avg-response">—</div><div class="a-sub">first reply, 24/7</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Revenue analytics ────────────────────────────────────────────── -->
+  <div class="grid-2">
+    <div class="card">
+      <h2>Revenue (30 days) <span class="w-badge" id="chartMonthBadge"></span></h2>
+      <div class="chart" id="revenueChart"><div class="empty" style="width:100%">Loading…</div></div>
+      <div class="chart-labels" id="chartLabels"></div>
+    </div>
+    <div class="card">
+      <h2>Monthly Trend <span class="w-badge">6 months</span></h2>
+      <div class="mt-chart" id="monthlyTrend"><div class="empty" style="width:100%">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- ── Technicians + Customers + Status distribution ────────────────── -->
+  <div class="grid-2">
+    <div class="card">
+      <h2>👨‍🔧 Technician Performance <span class="w-badge" id="techFreeBadge"></span></h2>
+      <div class="tech-list" id="techList"><div class="empty">No technicians added yet</div></div>
+    </div>
+    <div class="card">
+      <h2>👥 Customers</h2>
+      <div class="cust-grid" id="custStats">
+        <div class="cust-stat"><div class="c-label">Total Customers</div><div class="c-value" id="cust-total">—</div></div>
+        <div class="cust-stat"><div class="c-label">Repeat Customers</div><div class="c-value green" id="cust-repeat">—</div></div>
+        <div class="cust-stat"><div class="c-label">New This Month</div><div class="c-value" id="cust-new">—</div></div>
+      </div>
+      <div id="topCustomers"><div class="empty">No customer data yet</div></div>
+    </div>
+  </div>
+
+  <!-- ── Status distribution ──────────────────────────────────────────── -->
+  <div class="card">
+    <h2>Job Distribution <span class="w-sub">Pending → Assigned → Completed</span></h2>
+    <div id="statusDist"><div class="empty">No booking data yet</div></div>
+  </div>
+</div>
+
+<script>
+  const token = localStorage.getItem('cc_token');
+  if (!token) { window.location.href = '/login.html'; }
+
+  const isDemo = localStorage.getItem('cc_is_demo') === 'true';
+  if (isDemo) document.getElementById('demoBanner').classList.add('show');
+
+  const shopData = JSON.parse(localStorage.getItem('cc_shop') || '{}');
+  if (shopData.shopName) document.getElementById('shopName').textContent = shopData.shopName;
+
+  function toggleMobileMenu() {
+    document.getElementById('mobileMenu').classList.toggle('open');
+    document.getElementById('hamburger').classList.toggle('open');
+  }
+  document.addEventListener('click', function(e) {
+    const menu = document.getElementById('mobileMenu');
+    const hamburger = document.getElementById('hamburger');
+    if (!hamburger.contains(e.target) && !menu.contains(e.target) && menu.classList.contains('open')) {
+      menu.classList.remove('open');
+      hamburger.classList.remove('open');
+    }
+  });
+
+  function logout() {
+    fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ action: 'logout' }) }).catch(() => {});
+    localStorage.removeItem('cc_token'); localStorage.removeItem('cc_shop'); localStorage.removeItem('cc_user'); localStorage.removeItem('cc_is_demo');
+    window.location.href = '/login.html';
+  }
+
+  function fmtMoney(val) { return isDemo ? '₹' + Number(val || 0).toLocaleString('en-IN') : '$' + Number(val || 0).toFixed(2); }
+  function fmtHours(h) { return (Number(h || 0) % 1 === 0) ? Number(h || 0) + 'h' : Number(h || 0).toFixed(1) + 'h'; }
+  function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  async function loadInsights() {
+    try {
+      const res = await fetch('/api/shop?action=insights', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.status === 401) { window.location.href = '/login.html'; return; }
+      const d = await res.json();
+
+      if (d.shop) {
+        document.getElementById('shopName').textContent = d.shop.shop_name || '';
+      }
+
+      renderKpis(d.kpis || {}, d.statusCounts || {});
+      renderHealth(d.businessHealth);
+      renderAiPerf(d.aiPerformance);
+      renderRevenueChart(d.revenueChart || []);
+      renderMonthlyTrend(d.monthlyTrend || []);
+      renderTechPerf(d.technicianPerformance);
+      renderCustomers(d.customers || {});
+      renderStatusDist(d.statusCounts || {});
+      loadNotificationCount();
+    } catch (err) {
+      console.error('[insights] Load error:', err);
+      document.getElementById('kpiGrid').innerHTML = '<div class="empty" style="grid-column:1/-1">Failed to load insights. Please refresh.</div>';
+    }
+  }
+
+  function renderKpis(k, counts) {
+    if (!k) return;
+    document.getElementById('kpi-monthly-revenue').textContent = fmtMoney(k.monthlyRevenue || 0);
+    document.getElementById('kpi-month-bookings').textContent = (k.monthBookings || 0) + ' bookings';
+    const comp = document.getElementById('kpi-avg-completion');
+    comp.textContent = k.avgCompletionHours != null ? (Number.isInteger(k.avgCompletionHours) ? k.avgCompletionHours : k.avgCompletionHours.toFixed(1)) + 'h' : '—';
+    const resp = document.getElementById('kpi-avg-response');
+    resp.textContent = k.avgTechResponseMinutes != null ? (Number.isInteger(k.avgTechResponseMinutes) ? k.avgTechResponseMinutes : k.avgTechResponseMinutes.toFixed(1)) + 'm' : '—';
+    document.getElementById('kpi-ai-rate').textContent = (k.aiSuccessRate != null ? k.aiSuccessRate : 0) + '%';
+  }
+
+  function renderHealth(h) {
+    if (!h) return;
+    const score = h.score || 0;
+    document.getElementById('healthScore').textContent = score;
+    const ring = document.getElementById('healthRing');
+    const C = 238.76;
+    const color = score >= 90 ? 'var(--green)' : score >= 75 ? 'var(--blue)' : score >= 60 ? 'var(--yellow)' : 'var(--red)';
+    ring.style.stroke = color;
+    setTimeout(() => { ring.style.strokeDashoffset = C - (C * score / 100); }, 60);
+    const label = document.getElementById('healthLabel');
+    const tagClass = score >= 90 ? 'excellent' : score >= 75 ? 'great' : score >= 60 ? 'fair' : 'risk';
+    const tagText = tagClass === 'excellent' ? 'Excellent' : tagClass === 'great' ? 'Great' : tagClass === 'fair' ? 'Fair' : 'At Risk';
+    label.innerHTML = `${esc(h.label || '—')}<span class="tag ${tagClass}">${tagText}</span>`;
+    document.getElementById('healthUpdated').textContent = h.label || '';
+    const checks = document.getElementById('healthChecks');
+    checks.innerHTML = (h.checks || []).map(c => `
+      <div class="h-check ${c.ok ? 'ok' : 'bad'}">
+        <span class="h-ico">${c.ok ? '✓' : '✕'}</span><span>${esc(c.label)}</span>
+      </div>`).join('') || '<div class="empty" style="padding:10px">No health checks available</div>';
+  }
+
+  function renderAiPerf(a) {
+    if (!a) return;
+    const set = (id, v, unit) => { const el = document.getElementById(id); if (el) el.innerHTML = v + (unit ? `<span class="unit"> ${unit}</span>` : ''); };
+    set('ai-convos-today', a.conversationsToday || 0);
+    document.getElementById('ai-convos-month').textContent = (a.conversationsMonth || 0) + ' this month';
+    set('ai-bookings-today', a.bookingsCreatedToday || 0);
+    document.getElementById('ai-bookings-month').textContent = (a.bookingsCreatedMonth || 0) + ' this month';
+    set('ai-transfers-today', a.humanTransfersToday || 0);
+    document.getElementById('ai-transfers-month').textContent = (a.humanTransfersMonth || 0) + ' this month';
+    set('ai-hours-today', fmtHours(a.hoursSavedToday), 'saved');
+    document.getElementById('ai-hours-month').textContent = fmtHours(a.hoursSavedMonth) + ' this month';
+    set('ai-success-rate', (a.successRate || 0) + '%');
+    set('ai-avg-response', a.avgResponseSeconds ? '~' + a.avgResponseSeconds + 's' : '—');
+  }
+
+  function renderRevenueChart(chart) {
+    const el = document.getElementById('revenueChart');
+    const labels = document.getElementById('chartLabels');
+    if (!chart || !chart.length) { el.innerHTML = '<div class="empty" style="width:100%">No revenue data yet</div>'; labels.innerHTML = ''; return; }
+    const maxRev = Math.max(...chart.map(d => d.revenue), 1);
+    el.innerHTML = chart.map(d => {
+      const h = Math.max(4, (d.revenue / maxRev) * 110);
+      return `<div class="chart-bar${d.revenue > 0 ? ' has-value' : ''}" style="height:${h}px" title="${new Date(d.date).toLocaleDateString('en-IN')}: ${fmtMoney(d.revenue)}"></div>`;
+    }).join('');
+    const first = chart[0]?.date ? new Date(chart[0].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
+    const last = chart[chart.length - 1]?.date ? new Date(chart[chart.length - 1].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
+    labels.innerHTML = `<span>${first}</span><span>${last}</span>`;
+    const total30 = chart.reduce((s, d) => s + (d.revenue || 0), 0);
+    document.getElementById('chartMonthBadge').textContent = fmtMoney(total30) + ' total';
+  }
+
+  function renderMonthlyTrend(rows) {
+    const el = document.getElementById('monthlyTrend');
+    if (!rows || !rows.length) { el.innerHTML = '<div class="empty" style="width:100%">No monthly data yet</div>'; return; }
+    const maxRev = Math.max(...rows.map(r => r.revenue), 1);
+    el.innerHTML = rows.map(r => {
+      const h = Math.max(4, (r.revenue / maxRev) * 110);
+      const label = new Date(r.month + (r.month.length === 10 ? 'T00:00:00' : '')).toLocaleDateString('en', { month: 'short' });
+      return `<div class="mt-col"><div class="mt-bar" style="height:${h}px" title="${label}: ${fmtMoney(r.revenue)} · ${r.bookings} bookings"></div><div class="mt-label">${label}</div></div>`;
+    }).join('');
+  }
+
+  function renderTechPerf(tp) {
+    if (!tp) return;
+    const list = tp.list || [];
+    const freeCount = list.filter(t => !t.busy).length;
+    document.getElementById('techFreeBadge').textContent = `${freeCount} of ${list.length} free`;
+    const el = document.getElementById('techList');
+    if (!list.length) { el.innerHTML = '<div class="empty">No technicians added yet</div>'; return; }
+    el.innerHTML = list.slice(0, 8).map(t => `
+      <div class="tech-row">
+        <span class="t-av">${esc(initials(t.name))}</span>
+        <span class="t-name">${esc(t.name)}</span>
+        <span class="t-stat"><b>${t.repairs || 0}</b> jobs · <b>${fmtMoney(t.revenue)}</b></span>
+        <span class="busy-dot ${t.busy ? 'busy' : 'free'}" title="${t.busy ? 'On a job' : 'Available'}"></span>
+      </div>`).join('');
+  }
+
+  function initials(name) {
+    return String(name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  }
+
+  function renderCustomers(c) {
+    if (!c) return;
+    document.getElementById('cust-total').textContent = c.totalCustomers || 0;
+    document.getElementById('cust-repeat').textContent = c.repeatCustomers || 0;
+    document.getElementById('cust-new').textContent = c.newCustomersMonth || 0;
+    const el = document.getElementById('topCustomers');
+    const top = c.topCustomers || [];
+    if (!top.length) { el.innerHTML = '<div class="empty">No customer data yet — repeat customers appear after their first completed booking.</div>'; return; }
+    el.innerHTML = `<table><thead><tr><th>Customer</th><th>Visits</th><th>Total Spent</th><th>Last Visit</th></tr></thead><tbody>${
+      top.map(x => `<tr><td>${esc(x.name || 'Unknown')}</td><td>${x.visits}</td><td>${fmtMoney(x.totalSpent)}</td><td>${new Date(x.lastVisit).toLocaleDateString()}</td></tr>`).join('')
+    }</tbody></table>`;
+  }
+
+  function renderStatusDist(counts) {
+    const el = document.getElementById('statusDist');
+    const total = Object.values(counts).reduce((s, v) => s + (v || 0), 0);
+    if (!total) { el.innerHTML = '<div class="empty">No booking data yet — once bookings come in, the pipeline appears here.</div>'; return; }
+    const rows = [
+      { label: 'Pending', value: (counts.open || 0) + (counts.accepted || 0), color: 'var(--red)' },
+      { label: 'Assigned', value: (counts.assigned || 0) + (counts.on_the_way || 0) + (counts.arrived || 0) + (counts.in_progress || 0) + (counts.waiting_parts || 0), color: 'var(--blue)' },
+      { label: 'Completed', value: (counts.completed || 0) + (counts.payment_received || 0), color: 'var(--green)' },
+      { label: 'Cancelled', value: (counts.cancelled || 0) + (counts.rejected || 0), color: 'var(--muted2)' },
+    ];
+    el.innerHTML = rows.map(r => `
+      <div class="dist-row">
+        <span class="d-label">${r.label}</span>
+        <div class="dist-track"><div class="dist-fill" style="width:${total ? Math.round((r.value / total) * 100) : 0}%;background:${r.color}"></div></div>
+        <span class="d-count">${r.value}</span>
+      </div>`).join('');
+  }
+
+  async function loadNotificationCount() {
+    try {
+      const res = await fetch('/api/shop?action=notifications&limit=1', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { const d = await res.json(); const el = document.getElementById('bellCount'); if (d.unreadCount > 0) { el.textContent = d.unreadCount > 9 ? '9+' : d.unreadCount; el.style.display = 'flex'; } else { el.style.display = 'none'; } }
+    } catch (e) {}
+  }
+
+  loadInsights();
+  setInterval(loadInsights, 60000);
+</script>
+</body>
+</html>

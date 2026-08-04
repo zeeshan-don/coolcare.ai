@@ -215,12 +215,13 @@
 
   let booking = null;
 
-  // Display labels for booking statuses. 'open' = Pending Assignment (no
-  // automatic assignment — the owner must assign a technician manually).
+  // Display labels for booking statuses — the simplified 3-step workflow:
+  // Pending → Assigned → Completed. Legacy intermediate statuses roll up into
+  // their parent stage so the owner never juggles extra states.
   const STATUS_LABELS = {
-    open: 'Pending Assignment', accepted: 'Accepted', rejected: 'Rejected',
-    assigned: 'Assigned', on_the_way: 'Technician On The Way', arrived: 'Technician Arrived',
-    in_progress: 'Repair In Progress', waiting_parts: 'Waiting For Parts',
+    open: 'Pending', accepted: 'Pending', rejected: 'Cancelled',
+    assigned: 'Assigned', on_the_way: 'Assigned', arrived: 'Assigned',
+    in_progress: 'Assigned', waiting_parts: 'Assigned',
     completed: 'Completed', cancelled: 'Cancelled', payment_received: 'Payment Received',
   };
   const fmtStatus = (s) => STATUS_LABELS[s] || String(s || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -384,24 +385,22 @@
     card: `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>`
   };
 
-  // Full repair lifecycle: Pending → Assigned → On The Way → Arrived →
-  // In Progress ⇄ Waiting For Parts → Completed → Payment Received.
+  // Simplified owner workflow: Pending → Assign Technician → Mark Completed →
+  // Collect Payment. No On The Way / Arrived / In Progress / Waiting For Parts.
   const ACTION_FLOWS = {
-    open:           [{ label: 'Accept Booking',        status: 'accepted',   cls: 'primary', icon: SVGS.check },
-                     { label: 'Reject Booking',        status: 'rejected',   cls: 'danger',  icon: SVGS.x }],
-    accepted:       [{ label: 'Assign Technician',     status: 'assigned',   cls: '',         icon: SVGS.user },
+    open:           [{ label: 'Assign Technician',     status: 'assigned',   cls: 'primary', icon: SVGS.user },
                      { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
-    assigned:       [{ label: 'Technician On The Way', status: 'on_the_way', cls: '',         icon: SVGS.truck },
+    accepted:       [{ label: 'Assign Technician',     status: 'assigned',   cls: 'primary', icon: SVGS.user },
                      { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
-    on_the_way:     [{ label: 'Mark Arrived',          status: 'arrived',    cls: '',         icon: SVGS.mapPin },
+    assigned:       [{ label: 'Mark Completed',        status: 'completed',  cls: 'primary', icon: SVGS.check },
                      { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
-    arrived:        [{ label: 'Start Repair',          status: 'in_progress', cls: '',        icon: SVGS.wrench },
-                     { label: 'Cancel Booking',        status: 'cancelled',   cls: 'danger',  icon: SVGS.x }],
-    in_progress:    [{ label: 'Waiting For Parts',     status: 'waiting_parts', cls: '',      icon: SVGS.box },
-                     { label: 'Complete Repair',       status: 'completed',   cls: 'primary', icon: SVGS.check }],
-    waiting_parts:  [{ label: 'Repair In Progress',    status: 'in_progress', cls: '',        icon: SVGS.wrench },
-                     { label: 'Complete Repair',       status: 'completed',   cls: 'primary', icon: SVGS.check }],
-    completed:      [{ label: 'Collect Payment',       status: 'payment_received', cls: '',  icon: SVGS.card }],
+    on_the_way:     [{ label: 'Mark Completed',        status: 'completed',  cls: 'primary', icon: SVGS.check },
+                     { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
+    arrived:        [{ label: 'Mark Completed',        status: 'completed',  cls: 'primary', icon: SVGS.check },
+                     { label: 'Cancel Booking',        status: 'cancelled',  cls: 'danger',  icon: SVGS.x }],
+    in_progress:    [{ label: 'Mark Completed',        status: 'completed',  cls: 'primary', icon: SVGS.check }],
+    waiting_parts:  [{ label: 'Mark Completed',        status: 'completed',  cls: 'primary', icon: SVGS.check }],
+    completed:      [{ label: 'Collect Payment',       status: 'payment_received', cls: 'primary', icon: SVGS.card }],
     payment_received: [],
     cancelled:      [],
     rejected:       [],
@@ -438,6 +437,15 @@
     // Optional note recorded on the timeline with the status change
     const notes = document.getElementById('actionNotes')?.value.trim() || undefined;
 
+    // Final amount is captured when a job is marked completed so revenue
+    // (Today's Revenue / Monthly Revenue) updates immediately.
+    let finalCost;
+    if (status === 'completed') {
+      const raw = document.getElementById('finalCostInput')?.value;
+      const parsed = raw && raw.trim() !== '' ? parseFloat(raw) : NaN;
+      if (!isNaN(parsed) && parsed >= 0) finalCost = parsed;
+    }
+
     try {
       const res = await fetch('/api/shop', {
         method: 'POST',
@@ -445,7 +453,7 @@
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ action: 'update', bookingId: booking.id, status, technicianName, technicianId, notes }),
+        body: JSON.stringify({ action: 'update', bookingId: booking.id, status, technicianName, technicianId, notes, finalCost }),
       });
       if (res.status === 401) { window.location.href = '/login.html'; return; }
       const data = await res.json();

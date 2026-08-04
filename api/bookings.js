@@ -12,7 +12,6 @@ const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { sendWhatsApp, notifyShopOwner } = require("./_lib/notify");
-const { getAppBaseUrl } = require("./_lib/config");
 const { insertTimelineEvent, ACTORS } = require("./_lib/repair-lifecycle");
 const { validate } = require("./_lib/validate");
 const { z } = require("zod");
@@ -105,7 +104,7 @@ async function handleBookService(request, response, sql, shopId, body) {
       INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
       VALUES (${shopId}, 'new_booking', 'New Booking',
               ${`${customerName} booked a ${serviceType}${area ? " in " + area : ""}. Assign a technician to start the job.`},
-              '/shop-dashboard.html')
+              ${`/shop-booking.html?id=${bookingId}`})
     `;
   } catch (e) { console.warn("[bookings/book-service] Shop notification failed:", e.message); }
 
@@ -123,8 +122,7 @@ async function handleBookService(request, response, sql, shopId, body) {
     (address ? `• Address: ${address}\n` : "") +
     `• Slot: ${slot}\n` +
     (bookingId ? `• Ref #: ${bookingId}\n` : "") +
-    `\nYour booking has been received and our team will contact you shortly to confirm the visit. Thank you for choosing CoolCare! 🙏` +
-    (bookingId ? `\n\nTrack your repair anytime: ${getAppBaseUrl()}/tracker.html?booking=${bookingId}` : "");
+    `\nYour booking has been received and our team will contact you shortly to confirm the visit. For urgent updates, please call the shop directly. Thank you for choosing CoolCare! 🙏`;
 
   const waResult = await sendWhatsApp(customerNumber, msg);
   if (!waResult.ok) {

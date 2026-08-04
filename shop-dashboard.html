@@ -90,93 +90,10 @@
     .pipe-chip .pc-dot{width:6px;height:6px;border-radius:50%}
     .pipe-chip.red .pc-dot{background:var(--red)}.pipe-chip.green .pc-dot{background:var(--green)}.pipe-chip.yellow .pc-dot{background:var(--yellow)}.pipe-chip.blue .pc-dot{background:var(--blue)}
 
-    /* ── Widgets grid ───────────────────────────────────────────────────── */
-    .widgets{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:18px}
-    .widget{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:20px;display:flex;flex-direction:column}
-    .widget h2{font-size:15px;margin:0 0 14px;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px}
-    .widget h2 .w-badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
-    .widget h2 .w-sub{font-size:11px;font-weight:500;color:var(--muted)}
-
-    /* Health ring */
-    .health-top{display:flex;align-items:center;gap:18px;margin-bottom:14px}
-    .ring{position:relative;width:92px;height:92px;flex-shrink:0}
-    .ring svg{transform:rotate(-90deg)}
-    .ring .ring-bg{stroke:var(--bg3);fill:none;stroke-width:9}
-    .ring .ring-fg{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset 1s ease, stroke 0.6s}
-    .ring .ring-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-    .ring .ring-num b{font:800 24px 'Inter',sans-serif;color:#fff;line-height:1}
-    .ring .ring-num span{font:600 9px 'Inter',sans-serif;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase;margin-top:2px}
-    .health-label{font:700 15px 'Inter',sans-serif;color:#fff}
-    .health-label .tag{display:inline-block;margin-left:6px;font:700 10px 'Inter',sans-serif;padding:2px 8px;border-radius:20px;vertical-align:middle}
-    .health-label .tag.excellent{background:var(--green-bg);color:var(--green)}
-    .health-label .tag.great{background:var(--blue-bg);color:var(--blue)}
-    .health-label .tag.fair{background:var(--yellow-bg);color:var(--yellow)}
-    .health-label .tag.risk{background:var(--red-bg);color:var(--red)}
-    .health-meta{font-size:12px;color:var(--muted);margin-top:3px}
-    .health-checks{display:flex;flex-direction:column;gap:7px;margin-top:auto}
-    .h-check{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink2);padding:7px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--border)}
-    .h-check .h-ico{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0}
-    .h-check.ok .h-ico{background:var(--green-bg);color:var(--green)}
-    .h-check.bad .h-ico{background:var(--red-bg);color:var(--red)}
-
-    /* AI performance */
-    .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-    .ai-tile{background:var(--bg);border:1px solid var(--border);border-radius:11px;padding:12px 13px}
-    .ai-tile .a-label{font-size:10.5px;font-weight:600;letter-spacing:0.4px;color:var(--muted);text-transform:uppercase}
-    .ai-tile .a-value{font:800 22px 'Inter',sans-serif;color:#fff;letter-spacing:-0.3px;line-height:1.25}
-    .ai-tile .a-value.green{color:var(--green)}
-    .ai-tile .a-sub{font-size:10.5px;color:var(--muted);margin-top:1px}
-    .ai-tile .a-value .unit{font-size:12px;font-weight:600;color:var(--ink2)}
-
-    /* Technician performance */
-    .tech-top{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,rgba(34,197,94,0.08),transparent);border:1px solid rgba(34,197,94,0.18);border-radius:12px;padding:14px;margin-bottom:12px}
-    .tech-avatar{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#2a2a2a,#1a1a1a);border:2px solid rgba(34,197,94,0.4);display:flex;align-items:center;justify-content:center;font:800 15px 'Inter',sans-serif;color:#fff;flex-shrink:0}
-    .tech-top .tt-name{font:700 14px 'Inter',sans-serif;color:#fff}
-    .tech-top .tt-sub{font-size:11.5px;color:var(--muted)}
-    .tech-top .tt-stats{margin-left:auto;text-align:right;flex-shrink:0}
-    .tech-top .tt-stats .rev{font:800 16px 'Inter',sans-serif;color:var(--green)}
-    .tech-top .tt-stats .n{font-size:11px;color:var(--muted)}
-    .star{color:var(--yellow);font-size:11px;letter-spacing:1px}
-    .tech-list{display:flex;flex-direction:column;gap:5px;margin-top:auto}
-    .tech-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;transition:background 0.2s}
-    .tech-row:hover{background:var(--bg)}
-    .tech-row .t-rank{width:18px;text-align:center;font:700 11px 'Inter',sans-serif;color:var(--muted2);flex-shrink:0}
-    .tech-row .t-rank.top{color:var(--green)}
-    .tech-row .t-av{width:26px;height:26px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:700 10px 'Inter',sans-serif;color:var(--ink2);flex-shrink:0}
-    .tech-row .t-name{flex:1;font-size:12.5px;font-weight:600;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .tech-row .t-stat{font-size:11.5px;color:var(--muted);white-space:nowrap}
-    .tech-row .t-stat b{color:var(--ink);font-weight:700}
-    .tech-row .busy-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-    .busy-dot.free{background:var(--green)}.busy-dot.busy{background:var(--yellow)}.busy-dot.off{background:var(--muted2)}
-
-    /* ── Charts & timeline ──────────────────────────────────────────────── */
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px}
+    /* ── Customers section card ─────────────────────────────────────────── */
     .section-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:18px}
     .section-card h2{font-size:16px;margin:0 0 16px;color:#fff;display:flex;align-items:center;justify-content:space-between}
     .section-card h2 .badge{background:var(--bg3);color:var(--ink);border:1px solid var(--border);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
-    .chart{display:flex;align-items:flex-end;gap:3px;height:120px;padding:0 4px}
-    .chart-bar{flex:1;background:var(--bg3);border-radius:3px 3px 0 0;min-width:4px;transition:background 0.2s;position:relative}
-    .chart-bar:hover{background:var(--green)}.chart-bar.has-value{background:rgba(34,197,94,0.3)}
-    .chart-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:6px;padding:0 4px}
-
-    /* Business timeline */
-    .tl{border-left:2px solid var(--border);margin-left:7px;padding-left:0}
-    .tl-item{position:relative;padding:0 0 16px 24px}
-    .tl-item:last-child{padding-bottom:0}
-    .tl-item::before{content:'';position:absolute;left:-7px;top:3px;width:12px;height:12px;border-radius:50%;background:var(--bg2);border:2px solid var(--muted2)}
-    .tl-item.money::before{border-color:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,0.12)}
-    .tl-item.booking::before{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,0.12)}
-    .tl-item.ai::before{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,0.12)}
-    .tl-item.tech::before{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(234,179,8,0.12)}
-    .tl-item.done::before{border-color:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,0.12)}
-    .tl-item.star::before{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(234,179,8,0.12)}
-    .tl-item.alert::before{border-color:var(--red);box-shadow:0 0 0 3px rgba(239,68,68,0.12)}
-    .tl-head{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink2)}
-    .tl-head .tl-ico{font-size:14px;flex-shrink:0}
-    .tl-head strong{color:#fff;font-weight:700}
-    .tl-sub{font-size:12px;color:var(--muted);margin-top:1px}
-    .tl-sub b{color:var(--ink2);font-weight:600}
-    .tl-time{font-size:10.5px;color:var(--muted2);margin-top:2px}
 
     /* ── Bookings & tables (unchanged features) ─────────────────────────── */
     table{width:100%;border-collapse:collapse;font-size:13px}
@@ -208,25 +125,18 @@
     .src-badge.wa{background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.22)}
     .empty{text-align:center;color:var(--muted);padding:40px 20px}
 
-    /* ── Live feed toasts ───────────────────────────────────────────────── */
-    .toast-stack{position:fixed;bottom:20px;right:20px;z-index:99990;display:flex;flex-direction:column;gap:10px;max-width:340px;width:calc(100vw - 40px);pointer-events:none}
-    .toast{background:rgba(20,20,20,0.96);border:1px solid var(--border2);border-left:3px solid var(--green);border-radius:12px;padding:13px 15px;box-shadow:0 12px 40px rgba(0,0,0,0.55);display:flex;gap:11px;align-items:flex-start;opacity:0;transform:translateX(30px);transition:all 0.35s cubic-bezier(.2,.8,.3,1);pointer-events:auto;cursor:pointer}
-    .toast.show{opacity:1;transform:translateX(0)}
-    .toast .t-ico{font-size:18px;flex-shrink:0;margin-top:1px}
-    .toast .t-title{font:700 12.5px 'Inter',sans-serif;color:#fff}
-    .toast .t-body{font-size:12px;color:var(--ink2);line-height:1.45;margin-top:1px}
-    .toast .t-time{font-size:10px;color:var(--muted2);margin-top:2px}
-    .toast .t-x{margin-left:auto;font-size:12px;color:var(--muted);flex-shrink:0;padding:0 2px}
-    .toast .t-x:hover{color:#fff}
+    /* ── Quick actions (assign / complete / collect payment) ─────────────── */
+    .booking-actions{display:flex;gap:8px;flex-wrap:wrap}
+    .q-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:9px;border:1px solid var(--border2);background:var(--bg);color:var(--ink2);font:600 12px 'Inter',sans-serif;cursor:pointer;transition:all 0.2s}
+    .q-btn:hover{border-color:#555;color:#fff;background:var(--bg3)}
+    .q-btn.q-primary{background:#fff;color:#000;border-color:#fff}
+    .q-btn.q-primary:hover{background:#e5e5e5;border-color:#e5e5e5}
+    .priority-item .p-btn{background:#fff;color:#000;font:600 11px 'Inter',sans-serif;padding:7px 13px;border-radius:8px;white-space:nowrap;transition:background 0.2s}
+    .priority-item .p-btn:hover{background:#e5e5e5}
+    .kpi-card{cursor:pointer}
+    .kpi-card:hover .kpi-sub .sub-strong{color:#fff}
 
-    /* ── Live feed mini-panel ───────────────────────────────────────────── */
-    .feed-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-top:2px}
-    .feed-chip{flex-shrink:0;display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:7px 11px;font-size:11.5px;color:var(--ink2);white-space:nowrap}
-    .feed-chip .fc-ico{font-size:13px}
-    .feed-chip .fc-t{color:var(--muted);font-weight:600}
-
-    @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}.widgets{grid-template-columns:1fr 1fr}}
-    @media(max-width:900px){.grid-2{grid-template-columns:1fr}.widgets{grid-template-columns:1fr}}
+    @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:660px){
       .kpi-grid{grid-template-columns:1fr 1fr;gap:10px}
       .kpi-card{padding:14px}
@@ -280,6 +190,7 @@
   <div class="nav-right">
     <span class="shop-name" id="shopName">Loading…</span>
     <a href="/shop-team.html" class="nav-link">Team</a>
+    <a href="/shop-insights.html" class="nav-link">Insights</a>
     <a href="/shop-ai-settings.html" class="nav-link">AI Settings</a>
     <a href="/shop-channels.html" class="nav-link">Communication Channels</a>
     <a href="/web-bot/shop-widget.html" class="nav-link">Website Chat</a>
@@ -293,6 +204,7 @@
 <div class="mobile-menu" id="mobileMenu">
   <a href="/shop-dashboard.html">Dashboard</a>
   <a href="/shop-team.html">Technicians</a>
+  <a href="/shop-insights.html">Insights</a>
   <a href="/shop-channels.html">Communication Channels</a>
   <a href="/shop-sandbox.html">Developer Sandbox</a>
   <a href="/shop-ai-settings.html">AI Settings</a>
@@ -321,47 +233,37 @@
     </div>
   </div>
 
-  <!-- ═══ KPI row — the money & motion of the business ═══ -->
+  <!-- ═══ KPI row — numbers that drive today's actions (every card is clickable) ═══ -->
   <div class="kpi-grid" id="kpiGrid">
-    <div class="kpi-card">
+    <div class="kpi-card" onclick="window.location.href='/shop-insights.html'" title="View revenue report">
       <div class="kpi-icon">💰</div>
-      <div class="kpi-label">Revenue Today</div>
+      <div class="kpi-label">Today's Revenue</div>
       <div class="kpi-value green" id="kpi-revenue-today">—</div>
-      <div class="kpi-sub"><span class="delta" id="kpi-revenue-delta">…</span><span class="sub-strong" id="kpi-revenue-month"></span> this month</div>
+      <div class="kpi-sub"><span class="delta" id="kpi-revenue-delta">…</span><span class="sub-strong">revenue report →</span></div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">📦</div>
-      <div class="kpi-label">Bookings Today</div>
-      <div class="kpi-value" id="kpi-bookings-today">—</div>
-      <div class="kpi-sub"><span class="sub-strong" id="kpi-bookings-month"></span> this month</div>
+    <div class="kpi-card" onclick="filterBookings('pending')" title="Show pending bookings">
+      <div class="kpi-icon">📋</div>
+      <div class="kpi-label">Pending Bookings</div>
+      <div class="kpi-value" id="kpi-pending">—</div>
+      <div class="kpi-sub"><span class="sub-strong" id="kpi-pending-sub">awaiting technician</span></div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">🤖</div>
-      <div class="kpi-label">AI Conversations Today</div>
-      <div class="kpi-value" id="kpi-ai-convos">—</div>
-      <div class="kpi-sub"><span class="sub-strong" id="kpi-ai-bookings"></span> booked by AI today</div>
+    <div class="kpi-card" onclick="filterBookings('completed')" title="Show completed jobs">
+      <div class="kpi-icon">✅</div>
+      <div class="kpi-label">Completed Today</div>
+      <div class="kpi-value" id="kpi-completed-today">—</div>
+      <div class="kpi-sub"><span class="sub-strong" id="kpi-completed-sub">jobs completed today</span></div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">⏱️</div>
-      <div class="kpi-label">Hours Saved</div>
-      <div class="kpi-value green" id="kpi-hours-saved">—</div>
-      <div class="kpi-sub"><span class="sub-strong" id="kpi-avg-response"></span> avg AI response</div>
+    <div class="kpi-card" onclick="scrollToCustomers()" title="Show customer list">
+      <div class="kpi-icon">👥</div>
+      <div class="kpi-label">Total Customers</div>
+      <div class="kpi-value" id="kpi-customers">—</div>
+      <div class="kpi-sub"><span class="sub-strong">view customer list ↓</span></div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-      </div>
-      <div class="kpi-label">Avg Completion Time</div>
-      <div class="kpi-value" id="kpi-avg-completion">—</div>
-      <div class="kpi-sub"><span class="sub-strong">per completed repair</span></div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-icon">
-        <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-      </div>
-      <div class="kpi-label">Avg Tech Response</div>
-      <div class="kpi-value" id="kpi-avg-response-tech">—</div>
-      <div class="kpi-sub"><span class="sub-strong">booking to assigned</span></div>
+    <div class="kpi-card" onclick="window.location.href='/shop-insights.html'" title="View monthly analytics">
+      <div class="kpi-icon">📈</div>
+      <div class="kpi-label">Monthly Revenue</div>
+      <div class="kpi-value" id="kpi-monthly">—</div>
+      <div class="kpi-sub"><span class="sub-strong" id="kpi-monthly-sub">monthly analytics →</span></div>
     </div>
   </div>
 
@@ -374,75 +276,16 @@
     <div class="priority-list" id="priorityList"><div class="empty" style="padding:16px">Loading priorities…</div></div>
   </div>
 
-  <!-- ═══ Pipeline — booking status counts (kept feature, now clickable filters) ═══ -->
+  <!-- ═══ Pipeline — the 3-step workflow: Pending → Assigned → Completed ═══ -->
   <div class="pipeline" id="pipeline">
     <div class="pipe-chip active" data-filter="all" onclick="filterBookings('all')">All<span class="pc-count" id="pipe-all">0</span></div>
-    <div class="pipe-chip red" data-filter="open" onclick="filterBookings('open')"><span class="pc-dot"></span>Pending Assignment<span class="pc-count" id="pipe-open">0</span></div>
-    <div class="pipe-chip yellow" data-filter="accepted" onclick="filterBookings('accepted')"><span class="pc-dot"></span>Accepted<span class="pc-count" id="pipe-accepted">0</span></div>
+    <div class="pipe-chip red" data-filter="pending" onclick="filterBookings('pending')"><span class="pc-dot"></span>Pending<span class="pc-count" id="pipe-pending">0</span></div>
     <div class="pipe-chip blue" data-filter="assigned" onclick="filterBookings('assigned')"><span class="pc-dot"></span>Assigned<span class="pc-count" id="pipe-assigned">0</span></div>
-    <div class="pipe-chip" data-filter="on_the_way" onclick="filterBookings('on_the_way')"><span class="pc-dot"></span>On The Way<span class="pc-count" id="pipe-on_the_way">0</span></div>
-    <div class="pipe-chip" data-filter="arrived" onclick="filterBookings('arrived')"><span class="pc-dot"></span>Arrived<span class="pc-count" id="pipe-arrived">0</span></div>
-    <div class="pipe-chip" data-filter="in_progress" onclick="filterBookings('in_progress')"><span class="pc-dot"></span>In Progress<span class="pc-count" id="pipe-in_progress">0</span></div>
-    <div class="pipe-chip yellow" data-filter="waiting_parts" onclick="filterBookings('waiting_parts')"><span class="pc-dot"></span>Waiting For Parts<span class="pc-count" id="pipe-waiting_parts">0</span></div>
     <div class="pipe-chip green" data-filter="completed" onclick="filterBookings('completed')"><span class="pc-dot"></span>Completed<span class="pc-count" id="pipe-completed">0</span></div>
     <div class="pipe-chip" data-filter="cancelled" onclick="filterBookings('cancelled')"><span class="pc-dot"></span>Cancelled<span class="pc-count" id="pipe-cancelled">0</span></div>
   </div>
 
-  <!-- ═══ Command widgets ═══ -->
-  <div class="widgets" id="widgets">
-    <!-- Business Health -->
-    <div class="widget">
-      <h2>🩺 Business Health <span class="w-sub" id="healthUpdated"></span></h2>
-      <div class="health-top">
-        <div class="ring">
-          <svg width="92" height="92" viewBox="0 0 92 92">
-            <circle class="ring-bg" cx="46" cy="46" r="38"></circle>
-            <circle class="ring-fg" id="healthRing" cx="46" cy="46" r="38" stroke-dasharray="238.76" stroke-dashoffset="238.76"></circle>
-          </svg>
-          <div class="ring-num"><b id="healthScore">—</b><span>Score</span></div>
-        </div>
-        <div>
-          <div class="health-label" id="healthLabel">Loading…</div>
-          <div class="health-meta" id="healthMeta"></div>
-        </div>
-      </div>
-      <div class="health-checks" id="healthChecks"></div>
-    </div>
-
-    <!-- AI Performance -->
-    <div class="widget">
-      <h2>🤖 AI Performance <span class="w-sub" id="aiPerfSub"></span></h2>
-      <div class="ai-grid">
-        <div class="ai-tile"><div class="a-label">Conversations Today</div><div class="a-value" id="ai-convos-today">—</div><div class="a-sub" id="ai-convos-month"></div></div>
-        <div class="ai-tile"><div class="a-label">Bookings by AI</div><div class="a-value green" id="ai-bookings-today">—</div><div class="a-sub" id="ai-bookings-month"></div></div>
-        <div class="ai-tile"><div class="a-label">Human Transfers</div><div class="a-value" id="ai-transfers-today">—</div><div class="a-sub" id="ai-transfers-month"></div></div>
-        <div class="ai-tile"><div class="a-label">Hours Saved</div><div class="a-value green" id="ai-hours-today">—</div><div class="a-sub" id="ai-hours-month"></div></div>
-        <div class="ai-tile"><div class="a-label">AI Success Rate</div><div class="a-value" id="ai-success-rate">—</div><div class="a-sub">conversation → booking</div></div>
-        <div class="ai-tile"><div class="a-label">Avg Response</div><div class="a-value" id="ai-avg-response">—</div><div class="a-sub">first reply, 24/7</div></div>
-      </div>
-    </div>
-
-    <!-- Technician Performance -->
-    <div class="widget">
-      <h2><span>👨‍🔧 Technicians</span> <span style="display:flex;align-items:center;gap:8px"><span class="w-badge" id="techFreeBadge">— free</span><a href="/shop-team.html" style="font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap" title="Manage your technician roster">Manage →</a></span></h2>
-      <div class="tech-top" id="techTop"></div>
-      <div class="tech-list" id="techList"></div>
-    </div>
-  </div>
-
-  <!-- ═══ Revenue + Live Business Feed ═══ -->
-  <div class="grid-2">
-    <div class="section-card">
-      <h2>Revenue (30 days) <span class="badge" id="chartMonthBadge"></span></h2>
-      <div class="chart" id="revenueChart"><div class="empty" style="width:100%">Loading…</div></div>
-      <div class="chart-labels" id="chartLabels"></div>
-    </div>
-    <div class="section-card">
-      <h2>Business Timeline <span class="badge">live</span></h2>
-      <div class="tl" id="activityFeed"><div class="empty">No recent activity</div></div>
-      <div class="feed-strip" id="feedStrip"></div>
-    </div>
-  </div>
+  <!-- ═══ Analysis moved to Business Insights — this page is for action only ═══ -->
 
   <div id="bookingsHead" style="scroll-margin-top:90px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap">
     <div class="section-header" style="margin:0">Bookings <span class="badge" id="totalBadge">0</span></div>
@@ -453,13 +296,8 @@
 
   <div class="tabs">
     <div class="tab active" data-filter="all" onclick="filterBookings('all')">All</div>
-    <div class="tab" data-filter="open" onclick="filterBookings('open')">Pending Assignment</div>
-    <div class="tab" data-filter="accepted" onclick="filterBookings('accepted')">Accepted</div>
+    <div class="tab" data-filter="pending" onclick="filterBookings('pending')">Pending</div>
     <div class="tab" data-filter="assigned" onclick="filterBookings('assigned')">Assigned</div>
-    <div class="tab" data-filter="on_the_way" onclick="filterBookings('on_the_way')">On The Way</div>
-    <div class="tab" data-filter="arrived" onclick="filterBookings('arrived')">Arrived</div>
-    <div class="tab" data-filter="in_progress" onclick="filterBookings('in_progress')">In Progress</div>
-    <div class="tab" data-filter="waiting_parts" onclick="filterBookings('waiting_parts')">Waiting For Parts</div>
     <div class="tab" data-filter="completed" onclick="filterBookings('completed')">Completed</div>
     <div class="tab" data-filter="cancelled" onclick="filterBookings('cancelled')">Cancelled</div>
   </div>
@@ -472,13 +310,12 @@
     <button id="nextBtn" onclick="changePage(1)" style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;font:500 12px inherit;cursor:pointer;color:var(--muted)">Next →</button>
   </div>
 
-  <div class="section-card" style="margin-top:24px">
-    <h2>Customer History <span class="badge" id="custBadge">0</span></h2>
-    <div id="customerTable"><div class="empty">No customer data yet</div></div>
+  <div class="section-card" id="customersSection" style="margin-top:24px;scroll-margin-top:90px">
+    <h2>Customers <span class="badge" id="custBadge">0</span></h2>
+    <div id="customerTable"><div class="empty">No customer data yet — customers appear after their first booking.</div></div>
   </div>
 </div>
 
-<div class="toast-stack" id="toastStack"></div>
 
 <script>
   const token = localStorage.getItem('cc_token');
@@ -488,7 +325,6 @@
   let currentFilter = 'all';
   let currentPage = 1;
   let searchQuery = '';
-  let lastActivityCount = 0;
 
   const shopData = JSON.parse(localStorage.getItem('cc_shop') || '{}');
   if (shopData.shopName) document.getElementById('shopName').textContent = shopData.shopName;
@@ -536,10 +372,10 @@
       </div>
       <div style="width:280px">
         <div style="display:flex;flex-direction:column;gap:6px">
-          <div class="dash-load-step" data-dstep="1"><span class="dls-icon"></span><span class="dls-label">Business KPIs</span></div>
-          <div class="dash-load-step" data-dstep="2"><span class="dls-icon"></span><span class="dls-label">Today's priorities</span></div>
-          <div class="dash-load-step" data-dstep="3"><span class="dls-icon"></span><span class="dls-label">AI & team health</span></div>
-          <div class="dash-load-step" data-dstep="4"><span class="dls-icon"></span><span class="dls-label">Bookings & customers</span></div>
+          <div class="dash-load-step" data-dstep="1"><span class="dls-icon"></span><span class="dls-label">Today's numbers</span></div>
+          <div class="dash-load-step" data-dstep="2"><span class="dls-icon"></span><span class="dls-label">Bookings waiting for assignment</span></div>
+          <div class="dash-load-step" data-dstep="3"><span class="dls-icon"></span><span class="dls-label">Open jobs</span></div>
+          <div class="dash-load-step" data-dstep="4"><span class="dls-icon"></span><span class="dls-label">Customers</span></div>
         </div>
       </div>
       <style>
@@ -574,7 +410,6 @@
   // ── Formatting ─────────────────────────────────────────────────────────────
   function fmt(val) { return '₹' + Number(val || 0).toLocaleString('en-IN'); }
   function fmtMoney(val) { return isDemo ? fmt(val) : '$' + Number(val || 0).toFixed(2); }
-  function fmtHours(h) { return (Number(h || 0) % 1 === 0) ? Number(h || 0) + 'h' : Number(h || 0).toFixed(1) + 'h'; }
 
   // ── Unified dashboard loader ───────────────────────────────────────────────
   async function loadDashboard() {
@@ -641,13 +476,8 @@
       }
 
       renderPipeline(data.counts || {});
-      renderKpis(data.kpis, data.stats || {});
-      renderPriorities(data.priorities || []);
-      renderHealth(data.businessHealth, data.kpis?.satisfaction);
-      renderAiPerf(data.aiPerformance);
-      renderTechPerf(data.technicianPerformance);
-      renderRevenueChart(data.revenueChart || []);
-      renderTimeline(data.activityFeed || []);
+      renderKpis(data.stats || {}, data.counts || {});
+      renderPriorities(data.pendingAssignments || []);
 
       allBookings = data.bookings || [];
       const total = data.pagination?.total || allBookings.length;
@@ -658,15 +488,6 @@
       renderBookings();
       renderCustomerHistory(data.customerHistory || []);
       loadNotificationCount();
-
-      // New-activity detection → live toast
-      const feed = data.activityFeed || [];
-      if (feed.length > lastActivityCount && lastActivityCount > 0) {
-        const fresh = feed.slice(0, feed.length - lastActivityCount);
-        fresh.forEach(a => pushLiveToast(a));
-      }
-      lastActivityCount = feed.length;
-      renderFeedStrip(feed);
 
       clearTimeout(loaderTimeout);
       if (loaderCtrl) clearInterval(loaderCtrl);
@@ -695,35 +516,27 @@
     document.getElementById('todayDate').textContent = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
   }
 
-  // ── KPI cards ──────────────────────────────────────────────────────────────
-  function renderKpis(k, stats) {
-    if (!k) return;
-    const revEl = document.getElementById('kpi-revenue-today');
-    countUp(revEl, k.revenueToday || 0, v => fmtMoney(v));
+  // ── KPI cards — the 5 numbers that drive today's work ─────────────────────
+  function renderKpis(stats, counts) {
+    if (!stats) return;
+    countUp(document.getElementById('kpi-revenue-today'), stats.revenueToday || 0, v => fmtMoney(v));
 
     const d = document.getElementById('kpi-revenue-delta');
-    const dp = k.revenueDeltaPct || 0;
+    const dp = stats.revenueDeltaPct || 0;
     d.className = 'delta ' + (dp > 0 ? 'up' : dp < 0 ? 'down' : 'flat');
-    d.textContent = dp > 0 ? `▲ ${dp}%` : dp < 0 ? `▼ ${Math.abs(dp)}%` : '— vs yesterday';
+    d.textContent = dp > 0 ? `▲ ${dp}%` : dp < 0 ? `▼ ${Math.abs(dp)}%` : '— vs avg';
 
-    const mEl = document.getElementById('kpi-revenue-month');
-    mEl.textContent = k.monthlyRevenue != null ? fmtMoney(k.monthlyRevenue) : (stats.monthlyRevenue != null ? fmtMoney(stats.monthlyRevenue) : '—');
-    if (k.monthGrowthPct != null) {
-      mEl.textContent += ` · ${k.monthGrowthPct > 0 ? '+' : ''}${k.monthGrowthPct}%`;
-    }
+    const pending = (counts?.open || 0) + (counts?.accepted || 0);
+    countUp(document.getElementById('kpi-pending'), pending, v => v);
+    document.getElementById('kpi-pending-sub').textContent = 'awaiting technician';
 
-    countUp(document.getElementById('kpi-bookings-today'), k.todayBookings || stats.todayBookings || 0, v => v);
-    document.getElementById('kpi-bookings-month').textContent = (k.monthBookings || stats.monthBookings || 0) + ' jobs';
-    countUp(document.getElementById('kpi-ai-convos'), k.aiConversationsToday || 0, v => v);
-    document.getElementById('kpi-ai-bookings').textContent = (k.aiBookingsToday || 0) + ' jobs';
-    countUp(document.getElementById('kpi-hours-saved'), k.hoursSavedToday || 0, v => fmtHours(v), 1);
-    document.getElementById('kpi-avg-response').textContent = k.avgResponseSeconds ? `~${k.avgResponseSeconds}s` : '—';
+    countUp(document.getElementById('kpi-completed-today'), stats.completedToday || 0, v => v);
+    document.getElementById('kpi-completed-sub').textContent = 'jobs completed today';
 
-    // ── Repair lifecycle KPIs (avg completion + technician response) ───────
-    const compEl = document.getElementById('kpi-avg-completion');
-    if (compEl) compEl.textContent = k.avgCompletionHours != null ? (Number.isInteger(k.avgCompletionHours) ? k.avgCompletionHours : k.avgCompletionHours.toFixed(1)) + 'h' : '—';
-    const respEl = document.getElementById('kpi-avg-response-tech');
-    if (respEl) respEl.textContent = k.avgTechResponseMinutes != null ? (Number.isInteger(k.avgTechResponseMinutes) ? k.avgTechResponseMinutes : k.avgTechResponseMinutes.toFixed(1)) + 'm' : '—';
+    countUp(document.getElementById('kpi-customers'), stats.totalCustomers || 0, v => v);
+
+    countUp(document.getElementById('kpi-monthly'), stats.monthlyRevenue || 0, v => fmtMoney(v));
+    document.getElementById('kpi-monthly-sub').textContent = 'monthly analytics →';
   }
 
   function countUp(el, target, formatter, decimals) {
@@ -743,207 +556,34 @@
     requestAnimationFrame(frame);
   }
 
-  // ── Today's Priorities ─────────────────────────────────────────────────────
+  // ── Today's Priorities — real work: bookings waiting for a technician ─────
   function renderPriorities(list) {
     const el = document.getElementById('priorityList');
     document.getElementById('priorityCount').textContent = list.length;
-    if (!list.length) { el.innerHTML = '<div class="empty" style="padding:16px">All clear — nothing needs attention 🎉</div>'; return; }
-    el.innerHTML = list.map((p, i) => `
-      <div class="priority-item ${p.level || 'yellow'}" onclick="priorityAction(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){priorityAction(${i})}" style="cursor:pointer">
+    if (!list.length) { el.innerHTML = '<div class="empty" style="padding:20px">All clear — every booking is assigned or completed. 🎉</div>'; return; }
+    el.innerHTML = list.map((p) => `
+      <div class="priority-item red" onclick="openBooking(${p.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){openBooking(${p.id})}" style="cursor:pointer">
         <span class="p-dot"></span>
-        <span class="p-text"><strong>${p.count}</strong> · ${esc(p.text)}</span>
-        ${p.action ? `<span class="p-action">${esc(p.action)}</span>` : ''}
+        <span class="p-text"><strong>${esc(p.customerName || 'Customer')}</strong> · ${esc(p.serviceType || 'Repair')}${p.area ? ' · ' + esc(p.area) : ''}</span>
+        <span class="p-btn">Assign →</span>
       </div>`).join('');
-    window.__priorities = list;
   }
 
-  function priorityAction(i) {
-    const p = (window.__priorities || [])[i];
-    if (!p) return;
-    if (p.filter) filterBookings(p.filter);
-    const target = p.scrollTo === 'widgets' ? document.getElementById('widgets') : document.getElementById('bookingsHead');
-    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  function scrollToCustomers() {
+    document.getElementById('customersSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // ── Pipeline (booking status counts) ───────────────────────────────────────
+  // ── Pipeline — simplified 3-step workflow (legacy statuses roll up) ──────
   function renderPipeline(counts) {
-    const map = { open: counts.open, accepted: counts.accepted, assigned: counts.assigned, on_the_way: counts.on_the_way, arrived: counts.arrived, in_progress: counts.in_progress, waiting_parts: counts.waiting_parts, completed: counts.completed, cancelled: counts.cancelled, payment_received: counts.payment_received };
-    let total = 0;
-    Object.values(counts).forEach(v => { if (v != null) total += v; });
-    document.getElementById('pipe-all').textContent = total;
-    Object.keys(map).forEach(k => {
-      const el = document.getElementById('pipe-' + k);
-      if (el) el.textContent = map[k] || 0;
-    });
-  }
-
-  // ── Business Health ────────────────────────────────────────────────────────
-  function renderHealth(h, satisfaction) {
-    if (!h) return;
-    const score = h.score || 0;
-    document.getElementById('healthScore').textContent = score;
-    const ring = document.getElementById('healthRing');
-    const C = 238.76;
-    const color = score >= 90 ? 'var(--green)' : score >= 75 ? 'var(--blue)' : score >= 60 ? 'var(--yellow)' : 'var(--red)';
-    ring.style.stroke = color;
-    setTimeout(() => { ring.style.strokeDashoffset = C - (C * score / 100); }, 60);
-
-    const label = document.getElementById('healthLabel');
-    const tagClass = score >= 90 ? 'excellent' : score >= 75 ? 'great' : score >= 60 ? 'fair' : 'risk';
-    label.innerHTML = `${esc(h.label || '—')}<span class="tag ${tagClass}">${tagClass === 'risk' ? 'At Risk' : tagClass === 'excellent' ? 'Excellent' : tagClass === 'great' ? 'Great' : 'Fair'}</span>`;
-
-    const meta = document.getElementById('healthMeta');
-    const parts = [];
-    const sat = Number(satisfaction || 0);
-    if (sat > 0) parts.push(`⭐ <b>${sat.toFixed(1)}</b> customer satisfaction`);
-    parts.push(h.updatedAt ? 'Updated ' + getTimeAgo(new Date(h.updatedAt)) : 'Based on live business data');
-    meta.innerHTML = parts.join(' · ');
-    document.getElementById('healthUpdated').textContent = h.label || '';
-
-    const checks = document.getElementById('healthChecks');
-    checks.innerHTML = (h.checks || []).map(c => `
-      <div class="h-check ${c.ok ? 'ok' : 'bad'}">
-        <span class="h-ico">${c.ok ? '✓' : '✕'}</span><span>${esc(c.label)}</span>
-      </div>`).join('');
-  }
-
-  // ── AI Performance ─────────────────────────────────────────────────────────
-  function renderAiPerf(a) {
-    if (!a) return;
-    const set = (id, v, unit) => { const el = document.getElementById(id); if (el) el.innerHTML = v + (unit ? `<span class="unit"> ${unit}</span>` : ''); };
-    set('ai-convos-today', a.conversationsToday || 0);
-    document.getElementById('ai-convos-month').textContent = (a.conversationsMonth || 0) + ' this month';
-    set('ai-bookings-today', a.bookingsCreatedToday || 0);
-    document.getElementById('ai-bookings-month').textContent = (a.bookingsCreatedMonth || 0) + ' this month';
-    set('ai-transfers-today', a.humanTransfersToday || 0);
-    document.getElementById('ai-transfers-month').textContent = (a.humanTransfersMonth || 0) + ' this month';
-    set('ai-hours-today', fmtHours(a.hoursSavedToday), 'saved');
-    document.getElementById('ai-hours-month').textContent = fmtHours(a.hoursSavedMonth) + ' this month';
-    set('ai-success-rate', (a.successRate || 0) + '%');
-    set('ai-avg-response', a.avgResponseSeconds ? '~' + a.avgResponseSeconds + 's' : '—');
-    document.getElementById('aiPerfSub').textContent = '24/7 on WhatsApp';
-  }
-
-  // ── Technician Performance ─────────────────────────────────────────────────
-  function renderTechPerf(tp) {
-    if (!tp) return;
-    const top = tp.top;
-    const list = tp.list || [];
-    const freeCount = list.filter(t => !t.busy).length;
-    document.getElementById('techFreeBadge').textContent = `${freeCount} of ${list.length} free`;
-
-    const topEl = document.getElementById('techTop');
-    if (top && top.name && top.name !== '—') {
-      topEl.innerHTML = `
-        <div class="tech-avatar">${esc(initials(top.name))}</div>
-        <div>
-          <div class="tt-name">👑 ${esc(top.name)}</div>
-          <div class="tt-sub"><span class="star">${stars(top.rating)}</span> ${top.rating ? top.rating.toFixed(1) : '—'} · ${top.busy ? 'On a job' : 'Available'}</div>
-        </div>
-        <div class="tt-stats"><div class="rev">${fmtMoney(top.revenue)}</div><div class="n">${top.repairs || 0} repairs this month</div></div>`;
-      topEl.style.display = 'flex';
-    } else { topEl.style.display = 'none'; }
-
-    const listEl = document.getElementById('techList');
-    if (!list.length) { listEl.innerHTML = '<div class="empty" style="padding:12px">No technicians added yet</div>'; return; }
-    listEl.innerHTML = list.slice(0, 7).map((t, i) => `
-      <div class="tech-row">
-        <span class="t-rank ${i === 0 ? 'top' : ''}">${i === 0 ? '🏆' : i + 1}</span>
-        <span class="t-av">${esc(initials(t.name))}</span>
-        <span class="t-name">${esc(t.name)}</span>
-        <span class="t-stat"><b>${t.repairs || 0}</b> jobs · <b>${fmtMoney(t.revenue)}</b></span>
-        <span class="busy-dot ${t.busy ? 'busy' : 'free'}" title="${t.busy ? 'On a job' : 'Available'}"></span>
-      </div>`).join('');
-  }
-
-  function initials(name) {
-    return String(name || '?').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
-  }
-  function stars(r) {
-    const n = Math.round(r || 0);
-    return '★'.repeat(Math.max(0, Math.min(5, n))) + '☆'.repeat(Math.max(0, 5 - Math.min(5, n)));
-  }
-
-  // ── Revenue chart ──────────────────────────────────────────────────────────
-  function renderRevenueChart(chart) {
-    const el = document.getElementById('revenueChart');
-    const labels = document.getElementById('chartLabels');
-    if (!chart || !chart.length) { el.innerHTML = '<div class="empty" style="width:100%">No revenue data yet</div>'; labels.innerHTML = ''; return; }
-    const maxRev = Math.max(...chart.map(d => d.revenue), 1);
-    el.innerHTML = chart.map(d => {
-      const h = Math.max(4, (d.revenue / maxRev) * 110);
-      return `<div class="chart-bar${d.revenue > 0 ? ' has-value' : ''}" style="height:${h}px" title="${new Date(d.date).toLocaleDateString('en-IN')}: ${fmtMoney(d.revenue)}"></div>`;
-    }).join('');
-    const first = chart[0]?.date ? new Date(chart[0].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
-    const last = chart[chart.length - 1]?.date ? new Date(chart[chart.length - 1].date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : '';
-    labels.innerHTML = `<span>${first}</span><span>${last}</span>`;
-    const total30 = chart.reduce((s, d) => s + (d.revenue || 0), 0);
-    document.getElementById('chartMonthBadge').textContent = fmtMoney(total30) + ' total';
-  }
-
-  // ── Business Timeline ──────────────────────────────────────────────────────
-  const TL_META = {
-    booking_created:       { icon: '📅', cls: 'booking', title: (a) => `New booking · ${esc(a.serviceType || 'Service')}` },
-    ai_booked_service:     { icon: '🤖', cls: 'ai', title: (a) => `AI booked ${esc(a.serviceType || 'a job')} via WhatsApp` },
-    payment_received:      { icon: '💰', cls: 'money', title: () => 'Payment received' },
-    job_completed:         { icon: '✅', cls: 'done', title: () => 'Repair completed' },
-    customer_reviewed:     { icon: '⭐', cls: 'star', title: () => 'Customer left a review' },
-    technician_assigned:   { icon: '👨‍🔧', cls: 'tech', title: (a) => `Technician ${esc(a.newValue || 'assigned')} assigned` },
-    invoice_sent:          { icon: '📄', cls: 'tech', title: () => 'Invoice sent' },
-    rescheduled:           { icon: '🕐', cls: 'alert', title: () => 'Booking rescheduled' },
-    customer_called:       { icon: '📞', cls: 'tech', title: () => 'Customer called in' },
-    status_change:         { icon: '🔁', cls: 'tech', title: (a) => `Status: ${esc(a.oldValue || '')} → ${esc(a.newValue || '')}` },
-    priority_change:       { icon: '⚠️', cls: 'alert', title: () => 'Priority changed' },
-    human_handoff:         { icon: '🤝', cls: 'alert', title: () => 'Conversation transferred to team' },
-  };
-  const DEFAULT_TL = { icon: '🔔', cls: 'tech', title: (a) => esc((a.action || 'update').replace(/_/g, ' ')) };
-
-  function renderTimeline(feed) {
-    const el = document.getElementById('activityFeed');
-    if (!feed.length) { el.innerHTML = '<div class="empty">No recent activity</div>'; return; }
-    el.innerHTML = feed.slice(0, 8).map(a => {
-      const meta = TL_META[a.action] || DEFAULT_TL;
-      const name = a.customerName || a.customerNumber || '';
-      const sub = a.action === 'payment_received' && a.newValue
-        ? `<b>${esc(a.newValue)}</b> from ${esc(name)}`
-        : `<b>${esc(name)}</b>${a.serviceType ? ` · ${esc(a.serviceType)}` : ''}${a.notes ? ` · ${esc(a.notes)}` : ''}`;
-      return `<div class="tl-item ${meta.cls}">
-        <div class="tl-head"><span class="tl-ico">${meta.icon}</span>${meta.title(a)}</div>
-        <div class="tl-sub">${sub}</div>
-        <div class="tl-time">${getTimeAgo(new Date(a.createdAt))}</div>
-      </div>`;
-    }).join('');
-  }
-
-  function renderFeedStrip(feed) {
-    const el = document.getElementById('feedStrip');
-    if (!feed || !feed.length) { el.innerHTML = ''; return; }
-    el.innerHTML = feed.slice(0, 6).map(a => {
-      const meta = TL_META[a.action] || DEFAULT_TL;
-      return `<div class="feed-chip"><span class="fc-ico">${meta.icon}</span><span class="fc-t">${esc(a.customerName || a.serviceType || a.action.replace(/_/g, ' '))}</span></div>`;
-    }).join('');
-  }
-
-  // ── Live toasts ────────────────────────────────────────────────────────────
-  function pushLiveToast(a) {
-    const meta = TL_META[a.action] || DEFAULT_TL;
-    const stack = document.getElementById('toastStack');
-    const t = document.createElement('div');
-    t.className = 'toast';
-    t.innerHTML = `
-      <span class="t-ico">${meta.icon}</span>
-      <div style="flex:1">
-        <div class="t-title">${meta.title(a)}</div>
-        <div class="t-body"><b>${esc(a.customerName || 'Customer')}</b>${a.serviceType ? ` · ${esc(a.serviceType)}` : ''}${a.area ? ` · ${esc(a.area)}` : ''}</div>
-        <div class="t-time">just now</div>
-      </div>
-      <span class="t-x">✕</span>`;
-    t.onclick = () => { t.classList.remove('show'); setTimeout(() => t.remove(), 350); };
-    stack.appendChild(t);
-    requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
-    // Keep max 4 toasts
-    while (stack.children.length > 4) stack.removeChild(stack.firstChild);
-    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 350); }, 6000);
+    const pending = (counts.open || 0) + (counts.accepted || 0);
+    const assigned = (counts.assigned || 0) + (counts.on_the_way || 0) + (counts.arrived || 0) + (counts.in_progress || 0) + (counts.waiting_parts || 0);
+    const completed = (counts.completed || 0) + (counts.payment_received || 0);
+    const cancelled = (counts.cancelled || 0) + (counts.rejected || 0);
+    document.getElementById('pipe-all').textContent = pending + assigned + completed + cancelled;
+    document.getElementById('pipe-pending').textContent = pending;
+    document.getElementById('pipe-assigned').textContent = assigned;
+    document.getElementById('pipe-completed').textContent = completed;
+    document.getElementById('pipe-cancelled').textContent = cancelled;
   }
 
   // ── Customer history ───────────────────────────────────────────────────────
@@ -954,15 +594,6 @@
     el.innerHTML = `<table><thead><tr><th>Customer</th><th>Phone</th><th>Visits</th><th>Total Spent</th><th>Last Visit</th></tr></thead><tbody>${
       customers.map(c => `<tr><td>${esc(c.name || 'Unknown')}</td><td>${esc(c.phone)}</td><td>${c.visits}</td><td>${fmtMoney(c.totalSpent)}</td><td>${new Date(c.lastVisit).toLocaleDateString()}</td></tr>`).join('')
     }</tbody></table>`;
-  }
-
-  function getTimeAgo(date) {
-    const s = Math.floor((Date.now() - date.getTime()) / 1000);
-    if (isNaN(s) || s < 0) return 'just now';
-    if (s < 60) return 'just now';
-    if (s < 3600) return Math.floor(s / 60) + 'm ago';
-    if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-    return Math.floor(s / 86400) + 'd ago';
   }
 
   async function loadNotificationCount() {
@@ -981,23 +612,95 @@
     loadDashboard();
   }
 
+  // Simplified status labels — everything rolls into the 3-step workflow.
+  const STATUS_LABELS = {
+    open: 'Pending', accepted: 'Pending', rejected: 'Cancelled',
+    assigned: 'Assigned', on_the_way: 'Assigned', arrived: 'Assigned',
+    in_progress: 'Assigned', waiting_parts: 'Assigned',
+    completed: 'Completed', cancelled: 'Cancelled', payment_received: 'Payment Received',
+  };
+  function inGroup(status, group) {
+    if (group === 'pending') return status === 'open' || status === 'accepted';
+    if (group === 'assigned') return ['assigned','on_the_way','arrived','in_progress','waiting_parts'].includes(status);
+    if (group === 'completed') return status === 'completed' || status === 'payment_received';
+    if (group === 'cancelled') return status === 'cancelled' || status === 'rejected';
+    return true;
+  }
+
   function renderBookings() {
     const list = document.getElementById('bookingsList');
-    const filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => b.status === currentFilter);
-    if (!filtered.length) { list.innerHTML = `<div class="empty">No ${currentFilter === 'all' ? '' : currentFilter} bookings yet.</div>`; return; }
+    const filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => inGroup(b.status, currentFilter));
+    if (!filtered.length) {
+      const label = currentFilter === 'all' ? '' : currentFilter;
+      list.innerHTML = `<div class="empty">No ${label} bookings yet. When a customer books a service, it appears here.</div>`;
+      return;
+    }
     list.innerHTML = filtered.map(b => {
-      const STATUS_LABELS = { open: 'Pending Assignment', accepted: 'Accepted', rejected: 'Rejected', assigned: 'Assigned', on_the_way: 'Technician On The Way', arrived: 'Technician Arrived', in_progress: 'Repair In Progress', waiting_parts: 'Waiting For Parts', completed: 'Completed', cancelled: 'Cancelled', payment_received: 'Payment Received' };
       const statusLabel = STATUS_LABELS[b.status] || String(b.status || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       const src = (b.source || 'whatsapp') === 'website' ? '<span class="src-badge site" title="Website chat">🌐</span>' : '<span class="src-badge wa" title="WhatsApp">💬</span>';
+      const actions = bookingActions(b);
       return `<div class="booking-card" onclick="openBooking(${b.id})">
         <div class="booking-info">
           <div class="id">${src}#${b.id} • ${new Date(b.created_at).toLocaleDateString()}</div>
           <div class="name">${esc(b.customer_name || b.customer_number)}</div>
           <div class="detail">${esc(b.service_type)} • ${esc(b.area || 'Area pending')}</div>
         </div>
-        <div class="booking-badge ${b.status}">${statusLabel}</div>
+        <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-end">
+          <div class="booking-badge ${b.status}">${statusLabel}</div>
+          ${actions}
+        </div>
       </div>`;
     }).join('');
+  }
+
+  // One meaningful action per state — nothing else to click.
+  function bookingActions(b) {
+    if (b.status === 'open' || b.status === 'accepted') {
+      return `<div class="booking-actions"><button class="q-btn q-primary" onclick="event.stopPropagation();openBooking(${b.id})">Assign Technician</button></div>`;
+    }
+    if (['assigned','on_the_way','arrived','in_progress','waiting_parts'].includes(b.status)) {
+      const safeName = esc(String(b.customer_name || 'this job')).replace(/'/g, "\\'");
+      return `<div class="booking-actions"><button class="q-btn q-primary" onclick="event.stopPropagation();quickComplete(${b.id}, '${safeName}')">Mark Completed</button></div>`;
+    }
+    if (b.status === 'completed') {
+      return `<div class="booking-actions"><button class="q-btn" onclick="event.stopPropagation();quickPay(${b.id})">Collect Payment</button></div>`;
+    }
+    return '';
+  }
+
+  // Mark Completed with the final amount → revenue updates immediately.
+  async function quickComplete(id, name) {
+    const raw = window.prompt(`Mark completed — enter the final amount for ${name || 'this job'} (leave blank for 0):`, '');
+    if (raw === null) return;
+    const finalCost = raw.trim() === '' ? 0 : parseFloat(raw);
+    const body = { action: 'update', bookingId: id, status: 'completed' };
+    if (!isNaN(finalCost) && finalCost >= 0) body.finalCost = finalCost;
+    try {
+      const res = await fetch('/api/shop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) { logout(); return; }
+      const data = await res.json();
+      if (!res.ok) { alert('Error: ' + (data.error || 'Update failed')); return; }
+      loadDashboard(); // Today's revenue + completed counts refresh instantly
+    } catch (err) { alert('Network error. Please try again.'); }
+  }
+
+  // Collect Payment — records payment_received so revenue + notifications update.
+  async function quickPay(id) {
+    try {
+      const res = await fetch('/api/shop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: 'update', bookingId: id, status: 'payment_received' }),
+      });
+      if (res.status === 401) { logout(); return; }
+      const data = await res.json();
+      if (!res.ok) { alert('Error: ' + (data.error || 'Update failed')); return; }
+      loadDashboard();
+    } catch (err) { alert('Network error. Please try again.'); }
   }
 
   function openBooking(id) { window.location.href = `/shop-booking.html?id=${id}`; }
@@ -1027,13 +730,11 @@
 
   // ── Guided Tour for Demo Mode ──────────────────────────────────────────────
   const TOUR_STEPS = [
-    { title: '👋 Welcome to CoolCare AI', body: 'This is a simulated repair business using CoolCare. Everything you see is demo data — no real customers or businesses are shown here.', selector: null },
-    { title: '💵 Money & Motion', body: 'These are the numbers that matter — revenue today, bookings coming in, conversations your AI handled, and the hours it saved your team.', selector: '#kpiGrid' },
-    { title: '🎯 Today\'s Priorities', body: 'Red needs you now, yellow can wait, green is going well. This is your morning routine — open it, scan it, act on it.', selector: '#priorities' },
-    { title: '🩺 Business Health', body: 'One number that tells you if your business is running well — AI active, no overdue repairs, fast responses, revenue growing.', selector: '#widgets' },
-    { title: '🤖 AI Performance', body: 'Every conversation your AI handles is time you don\'t spend on the phone. Bookings created, transfers, hours saved — proof your AI is earning its keep.', selector: '#widgets' },
-    { title: '📈 Live Business Feed', body: 'The timeline shows every booking, payment, and completion as it happens. Watch your business move in real time.', selector: '#activityFeed' },
-    { title: '📅 Bookings Management', body: 'Every WhatsApp enquiry from your customers appears here as a booking. Accept, assign, and track each job through completion.', selector: '.tabs' },
+    { title: '👋 Welcome to CoolCare', body: 'This is a simulated repair business using CoolCare. Everything you see is demo data — no real customers or businesses are shown here.', selector: null },
+    { title: '💵 Today\'s Numbers', body: 'Revenue earned today, bookings waiting for a technician, jobs completed, customers and monthly revenue. Every card opens the right place.', selector: '#kpiGrid' },
+    { title: '🎯 Today\'s Priorities', body: 'Bookings waiting for a technician, listed right here. Click one to assign a technician and get the job moving.', selector: '#priorities' },
+    { title: '🛠️ Bookings Workflow', body: 'Three steps only: Pending → Assigned → Completed. Open a booking to assign a technician, mark it completed, and collect payment.', selector: '.tabs' },
+    { title: '📊 Business Insights', body: 'AI performance, business health, revenue trends and customer analytics live on the Insights page — the dashboard stays focused on action.', selector: '.pipeline' },
     { title: '🎉 You\'re All Set!', body: 'Ready to automate your own repair business? Click "Get Started" to create your own account and start accepting bookings from WhatsApp today!', selector: null, isLast: true },
   ];
 

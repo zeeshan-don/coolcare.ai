@@ -5,7 +5,7 @@
 // Every demo session gets fresh, realistic data that makes the product
 // feel like it has been used by a real business for months.
 
-const { getAppBaseUrl } = require("./config");
+const { getAppBaseUrl, getHostedWebsiteUrl } = require("./config");
 
 // ═════════════════════════════════════════════════════════════════════════════
 // DATA POOLS
@@ -1335,6 +1335,7 @@ const DEMO_CACHE = {
   dashboardByParams: new Map(),
   bookingDetails: new Map(),
   revenueCharts: new Map(),
+  insights: null,
   lastCachedAt: null,
 };
 
@@ -1451,6 +1452,7 @@ function buildDemoDashboardResponse(params) {
   let totalRevenue = 0;
   let monthlyRevenue = 0;
   let weeklyRevenue = 0;
+  let revenueToday = 0;
   let completedToday = 0;
   let todayBookings = 0;
   let monthBookings = 0;
@@ -1461,6 +1463,7 @@ function buildDemoDashboardResponse(params) {
 
     if (b.status === "completed" && b.final_cost) {
       totalRevenue += b.final_cost;
+      if (b.created_days_ago < 1) revenueToday += b.final_cost;
       if (daysDiff < 30) monthlyRevenue += b.final_cost;
       if (daysDiff < 7) weeklyRevenue += b.final_cost;
     }
@@ -1475,15 +1478,36 @@ function buildDemoDashboardResponse(params) {
     ["open", "accepted", "assigned", "on_the_way", "arrived", "in_progress", "waiting_parts"].includes(b.status)
   ).length;
 
+  // Today's revenue vs the 7-day average (excl. today) — a business signal,
+  // not analysis. Mirrors what the real dashboard computes.
+  const prevAvgRevenue = Math.round(weeklyRevenue / 7);
+  let revenueDeltaPct = prevAvgRevenue > 0 ? Math.round(((revenueToday - prevAvgRevenue) / prevAvgRevenue) * 100) : 0;
+  revenueDeltaPct = Math.max(-99, Math.min(199, revenueDeltaPct));
+
+  // ── Today's Priorities — real work: bookings waiting for a technician ────
+  // Today's Priorities — real work: bookings waiting for a technician. The id
+  // MUST be the booking's index in BOOKINGS + 1 so the click opens the SAME
+  // booking buildDemoBookingDetailResponse resolves (bookingId - 1 → BOOKINGS).
+  const pendingAssignments = BOOKINGS
+    .filter(b => ["open", "accepted"].includes(b.status))
+    .slice(0, 8)
+    .map((b) => {
+      const cust = CUSTOMERS[b.customerIdx];
+      return {
+        id: BOOKINGS.indexOf(b) + 1,
+        customerName: cust.name,
+        customerNumber: cust.phone,
+        serviceType: b.service,
+        area: b.area,
+        createdAt: deterministicAgo(b.created_days_ago, b.customerIdx),
+      };
+    });
+
   perfMark('revenue stats done');
 
   // ── Revenue chart (30 days) ──────────────────────────────────────────────
   const revenueChart = generateRevenueChart();
   perfMark('revenue chart done');
-
-  // ── Command center payload (KPIs, priorities, health, AI & tech perf) ────
-  const commandCenter = buildCommandCenterData();
-  perfMark('command center done');
 
   // ── Activity feed (deterministic, cacheable) ─────────────────────────────
   const activityFeed = TIMELINE.slice(0, 20).map((t, i) => {
@@ -1526,6 +1550,7 @@ function buildDemoDashboardResponse(params) {
       if (!entry.first_visit || bDate < entry.first_visit) entry.first_visit = bDate;
     }
   }
+  const totalCustomers = Object.keys(customerVisitMap).length;
   const customerHistory = Object.values(customerVisitMap)
     .sort((a, b) => b.visit_count - a.visit_count)
     .slice(0, 20)
@@ -1596,18 +1621,22 @@ function buildDemoDashboardResponse(params) {
     stats: {
       todayBookings,
       pendingJobs,
+      revenueToday: Math.round(revenueToday * 100) / 100,
       completedToday,
+      revenueDeltaPct,
+      totalCustomers,
+      customersCount: totalCustomers,
       totalRevenue: Math.round(totalRevenue * 100) / 100,
       monthlyRevenue: Math.round(monthlyRevenue * 100) / 100,
       weeklyRevenue: Math.round(weeklyRevenue * 100) / 100,
       monthBookings,
     },
+    pendingAssignments,
     weeklyBookings,
     revenueChart,
     activityFeed,
     customerHistory,
     recentCustomers,
-    ...commandCenter,
     subscription: {
       id: 1,
       repair_shop_id: 1,
@@ -1629,6 +1658,8 @@ function buildDemoDashboardResponse(params) {
     subscriptionStatus: "active",
     approvalStatus: "approved",
     rejectionReason: null,
+    websiteEnabled: true,
+    websiteUrl: getHostedWebsiteUrl("coolcare-demo"),
     isDemo: true,
   };
 
@@ -1642,6 +1673,84 @@ function buildDemoDashboardResponse(params) {
   perfMark('response built and cached');
   perfReport('buildDemoDashboardResponse');
 
+  return result;
+}
+
+/**
+ * Build the Business Insights payload for demo mode.
+ * Answers "What can I learn from my business?" — business health, AI
+ * performance, technician performance, revenue trends and customer analytics.
+ * Matches handleInsights() in api/shop.js. Cacheable like the dashboard.
+ */
+function buildDemoInsightsResponse() {
+  if (DEMO_CACHE.insights && isCacheValid()) {
+    return JSON.parse(JSON.stringify(DEMO_CACHE.insights));
+  }
+
+  const commandCenter = buildCommandCenterData();
+
+  const statusCounts = { open: 0, accepted: 0, rejected: 0, assigned: 0, on_the_way: 0, arrived: 0, in_progress: 0, waiting_parts: 0, completed: 0, cancelled: 0, payment_received: 0 };
+  for (const b of BOOKINGS) {
+    if (statusCounts[b.status] !== undefined) statusCounts[b.status]++;
+  }
+
+  // ── Monthly trend — last 6 months (deterministic from created_days_ago) ──
+  const now = new Date();
+  const monthKeys = [];
+  for (let m = 5; m >= 0; m--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - m, 1);
+    monthKeys.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, d });
+  }
+  const monthMap = new Map(monthKeys.map((x) => [x.key, { bookings: 0, revenue: 0 }]));
+  for (const b of BOOKINGS) {
+    const d = new Date(now.getTime() - b.created_days_ago * 86400000);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = monthMap.get(key);
+    if (bucket) {
+      bucket.bookings++;
+      if (b.status === "completed" && b.final_cost) bucket.revenue += b.final_cost;
+    }
+  }
+  const monthlyTrend = monthKeys.map(({ key, d }) => ({
+    month: key + "-01",
+    bookings: monthMap.get(key).bookings,
+    revenue: Math.round(monthMap.get(key).revenue * 100) / 100,
+  }));
+
+  // ── Customer analytics ──────────────────────────────────────────────────
+  const custMap = new Map();
+  const recentCustSet = new Set();
+  for (const b of BOOKINGS) {
+    const cust = CUSTOMERS[b.customerIdx];
+    if (b.created_days_ago < 30) recentCustSet.add(cust.phone);
+    if (b.status !== "completed" || !b.final_cost) continue;
+    const entry = custMap.get(cust.phone) || { name: cust.name, phone: cust.phone, visits: 0, totalSpent: 0, lastVisit: null };
+    entry.visits++;
+    entry.totalSpent += b.final_cost;
+    const bDate = deterministicAgo(b.created_days_ago, b.customerIdx);
+    if (!entry.lastVisit || bDate > entry.lastVisit) entry.lastVisit = bDate;
+    custMap.set(cust.phone, entry);
+  }
+  const customers = {
+    totalCustomers: custMap.size,
+    repeatCustomers: [...custMap.values()].filter((c) => c.visits > 1).length,
+    newCustomersMonth: recentCustSet.size,
+    topCustomers: [...custMap.values()]
+      .sort((a, b) => b.totalSpent - a.totalSpent)
+      .slice(0, 10)
+      .map((c) => ({ name: c.name, phone: c.phone, visits: c.visits, totalSpent: Math.round(c.totalSpent * 100) / 100, lastVisit: c.lastVisit })),
+  };
+
+  const result = {
+    ...commandCenter,
+    statusCounts,
+    revenueChart: generateRevenueChart(),
+    monthlyTrend,
+    customers,
+    shop: { shop_name: DEMO.shop.shop_name, owner_name: DEMO.shop.owner_name },
+  };
+
+  DEMO_CACHE.insights = JSON.parse(JSON.stringify(result));
   return result;
 }
 
@@ -2062,6 +2171,7 @@ module.exports = {
   deterministicAgo,
   // Response builders
   buildDemoDashboardResponse,
+  buildDemoInsightsResponse,
   buildDemoBookingDetailResponse,
   buildDemoNotificationsResponse,
   buildDemoAiSettingsResponse,

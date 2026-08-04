@@ -44,7 +44,6 @@
 const { neon } = require("@neondatabase/serverless");
 const { insertTimelineEvent, ACTORS } = require("./repair-lifecycle");
 const { notifyShopOwner } = require("./notify");
-const { getAppBaseUrl } = require("./config");
 
 // ─── Conversation modes ──────────────────────────────────────────────────────
 const MODE = {
@@ -96,7 +95,7 @@ const I18N = {
     technicianPendingMsg: (s) => `Your booking (Ref #${s.booking_id}) has been received and our team will contact you shortly to confirm the visit.`,
     etaKnownMsg: (s, when) => `Your service is scheduled for *${when}*. We'll keep you updated.`,
     etaUnknownMsg: (s) => `Your booking (Ref #${s.booking_id}) has been received and our team will contact you shortly to confirm the visit.`,
-    callShopNow: (phone) => phone ? `For immediate assistance, please call the shop directly: ${phone}` : "For immediate assistance, please call the shop directly.",
+    callShopNow: (phone) => phone ? `For urgent updates, please call the shop directly: ${phone}` : "For urgent updates, please call the shop directly.",
     rescheduleAsk: "Sure! When would you like to reschedule? (Please share a preferred day/time.)",
     rescheduleRetry: "Could you share a preferred day/time for the reschedule?",
     rescheduleDone: (s, date) => `✅ Done! Your booking (Ref #${s.booking_id}) has been rescheduled to *${date}*. Anything else I can help with?`,
@@ -1215,7 +1214,7 @@ async function createBooking(customerNumber, state) {
           INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
           VALUES (${state.repair_shop_id}, 'new_booking', 'New Booking',
                   ${`${state.customer_name || "A customer"} booked ${state.appliance || "a service"}${state.area ? " in " + state.area : ""}. Assign a technician to start the job.`},
-                  '/shop-dashboard.html')
+                  ${`/shop-booking.html?id=${bookingId}`})
         `;
       } catch (e) { console.warn("[conversation-engine] New-booking notification failed:", e.message); }
 
@@ -1344,20 +1343,24 @@ async function handleBookingStatus(state, lang, booking) {
   return msg;
 }
 
-// TECHNICIAN_STATUS — never invent a technician. Only a REAL roster record is
-// named; otherwise the honest "we'll contact you" reply is given.
+// TECHNICIAN_STATUS — "Where is my technician?" — no live tracking, ever.
+// The customer gets the honest "received + call the shop" reply with the shop's
+// configured phone number. A REAL roster name may be mentioned, but never a
+// location, ETA, or invented technician.
 async function handleTechnicianStatus(state, lang, booking) {
   const s = t(lang);
   const b = booking || (state.booking_id ? await loadBooking(state.booking_id) : null);
-  if (b?.technician_name) return s.technicianAssignedMsg(state, b.technician_name);
-  if (b?.status === "assigned" && b?.technician_id) {
+  const phone = await loadShopPhone(state.repair_shop_id);
+  let name = null;
+  if (b?.technician_name) name = b.technician_name;
+  else if (b?.status === "assigned" && b?.technician_id) {
     try {
       const rows = await getSql()`SELECT name FROM technicians WHERE id = ${b.technician_id} LIMIT 1`;
-      if (rows[0]?.name) return s.technicianAssignedMsg(state, rows[0].name);
-    } catch (e) { /* fall through — never fabricate a name */ }
+      if (rows[0]?.name) name = rows[0].name;
+    } catch (e) { /* never fabricate a name */ }
   }
-  const phone = await loadShopPhone(state.repair_shop_id);
-  return s.technicianPendingMsg(state) + "\n" + s.callShopNow(phone);
+  const base = name ? s.technicianAssignedMsg(state, name) : s.technicianPendingMsg(state);
+  return base + "\n" + s.callShopNow(phone);
 }
 
 // REPAIR_STATUS — "Has my repair started?" — answered from LIVE booking data.
@@ -1757,11 +1760,7 @@ async function handleMessage(customerNumber, userText, messageType, mediaData, o
       if (bookingId) {
         updateConversationSummary(customerNumber, bookingId).catch(() => {});
       }
-      // Point the customer at the public tracker so they can follow the repair
-      // lifecycle without messaging us (both WhatsApp and Website Chat).
-      const trackerUrl = `${getAppBaseUrl()}/tracker.html?booking=${bookingId}`;
-      const trackerLine = s.trackerMsg ? `\n\n${s.trackerMsg(trackerUrl)}` : "";
-      return s.bookingConfirmed(state, bookingId) + trackerLine;
+      return s.bookingConfirmed(state, bookingId);
     }
 
     if (intent === INTENT.CONFIRM_NO || intent === INTENT.CANCEL_BOOKING) {
