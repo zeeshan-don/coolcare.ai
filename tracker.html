@@ -170,6 +170,14 @@
 
   function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function fmtStatus(s) { return String(s || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '); }
+  // Display labels — 'open' means the shop hasn't assigned a technician yet.
+  const STATUS_LABELS = {
+    open: 'Pending Assignment', accepted: 'Accepted', rejected: 'Rejected',
+    assigned: 'Assigned', on_the_way: 'Technician On The Way', arrived: 'Technician Arrived',
+    in_progress: 'Repair In Progress', waiting_parts: 'Waiting For Parts',
+    completed: 'Completed', cancelled: 'Cancelled', payment_received: 'Payment Received',
+  };
+  const statusLabel = (s) => STATUS_LABELS[s] || fmtStatus(s);
   function fmtMoney(v) { return v != null ? (v % 1 === 0 ? v.toFixed(2) : v) : null; }
 
   function showError(msg) {
@@ -220,8 +228,8 @@
   function statusMessage(b) {
     const t = (b.technicianName ? ' Technician: ' + b.technicianName + '.' : '');
     switch (b.status) {
-      case 'open': return 'Your booking is confirmed and we are matching it with a technician. You will receive an update shortly.';
-      case 'accepted': return 'Your booking has been accepted. A technician is being assigned to your job.';
+      case 'open': return 'Your booking has been received and our team will contact you shortly to confirm the visit.';
+      case 'accepted': return 'Your booking has been accepted. The shop will assign a technician shortly.';
       case 'assigned': return 'A technician has been assigned to your repair.' + t + ' They will contact you soon.';
       case 'on_the_way': return 'Your technician is on the way to your location.' + t;
       case 'arrived': return 'Your technician has arrived at your location.' + t;
@@ -240,14 +248,14 @@
     document.getElementById('result').classList.add('show');
     document.getElementById('rShop').textContent = data.shopName ? 'Repair with ' + data.shopName : 'Your Repair';
     document.getElementById('rRef').textContent = 'Booking #' + b.id;
-    document.getElementById('rBadge').textContent = b.statusLabel || fmtStatus(b.status);
+    document.getElementById('rBadge').textContent = b.statusLabel || statusLabel(b.status);
     document.getElementById('rBadge').className = 'badge ' + (b.status || 'open');
     document.getElementById('rStatusMsg').textContent = statusMessage(b);
 
     document.getElementById('rService').textContent = b.serviceType || '—';
     document.getElementById('rAddress').textContent = b.address || b.area || '—';
     document.getElementById('rWhen').textContent = b.urgency || '—';
-    document.getElementById('rTech').textContent = b.technicianName || 'To be assigned';
+    document.getElementById('rTech').textContent = b.technicianName || 'Not assigned yet';
     const est = b.estimatedCost, fin = b.finalCost;
     document.getElementById('rEst').textContent = est != null ? fmtMoney(est) : 'To be confirmed after inspection';
     document.getElementById('rFinal').textContent = fin != null ? fmtMoney(fin) : '—';
@@ -260,8 +268,8 @@
       tl.innerHTML = timeline.map((e, i) => {
         const isCurrent = i === timeline.length - 1 && !['completed','cancelled','rejected','payment_received'].includes(b.status);
         const title = e.action === 'status_change'
-          ? 'Status: ' + fmtStatus(e.new_value || e.status_to)
-          : fmtStatus(e.action || 'Event');
+          ? 'Status: ' + statusLabel(e.new_value || e.status_to)
+          : statusLabel(e.action || 'Event');
         const when = new Date(e.created_at);
         const by = e.performed_by ? `<span class="tl-time"><b>${esc(e.performed_by)}</b> · ${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>` : '';
         return `

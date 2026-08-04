@@ -21,7 +21,7 @@ const { loadRepairTimeline, statusLabel: repairStatusLabel } = require("./_lib/r
 const { CURRENCIES, PLAN_PRICING, getExchangeRates, detectCurrency, detectCountry, getCountryCurrency, getPlanPricingFromDB } = require("./_lib/currency");
 
 // ─── DASHBOARD (public widget) ─────────────────────────────────────────────
-// Mask a name: "Rajesh Kumar" -> "Rajesh K."
+// Mask a name: "Jane Doe" -> "Jane D."
 function maskName(name) {
   if (!name) return "Customer";
   const parts = name.trim().split(/\s+/);

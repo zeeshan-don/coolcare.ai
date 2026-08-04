@@ -151,7 +151,7 @@ Once everything is deployed:
 - [ ] Test shop signup works
 - [ ] Test shop login works
 - [ ] Test job status update sends WhatsApp notification
-- [ ] Test the repair lifecycle: Pending → Assigned → On The Way → Arrived → In Progress → Completed (timeline events + customer notifications)
+- [ ] Test the repair lifecycle: Pending Assignment → Assigned → On The Way → Arrived → In Progress → Completed (timeline events + customer notifications)
 - [ ] Test the Technician Dashboard (`/tech-dashboard.html`) — technician login shows active jobs and status buttons
 
 ---

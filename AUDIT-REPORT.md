@@ -15,7 +15,7 @@ CoolCare is **not** a UI prototype. ~95% of the app is wired to real, working AP
 
 **There is exactly one genuinely missing feature block: Technician Roster Management.**
 
-The `technicians` table exists in the database, the technician *dashboard* API (`/api/technician`) exists, the booking engine auto-assigns from the `technicians` table, and the dashboard displays technician *performance* — but **nobody can create, edit, suspend, or delete a technician**. There is no UI and no CRUD API for the roster. That is why "Add Technician" appears to be a placeholder: the button/feature does not exist anywhere.
+The `technicians` table exists in the database, the technician *dashboard* API (`/api/technician`) exists, the owner manually assigns jobs from the `technicians` table, and the dashboard displays technician *performance* — but **nobody can create, edit, suspend, or delete a technician**. There is no UI and no CRUD API for the roster. That is why "Add Technician" appears to be a placeholder: the button/feature does not exist anywhere.
 
 Two smaller gaps were also found and fixed:
 
@@ -80,7 +80,7 @@ Legend: ✅ Working · ⚠️ Partial · ❌ Broken/Placeholder · ➖ Not appli
 | /api/auth | ✅ Full auth (login, signup, bootstrap, forgot/reset, demo seeding) |
 | /api/shop | ✅ Shop + admin router (bookings, settings, admin actions). ⚠️ Had **no technician roster actions** → ✅ now added |
 | /api/technician | ✅ Technician dashboard (jobs, stats, lifecycle updates) |
-| /api/bookings | ✅ Book service + legacy update + technician auto-assign |
+| /api/bookings | ✅ Book service + legacy update + manual technician assignment |
 | /api/chat | ✅ Conversation engine + website chat |
 | /api/dashboard | ✅ Dashboard, health, currency, tracker |
 | /api/payments | ✅ Gateways, checkout, webhooks, invoices, refunds |

@@ -206,6 +206,58 @@ async function notifyAdmin(shopId, subject, message) {
   await logNotification(shopId, null, "email", adminEmail, "admin_alert", result.ok ? "sent" : "failed", result.ok ? null : result.error);
 }
 
+// ─── Shop owner notification (new booking awaiting manual assignment) ───────
+async function notifyShopOwner(shopId, booking, bookingId) {
+  if (!shopId) return { ok: false, error: "No shop id" };
+
+  let shop = null;
+  try {
+    const sql = neon(process.env.DATABASE_URL);
+    const rows = await sql`SELECT shop_name, owner_name, mobile, email FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    shop = rows[0] || null;
+  } catch (e) {
+    console.warn("[notify] Owner shop lookup failed:", e.message);
+    return { ok: false, error: e.message };
+  }
+  if (!shop) return { ok: false, error: "Shop not found" };
+
+  const message =
+    `📋 *New Booking — Pending Assignment*\n` +
+    `Hi ${shop.owner_name || "there"}, a new booking has arrived and needs a technician assigned:\n\n` +
+    `• Service: ${booking.service_type || "—"}\n` +
+    `• Customer: ${booking.customer_name || "—"}\n` +
+    (booking.area ? `• Area: ${booking.area}\n` : "") +
+    (bookingId ? `• Ref #: ${bookingId}\n` : "") +
+    `\nOpen your dashboard and assign a technician to start the job.`;
+
+  const results = { whatsapp: { ok: false }, email: { ok: false } };
+
+  // WhatsApp to the owner's mobile number
+  if (shop.mobile) {
+    const wa = await sendWhatsApp(shop.mobile, message);
+    results.whatsapp = wa;
+    await logNotification(shopId, bookingId || null, "whatsapp", shop.mobile, "owner_new_booking", wa.ok ? "sent" : "failed", wa.ok ? null : wa.error);
+  }
+
+  // Email to the owner's email address
+  if (shop.email) {
+    const subject = "New Booking — Pending Assignment";
+    const safeBody = htmlEscape(message).replace(/\n/g, "<br>");
+    const htmlBody = `<div style="font-family:Inter,sans-serif;padding:24px;background:#0a0a0a;color:#ededed;">
+      <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #222;border-radius:12px;padding:32px;">
+      <h2 style="color:#fff;margin:0 0 16px;font-size:20px;">New Booking — Pending Assignment</h2>
+      <p style="color:#a3a3a3;line-height:1.6;">${safeBody}</p>
+      <hr style="border:none;border-top:1px solid #222;margin:24px 0;">
+      <p style="color:#525252;font-size:12px;margin:0;">CoolCare — Better service, one conversation at a time.</p>
+      </div></div>`;
+    const em = await sendEmail(shop.email, subject, htmlBody);
+    results.email = em;
+    await logNotification(shopId, bookingId || null, "email", shop.email, "owner_new_booking", em.ok ? "sent" : "failed", em.ok ? null : em.error);
+  }
+
+  return results;
+}
+
 // ─── Technician notification (new assignment) ──────────────────────────────
 async function notifyTechnician(techPhone, booking) {
   if (!techPhone) return;
@@ -226,6 +278,7 @@ module.exports = {
   sendEmail,
   notifyStatusChange,
   notifyAdmin,
+  notifyShopOwner,
   notifyTechnician,
   logNotification,
 };

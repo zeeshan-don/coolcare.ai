@@ -215,6 +215,16 @@
 
   let booking = null;
 
+  // Display labels for booking statuses. 'open' = Pending Assignment (no
+  // automatic assignment — the owner must assign a technician manually).
+  const STATUS_LABELS = {
+    open: 'Pending Assignment', accepted: 'Accepted', rejected: 'Rejected',
+    assigned: 'Assigned', on_the_way: 'Technician On The Way', arrived: 'Technician Arrived',
+    in_progress: 'Repair In Progress', waiting_parts: 'Waiting For Parts',
+    completed: 'Completed', cancelled: 'Cancelled', payment_received: 'Payment Received',
+  };
+  const fmtStatus = (s) => STATUS_LABELS[s] || String(s || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
   function toggleMobileMenu() {
     document.getElementById('mobileMenu').classList.toggle('open');
     document.getElementById('hamburger').classList.toggle('open');
@@ -281,7 +291,6 @@
     document.getElementById('loadingMsg').style.display = 'none';
     document.getElementById('bookingContent').style.display = 'block';
 
-    const fmtStatus = (s) => String(s || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     document.getElementById('pageTitle').textContent    = `Booking #${booking.id}`;
     document.getElementById('statusBadge').textContent  = fmtStatus(booking.status);
     document.getElementById('statusBadge').className    = `badge ${booking.status}`;
@@ -340,7 +349,6 @@
       return;
     }
 
-    const fmtStatus = (s) => String(s || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     container.innerHTML = timeline.map(entry => {
       const title = entry.action === 'status_change'
         ? `Status: ${fmtStatus(entry.status_to || entry.new_value)}`
@@ -420,7 +428,7 @@
     buttons.forEach(b => b.disabled = true);
 
     // When assigning, use the roster selection so the booking links to a real
-    // technician record (drives the technician dashboard + auto-assign logic).
+    // technician record (drives the technician dashboard + job assignment).
     const sel = document.getElementById('technicianId');
     const isAssigning = status === 'assigned';
     const technicianId = isAssigning && sel && sel.value ? parseInt(sel.value, 10) : undefined;

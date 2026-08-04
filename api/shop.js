@@ -18,7 +18,7 @@
 
 const { neon } = require("@neondatabase/serverless");
 const { requireAuth, requireRole, requirePlatformAdmin, requireSuperAdmin, requireActiveSubscription, logAdminAction, isDemoShop } = require("./_lib/auth");
-const { sendEmail, sendWhatsApp } = require("./_lib/notify");
+const { sendEmail, sendWhatsApp, notifyTechnician } = require("./_lib/notify");
 const { insertTimelineEvent, ACTORS, loadRepairTimeline, applyBookingStatusChange } = require("./_lib/repair-lifecycle");
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { validate, bookingUpdateSchema, createUserSchema, editUserSchema, createPlanSchema, editPlanSchema, aiSettingsSchema, settingsSchema, resetPasswordSchema } = require("./_lib/validate");
@@ -450,6 +450,28 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
 
   if (data.technicianName && data.technicianName !== booking.technician_name) {
     await insertTimelineEvent(sql, { bookingId: data.bookingId, action: "technician_assigned", oldValue: booking.technician_name || null, newValue: data.technicianName, actorType: ACTORS.SHOP, actorId: shopId });
+  }
+
+  // ── Technician assignment notification ────────────────────────────────────
+  // A technician only ever gets a job AFTER the owner manually assigns them.
+  // Look up the REAL roster record (scoped to this shop) and notify them
+  // (fire-and-forget). Only fires when the assignment actually changed, so a
+  // re-save of the same technician never re-sends the notification.
+  const incomingTechId = data.technicianId != null && data.technicianId !== "" ? parseInt(data.technicianId, 10) : null;
+  const techChanged = incomingTechId != null
+    ? String(incomingTechId) !== String(booking.technician_id || "")
+    : !!(data.technicianName && data.technicianName !== booking.technician_name);
+  if (techChanged) {
+    try {
+      const techId = incomingTechId || booking.technician_id;
+      const techRows = await sql`SELECT name, phone FROM technicians WHERE id = ${techId} AND repair_shop_id = ${shopId} LIMIT 1`;
+      const tech = techRows[0];
+      if (tech?.phone) {
+        const b = (await sql`SELECT * FROM bookings WHERE id = ${data.bookingId} LIMIT 1`)[0];
+        notifyTechnician(tech.phone, { ...b, technician_name: b.technician_name || tech.name })
+          .catch((err) => console.warn("[shop/update] Technician notify failed:", err.message));
+      }
+    } catch (e) { console.warn("[shop/update] Technician notify lookup failed:", e.message); }
   }
   if (data.priority && data.priority !== booking.priority) {
     await insertTimelineEvent(sql, { bookingId: data.bookingId, action: "priority_change", oldValue: booking.priority || 'normal', newValue: data.priority, actorType: ACTORS.SHOP, actorId: shopId });

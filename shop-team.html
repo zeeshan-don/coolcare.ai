@@ -155,10 +155,10 @@
   <div class="modal">
     <h2 id="modalTitle">Add Technician</h2>
     <input type="hidden" id="editTechId">
-    <div class="field"><label>Full Name *</label><input id="tName" type="text" placeholder="e.g. Rajesh Kumar" maxlength="100"></div>
+    <div class="field"><label>Full Name *</label><input id="tName" type="text" placeholder="Technician's full name" maxlength="100"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
       <div class="field"><label>Phone</label><input id="tPhone" type="tel" placeholder="+91 98765 43210"></div>
-      <div class="field"><label>Email</label><input id="tEmail" type="email" placeholder="rajesh@example.com"></div>
+      <div class="field"><label>Email</label><input id="tEmail" type="email" placeholder="tech@example.com"></div>
     </div>
     <div class="field">
       <label>Specialization <span style="font-weight:400;color:var(--muted)">(comma separated)</span></label>
@@ -168,7 +168,7 @@
     <div class="field">
       <label>Services <span style="font-weight:400;color:var(--muted)">(comma separated)</span></label>
       <input id="tServices" type="text" placeholder="AC Repair, AC Service, Refrigerator Repair" value="">
-      <div class="hint">Services this technician can handle — used for auto-assignment.</div>
+      <div class="hint">Services this technician can handle — helps you match the right person to each job.</div>
     </div>
     <div class="field"><label>Status</label>
       <select id="tActive">

@@ -29,7 +29,7 @@ tagged with its source (🌐 Website / 💬 WhatsApp).
                           │     ┌───────────────────────────────────┐  │
                           │     │  handleMessage() state machine    │  │
                           │     │  · booking flow (i18n en/hi/ta/ar)│  │
-                          │     │  · technician auto-assignment     │  │
+                          │     │  · manual technician assignment  │  │
                           │     │  · human handoff                 │  │
                           │     │  · smart scheduling              │  │
                           │     │  · knowledge base                │  │
@@ -193,7 +193,8 @@ widget resolves its API base from its own script URL automatically.
    handoff, and i18n must behave exactly as before (same engine, same DB).
 5. **Verify widget** — open a shop with widget enabled; run a full booking flow
    from the widget; confirm the booking appears in the dashboard with 🌐 badge
-   and a technician is auto-assigned.
+   and the booking stays in Pending Assignment until the shop owner assigns a
+   technician from the roster.
 6. Optional: point `widget.coolcare.zeeshstudios.in` subdomain at the deployment.
 7. Update `DEPLOYMENT-CHECKLIST.md` if desired.
 
@@ -215,7 +216,7 @@ widget resolves its API base from its own script URL automatically.
 
 **Business hours**
 - [ ] Outside hours → offline banner + offline message shown
-- [ ] Booking still created outside hours; technician still assigned
+- [ ] Booking still created outside hours; booking stays Pending Assignment
 
 **Dashboard (one dashboard, two channels)**
 - [ ] Website booking appears with 🌐 badge; WhatsApp with 💬

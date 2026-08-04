@@ -865,9 +865,10 @@ test("DASHBOARD: whatsapp and website produce IDENTICAL dashboard data shape", a
   assert.equal(waA.total_conversations, webA.total_conversations);
   assert.equal(waA.booking_completed, webA.booking_completed);
 
-  // Both channels send exactly one notification each
-  assert.equal(db.notifications.filter((x) => x.repair_shop_id === 1001).length, 1);
-  assert.equal(db.notifications.filter((x) => x.repair_shop_id === 1002).length, 1);
+  // Both channels send exactly two notifications each (conversation started +
+  // new booking awaiting manual technician assignment).
+  assert.equal(db.notifications.filter((x) => x.repair_shop_id === 1001).length, 2);
+  assert.equal(db.notifications.filter((x) => x.repair_shop_id === 1002).length, 2);
 });
 
 test("DASHBOARD: human handoff writes human_handoff analytics + notification", async () => {

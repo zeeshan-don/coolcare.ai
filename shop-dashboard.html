@@ -377,7 +377,7 @@
   <!-- ═══ Pipeline — booking status counts (kept feature, now clickable filters) ═══ -->
   <div class="pipeline" id="pipeline">
     <div class="pipe-chip active" data-filter="all" onclick="filterBookings('all')">All<span class="pc-count" id="pipe-all">0</span></div>
-    <div class="pipe-chip red" data-filter="open" onclick="filterBookings('open')"><span class="pc-dot"></span>Pending<span class="pc-count" id="pipe-open">0</span></div>
+    <div class="pipe-chip red" data-filter="open" onclick="filterBookings('open')"><span class="pc-dot"></span>Pending Assignment<span class="pc-count" id="pipe-open">0</span></div>
     <div class="pipe-chip yellow" data-filter="accepted" onclick="filterBookings('accepted')"><span class="pc-dot"></span>Accepted<span class="pc-count" id="pipe-accepted">0</span></div>
     <div class="pipe-chip blue" data-filter="assigned" onclick="filterBookings('assigned')"><span class="pc-dot"></span>Assigned<span class="pc-count" id="pipe-assigned">0</span></div>
     <div class="pipe-chip" data-filter="on_the_way" onclick="filterBookings('on_the_way')"><span class="pc-dot"></span>On The Way<span class="pc-count" id="pipe-on_the_way">0</span></div>
@@ -453,7 +453,7 @@
 
   <div class="tabs">
     <div class="tab active" data-filter="all" onclick="filterBookings('all')">All</div>
-    <div class="tab" data-filter="open" onclick="filterBookings('open')">Pending</div>
+    <div class="tab" data-filter="open" onclick="filterBookings('open')">Pending Assignment</div>
     <div class="tab" data-filter="accepted" onclick="filterBookings('accepted')">Accepted</div>
     <div class="tab" data-filter="assigned" onclick="filterBookings('assigned')">Assigned</div>
     <div class="tab" data-filter="on_the_way" onclick="filterBookings('on_the_way')">On The Way</div>
@@ -986,7 +986,8 @@
     const filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => b.status === currentFilter);
     if (!filtered.length) { list.innerHTML = `<div class="empty">No ${currentFilter === 'all' ? '' : currentFilter} bookings yet.</div>`; return; }
     list.innerHTML = filtered.map(b => {
-      const statusLabel = String(b.status || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const STATUS_LABELS = { open: 'Pending Assignment', accepted: 'Accepted', rejected: 'Rejected', assigned: 'Assigned', on_the_way: 'Technician On The Way', arrived: 'Technician Arrived', in_progress: 'Repair In Progress', waiting_parts: 'Waiting For Parts', completed: 'Completed', cancelled: 'Cancelled', payment_received: 'Payment Received' };
+      const statusLabel = STATUS_LABELS[b.status] || String(b.status || '').split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       const src = (b.source || 'whatsapp') === 'website' ? '<span class="src-badge site" title="Website chat">🌐</span>' : '<span class="src-badge wa" title="WhatsApp">💬</span>';
       return `<div class="booking-card" onclick="openBooking(${b.id})">
         <div class="booking-info">

@@ -11,7 +11,7 @@ const { requireAuth, requireActiveSubscription, isDemoShop } = require("./_lib/a
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
-const { sendWhatsApp } = require("./_lib/notify");
+const { sendWhatsApp, notifyShopOwner } = require("./_lib/notify");
 const { getAppBaseUrl } = require("./_lib/config");
 const { insertTimelineEvent, ACTORS } = require("./_lib/repair-lifecycle");
 const { validate } = require("./_lib/validate");
@@ -97,26 +97,22 @@ async function handleBookService(request, response, sql, shopId, body) {
     });
   } catch (e) { console.warn("[bookings/book-service] Timeline create failed:", e.message); }
 
-  // Attempt technician auto-assign
+  // No automatic technician assignment — the booking stays in "Pending
+  // Assignment" until the shop owner manually assigns a technician from the
+  // roster. Never invent or placeholder a technician.
   try {
-    const techs = await sql`
-      SELECT id, name FROM technicians
-      WHERE active = true AND repair_shop_id = ${shopId}
-        AND EXISTS (SELECT 1 FROM unnest(services) s WHERE lower(s) LIKE lower(${"%" + serviceType + "%"}))
-      LIMIT 1
+    await sql`
+      INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+      VALUES (${shopId}, 'new_booking', 'New Booking',
+              ${`${customerName} booked a ${serviceType}${area ? " in " + area : ""}. Assign a technician to start the job.`},
+              '/shop-dashboard.html')
     `;
-    if (techs.length > 0) {
-      await sql`UPDATE bookings SET technician_id = ${techs[0].id}, status = 'assigned' WHERE id = ${bookingId}`;
-      await insertTimelineEvent(sql, {
-        bookingId,
-        action: "technician_assigned",
-        newValue: techs[0].name,
-        actorType: ACTORS.SYSTEM,
-        notes: "Technician auto-assigned by the system",
-      });
-      console.log("[bookings/book-service] Auto-assigned:", techs[0].name);
-    }
-  } catch (e) { console.warn("[bookings/book-service] Auto-assign failed:", e.message); }
+  } catch (e) { console.warn("[bookings/book-service] Shop notification failed:", e.message); }
+
+  // Alert the owner directly (WhatsApp + email when configured) so a new
+  // booking is never missed between dashboard visits.
+  notifyShopOwner(shopId, { service_type: serviceType, customer_name: customerName, area }, bookingId)
+    .catch((e) => console.warn("[bookings/book-service] Owner alert failed:", e.message));
 
   // Send WhatsApp confirmation
   const msg =
@@ -127,7 +123,7 @@ async function handleBookService(request, response, sql, shopId, body) {
     (address ? `• Address: ${address}\n` : "") +
     `• Slot: ${slot}\n` +
     (bookingId ? `• Ref #: ${bookingId}\n` : "") +
-    `\nA technician will be in touch shortly. Thank you for choosing CoolCare! 🙏` +
+    `\nYour booking has been received and our team will contact you shortly to confirm the visit. Thank you for choosing CoolCare! 🙏` +
     (bookingId ? `\n\nTrack your repair anytime: ${getAppBaseUrl()}/tracker.html?booking=${bookingId}` : "");
 
   const waResult = await sendWhatsApp(customerNumber, msg);

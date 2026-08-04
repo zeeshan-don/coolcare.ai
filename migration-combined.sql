@@ -96,12 +96,8 @@ CREATE TABLE IF NOT EXISTS technicians (
   active BOOLEAN DEFAULT true
 );
 
--- Sample technicians
-INSERT INTO technicians (name, phone, active, services) VALUES
-  ('Rajesh Kumar', '+919876543210', true, ARRAY['AC no cooling', 'AC installation', 'AC service', 'Refrigerator not cooling', 'Refrigerator repair']),
-  ('Amit Singh',   '+919876543211', true, ARRAY['Geyser repair', 'Geyser no hot water', 'Washing machine not spinning', 'Washing machine repair']),
-  ('Vijay Sharma', '+919876543212', true, ARRAY['Microwave not heating', 'TV repair', 'RO not working', 'Fan repair'])
-ON CONFLICT DO NOTHING;
+-- NOTE: No sample technicians are seeded. Shops add their own technicians via
+-- the dashboard roster. The UI only ever shows technicians that exist in the DB.
 
 
 -- =============================================================================

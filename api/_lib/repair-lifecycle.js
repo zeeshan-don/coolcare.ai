@@ -29,7 +29,7 @@ const { notifyStatusChange } = require("./notify");
 
 // ─── Canonical lifecycle statuses ────────────────────────────────────────────
 const REPAIR_STATUSES = [
-  "open",           // Pending
+  "open",           // Pending Assignment
   "accepted",       // Accepted
   "rejected",       // Rejected (terminal)
   "assigned",       // Assigned
@@ -44,7 +44,7 @@ const REPAIR_STATUSES = [
 
 // Human-readable labels (website + API surfaces — no emojis).
 const STATUS_LABELS = {
-  open: "Pending",
+  open: "Pending Assignment",
   accepted: "Accepted",
   rejected: "Rejected",
   assigned: "Assigned",
@@ -299,7 +299,9 @@ async function computeRepairStats(sql, shopId) {
  * query for the full list.
  */
 async function listActiveJobs(sql, shopId, technicianId = null) {
-  const techFilter = technicianId ? sql`AND (b.technician_id = ${technicianId} OR b.technician_id IS NULL)` : sql``;
+  // A linked technician only sees jobs the shop owner manually assigned to
+  // them. Unassigned jobs stay visible to the shop (technicianId = null).
+  const techFilter = technicianId ? sql`AND b.technician_id = ${technicianId}` : sql``;
   const rows = await sql`
     SELECT b.id, b.customer_number, b.customer_name, b.customer_phone, b.service_type,
            b.area, b.address, b.urgency, b.status, b.technician_id, b.technician_name,

@@ -196,7 +196,7 @@
   function renderJobs() {
     const list = document.getElementById('jobsList');
     if (!jobs.length) {
-      list.innerHTML = '<div class="empty">No active jobs right now. New bookings will appear here automatically.</div>';
+      list.innerHTML = '<div class="empty">No jobs assigned to you yet. Jobs appear here once the shop owner assigns them to you.</div>';
       return;
     }
     list.innerHTML = jobs.map(job => renderJob(job)).join('');

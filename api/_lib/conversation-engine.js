@@ -43,6 +43,7 @@
 
 const { neon } = require("@neondatabase/serverless");
 const { insertTimelineEvent, ACTORS } = require("./repair-lifecycle");
+const { notifyShopOwner } = require("./notify");
 const { getAppBaseUrl } = require("./config");
 
 // ─── Conversation modes ──────────────────────────────────────────────────────
@@ -92,9 +93,10 @@ const I18N = {
     priceNeedsInspection: (s) => `To give you an exact quotation, our technician needs to inspect your ${s.appliance} first. No worries — your booking (Ref #${s.booking_id}) is confirmed, and we'll share the exact cost after inspection.`,
     bookingStatusHeader: (s) => `📋 *Booking Status* (Ref #${s.booking_id})`,
     technicianAssignedMsg: (s, name) => `Your technician for booking (Ref #${s.booking_id}) is *${name}*. They will contact you shortly. 🔧`,
-    technicianPendingMsg: (s) => `We're assigning a technician to your booking (Ref #${s.booking_id}). You'll receive an update shortly.`,
+    technicianPendingMsg: (s) => `Your booking (Ref #${s.booking_id}) has been received and our team will contact you shortly to confirm the visit.`,
     etaKnownMsg: (s, when) => `Your service is scheduled for *${when}*. We'll keep you updated.`,
-    etaUnknownMsg: (s) => `We'll confirm your exact service time shortly. Your booking (Ref #${s.booking_id}) is safe.`,
+    etaUnknownMsg: (s) => `Your booking (Ref #${s.booking_id}) has been received and our team will contact you shortly to confirm the visit.`,
+    callShopNow: (phone) => phone ? `For immediate assistance, please call the shop directly: ${phone}` : "For immediate assistance, please call the shop directly.",
     rescheduleAsk: "Sure! When would you like to reschedule? (Please share a preferred day/time.)",
     rescheduleRetry: "Could you share a preferred day/time for the reschedule?",
     rescheduleDone: (s, date) => `✅ Done! Your booking (Ref #${s.booking_id}) has been rescheduled to *${date}*. Anything else I can help with?`,
@@ -102,7 +104,7 @@ const I18N = {
     complaintAck: (s) => `I'm really sorry to hear that. That's not the experience we want for you. 🙏 I've flagged this to our team — let me connect you with a human so we can fix it right away.`,
     bookingClosedMsg: (s) => `Your booking (Ref #${s.booking_id}) is now closed. If you'd like to book a new repair, just say *new booking*.`,
     statusLabel: {
-      open: "Pending — awaiting technician assignment",
+      open: "Pending Assignment",
       assigned: "Confirmed — technician assigned",
       on_the_way: "Technician on the way",
       arrived: "Technician arrived",
@@ -158,9 +160,10 @@ const I18N = {
     priceNeedsInspection: (s) => `सटीक कोटेशन देने के लिए हमारे टेक्नीशियन को आपके ${s.appliance} की जांच करनी होगी। चिंता न करें — आपकी बुकिंग (Ref #${s.booking_id}) कन्फर्म है, जांच के बाद सटीक लागत बताई जाएगी।`,
     bookingStatusHeader: (s) => `📋 *बुकिंग स्थिति* (Ref #${s.booking_id})`,
     technicianAssignedMsg: (s, name) => `आपकी बुकिंग (Ref #${s.booking_id}) के लिए टेक्नीशियन *${name}* हैं। वे जल्द संपर्क करेंगे। 🔧`,
-    technicianPendingMsg: (s) => `हम आपकी बुकिंग (Ref #${s.booking_id}) के लिए टेक्नीशियन असाइन कर रहे हैं। जल्द अपडेट मिलेगा।`,
+    technicianPendingMsg: (s) => `आपकी बुकिंग (Ref #${s.booking_id}) प्राप्त हो गई है और हमारी टीम विज़िट कन्फर्म करने के लिए जल्द ही आपसे संपर्क करेगी।`,
     etaKnownMsg: (s, when) => `आपकी सेवा *${when}* के लिए निर्धारित है। हम आपको अपडेट करते रहेंगे।`,
-    etaUnknownMsg: (s) => `हम आपका सटीक सेवा समय जल्द कन्फर्म करेंगे। आपकी बुकिंग (Ref #${s.booking_id}) सुरक्षित है।`,
+    etaUnknownMsg: (s) => `आपकी बुकिंग (Ref #${s.booking_id}) प्राप्त हो गई है और हमारी टीम विज़िट कन्फर्म करने के लिए जल्द ही आपसे संपर्क करेगी।`,
+    callShopNow: (phone) => phone ? `तुरंत सहायता के लिए, कृपया सीधे शॉप को कॉल करें: ${phone}` : "तुरंत सहायता के लिए, कृपया सीधे शॉप को कॉल करें।",
     rescheduleAsk: "ज़रूर! आप कब रीशेड्यूल करना चाहेंगे? (कृपया पसंदीदा दिन/समय बताएं)",
     rescheduleRetry: "कृपया रीशेड्यूल के लिए पसंदीदा दिन/समय बताएं?",
     rescheduleDone: (s, date) => `✅ हो गया! आपकी बुकिंग (Ref #${s.booking_id}) *${date}* के लिए रीशेड्यूल हो गई है। और कुछ मदद?`,
@@ -168,7 +171,7 @@ const I18N = {
     complaintAck: (s) => `मुझे यह सुनकर बहुत खेद है। यह अनुभव हम नहीं चाहते। 🙏 मैंने इसे अपनी टीम को भेज दिया है — आपको किसी व्यक्ति से जोड़ता हूं ताकि हम इसे तुरंत ठीक कर सकें।`,
     bookingClosedMsg: (s) => `आपकी बुकिंग (Ref #${s.booking_id}) अब बंद है। नई मरम्मत बुक करने के लिए *new booking* लिखें।`,
     statusLabel: {
-      open: "लंबित — टेक्नीशियन असाइनमेंट की प्रतीक्षा",
+      open: "टेक्नीशियन असाइनमेंट लंबित",
       assigned: "कन्फर्म — टेक्नीशियन असाइन हो गया",
       on_the_way: "टेक्नीशियन रास्ते में",
       arrived: "टेक्नीशियन पहुंच गया",
@@ -223,9 +226,10 @@ const I18N = {
     priceNeedsInspection: (s) => `சரியான மேற்கோள் தர தொழில்நுட்பர் உங்கள் ${s.appliance}-ஐ முதலில் ஆய்வு செய்ய வேண்டும். கவலை வேண்டாம் — உங்கள் முன்பதிவு (Ref #${s.booking_id}) உறுதி செய்யப்பட்டுள்ளது.`,
     bookingStatusHeader: (s) => `📋 *முன்பதிவு நிலை* (Ref #${s.booking_id})`,
     technicianAssignedMsg: (s, name) => `உங்கள் முன்பதிவுக்கான (Ref #${s.booking_id}) தொழில்நுட்பர் *${name}* ஆவார். விரைவில் தொடர்புகொள்வார். 🔧`,
-    technicianPendingMsg: (s) => `உங்கள் முன்பதிவுக்கு (Ref #${s.booking_id}) தொழில்நுட்பரை ஒதுக்குகிறோம். விரைவில் அறிவிப்பு வரும்.`,
+    technicianPendingMsg: (s) => `உங்கள் முன்பதிவு (Ref #${s.booking_id}) பெறப்பட்டது, வருகையை உறுதிப்படுத்த எங்கள் குழு விரைவில் தொடர்பு கொள்ளும்.`,
     etaKnownMsg: (s, when) => `உங்கள் சேவை *${when}*-க்கு திட்டமிடப்பட்டுள்ளது. உங்களை தொடர்ந்து அறிவிப்போம்.`,
-    etaUnknownMsg: (s) => `உங்கள் சேவை நேரத்தை விரைவில் உறுதிப்படுத்துவோம். உங்கள் முன்பதிவு (Ref #${s.booking_id}) பாதுகாப்பானது.`,
+    etaUnknownMsg: (s) => `உங்கள் முன்பதிவு (Ref #${s.booking_id}) பெறப்பட்டது, வருகையை உறுதிப்படுத்த எங்கள் குழு விரைவில் தொடர்பு கொள்ளும்.`,
+    callShopNow: (phone) => phone ? `உடனடி உதவிக்கு, நேரடியாக கடையை அழைக்கவும்: ${phone}` : "உடனடி உதவிக்கு, நேரடியாக கடையை அழைக்கவும்.",
     rescheduleAsk: "நிச்சயம்! எப்போது மறு திட்டமிட விரும்புகிறீர்கள்? (விரும்பிய நாள்/நேரத்தை கூறுங்கள்)",
     rescheduleRetry: "மறு திட்டமிடலுக்கு விரும்பிய நாள்/நேரத்தை கூறுங்கள்?",
     rescheduleDone: (s, date) => `✅ முடிந்தது! உங்கள் முன்பதிவு (Ref #${s.booking_id}) *${date}*-க்கு மாற்றப்பட்டது. மேலும் உதவி?`,
@@ -233,7 +237,7 @@ const I18N = {
     complaintAck: (s) => `இதைக் கேட்டு மிகவும் வருந்துகிறேன். நாங்கள் விரும்பும் அனுபவம் அல்ல. 🙏 எங்கள் குழுவிடம் கொடுத்துள்ளேன் — உடனே சரிசெய்ய ஒருவரிடம் இணைக்கிறேன்.`,
     bookingClosedMsg: (s) => `உங்கள் முன்பதிவு (Ref #${s.booking_id}) மூடப்பட்டது. புதிய பழுதுக்கு *new booking* என்று கூறுங்கள்.`,
     statusLabel: {
-      open: "நிலுவை — தொழில்நுட்பர் ஒதுக்கீடு",
+      open: "தொழில்நுட்பர் ஒதுக்கீடு நிலுவையில்",
       assigned: "உறுதி — தொழில்நுட்பர் ஒதுக்கப்பட்டார்",
       on_the_way: "தொழில்நுட்பர் வருகிறார்",
       arrived: "தொழில்நுட்பர் வந்துவிட்டார்",
@@ -289,9 +293,10 @@ const I18N = {
     priceNeedsInspection: (s) => `لإعطائك عرض سعر دقيق، يجب على فنينا فحص ${s.appliance} أولاً. لا تقلق — حجزك (المرجع #${s.booking_id}) مؤكد وسنشارك التكلفة الدقيقة بعد الفحص.`,
     bookingStatusHeader: (s) => `📋 *حالة الحجز* (المرجع #${s.booking_id})`,
     technicianAssignedMsg: (s, name) => `الفني الخاص بحجزك (المرجع #${s.booking_id}) هو *${name}*. سيتواصل معك قريباً. 🔧`,
-    technicianPendingMsg: (s) => `نقوم بتعيين فني لحجزك (المرجع #${s.booking_id}). سنرسل لك تحديثاً قريباً.`,
+    technicianPendingMsg: (s) => `تم استلام حجزك (المرجع #${s.booking_id}) وسيتواصل فريقنا معك قريباً لتأكيد الزيارة.`,
     etaKnownMsg: (s, when) => `خدمتك مجدولة في *${when}*. سنبقيك على اطلاع.`,
-    etaUnknownMsg: (s) => `سنؤكد وقت الخدمة الدقيق قريباً. حجزك (المرجع #${s.booking_id}) آمن.`,
+    etaUnknownMsg: (s) => `تم استلام حجزك (المرجع #${s.booking_id}) وسيتواصل فريقنا معك قريباً لتأكيد الزيارة.`,
+    callShopNow: (phone) => phone ? `للمساعدة الفورية، يرجى الاتصال بالمتجر مباشرة: ${phone}` : "للمساعدة الفورية، يرجى الاتصال بالمتجر مباشرة.",
     rescheduleAsk: "بالتأكيد! متى تريد إعادة الجدولة؟ (يرجى مشاركة اليوم/الوقت المفضل)",
     rescheduleRetry: "هل يمكنك مشاركة اليوم/الوقت المفضل لإعادة الجدولة؟",
     rescheduleDone: (s, date) => `✅ تم! تمت إعادة جدولة حجزك (المرجع #${s.booking_id}) إلى *${date}*. هل هناك ما يمكنني مساعدتك به؟`,
@@ -299,7 +304,7 @@ const I18N = {
     complaintAck: (s) => `أنا آسف جداً لسماع ذلك. هذه ليست التجربة التي نريدها لك. 🙏 أبلغت فريقنا — دعني أوصلك بأحد الموظفين لإصلاح الأمر فوراً.`,
     bookingClosedMsg: (s) => `حجزك (المرجع #${s.booking_id}) مغلق الآن. لحجز إصلاح جديد، اكتب *new booking*.`,
     statusLabel: {
-      open: "قيد الانتظار — بانتظار تعيين الفني",
+      open: "بانتظار تعيين الفني",
       assigned: "مؤكد — تم تعيين الفني",
       on_the_way: "الفني في الطريق",
       arrived: "وصل الفني",
@@ -695,6 +700,17 @@ async function loadBooking(bookingId) {
     return rows.length ? rows[0] : null;
   } catch (e) {
     console.warn("[conversation-engine] Failed to load booking:", e.message);
+    return null;
+  }
+}
+
+// ─── Load the shop's contact number (for "call the shop directly" replies) ──
+async function loadShopPhone(repairShopId) {
+  if (!repairShopId) return null;
+  try {
+    const rows = await getSql()`SELECT mobile FROM repair_shops WHERE id = ${repairShopId} LIMIT 1`;
+    return rows[0]?.mobile || null;
+  } catch (e) {
     return null;
   }
 }
@@ -1189,37 +1205,28 @@ async function createBooking(customerNumber, state) {
       notes: `Booking created via ${channel === "website" ? "website chat" : "WhatsApp"}`,
     });
 
-    // Try to auto-assign technician — ALWAYS from the REAL roster record:
-    // scoped to this shop's technicians (falling back to global ones) and the
-    // booking row stores the real technician_name so every surface (dashboard,
-    // tracker, timeline, AI status replies) shows the actual assigned person.
-    let techs = [];
+    // No automatic technician assignment — the booking stays in "Pending
+    // Assignment" until the shop owner manually assigns a technician from the
+    // roster. Never invent or placeholder a technician name.
+    // Notify the shop owner that a new booking needs manual assignment.
     if (state.repair_shop_id) {
-      techs = await sql`
-        SELECT id FROM technicians WHERE active = true
-        AND (repair_shop_id = ${state.repair_shop_id} OR repair_shop_id IS NULL)
-        AND EXISTS (SELECT 1 FROM unnest(services) s WHERE lower(s) LIKE lower(${"%" + (state.appliance ?? "") + "%"}))
-        ORDER BY (repair_shop_id = ${state.repair_shop_id}) DESC
-        LIMIT 1
-      `;
-    } else {
-      techs = await sql`
-        SELECT id FROM technicians WHERE active = true
-        AND EXISTS (SELECT 1 FROM unnest(services) s WHERE lower(s) LIKE lower(${"%" + (state.appliance ?? "") + "%"}))
-        LIMIT 1
-      `;
-    }
-    if (techs.length > 0) {
-      const techRow = await sql`SELECT name FROM technicians WHERE id = ${techs[0].id} LIMIT 1`;
-      const techName = techRow[0]?.name || null;
-      await sql`UPDATE bookings SET technician_id = ${techs[0].id}, technician_name = ${techName}, status = 'assigned' WHERE id = ${bookingId}`;
-      await insertTimelineEvent(sql, {
-        bookingId,
-        action: "technician_assigned",
-        newValue: techName,
-        actorType: ACTORS.SYSTEM,
-        notes: "Technician auto-assigned by the system",
-      });
+      try {
+        await sql`
+          INSERT INTO shop_notifications (repair_shop_id, type, title, message, link)
+          VALUES (${state.repair_shop_id}, 'new_booking', 'New Booking',
+                  ${`${state.customer_name || "A customer"} booked ${state.appliance || "a service"}${state.area ? " in " + state.area : ""}. Assign a technician to start the job.`},
+                  '/shop-dashboard.html')
+        `;
+      } catch (e) { console.warn("[conversation-engine] New-booking notification failed:", e.message); }
+
+      // Alert the owner directly (WhatsApp + email when configured) so a new
+      // booking is never missed between dashboard visits.
+      notifyShopOwner(state.repair_shop_id, {
+        service_type: (state.appliance || "") + (state.issue ? " — " + state.issue : ""),
+        customer_name: state.customer_name,
+        area: state.area,
+      }, bookingId)
+        .catch((e) => console.warn("[conversation-engine] Owner alert failed:", e.message));
     }
 
     // Track analytics
@@ -1337,13 +1344,20 @@ async function handleBookingStatus(state, lang, booking) {
   return msg;
 }
 
-// TECHNICIAN_STATUS
+// TECHNICIAN_STATUS — never invent a technician. Only a REAL roster record is
+// named; otherwise the honest "we'll contact you" reply is given.
 async function handleTechnicianStatus(state, lang, booking) {
   const s = t(lang);
   const b = booking || (state.booking_id ? await loadBooking(state.booking_id) : null);
   if (b?.technician_name) return s.technicianAssignedMsg(state, b.technician_name);
-  if (b?.status === "assigned" && b?.technician_id) return s.technicianAssignedMsg(state, `#${b.technician_id}`);
-  return s.technicianPendingMsg(state);
+  if (b?.status === "assigned" && b?.technician_id) {
+    try {
+      const rows = await getSql()`SELECT name FROM technicians WHERE id = ${b.technician_id} LIMIT 1`;
+      if (rows[0]?.name) return s.technicianAssignedMsg(state, rows[0].name);
+    } catch (e) { /* fall through — never fabricate a name */ }
+  }
+  const phone = await loadShopPhone(state.repair_shop_id);
+  return s.technicianPendingMsg(state) + "\n" + s.callShopNow(phone);
 }
 
 // REPAIR_STATUS — "Has my repair started?" — answered from LIVE booking data.
@@ -1393,13 +1407,14 @@ async function handlePaymentStatus(state, lang, booking) {
   return r.notPaid(state, label);
 }
 
-// ETA
+// ETA — only a genuinely confirmed visit slot is reported. Never invent an
+// arrival time; otherwise the honest "we'll contact you" reply is given.
 async function handleEta(state, lang, booking) {
   const s = t(lang);
-  const b = booking || (state.booking_id ? await loadBooking(state.booking_id) : null);
-  const when = state.selected_slot || state.urgency || b?.urgency;
+  const when = state.selected_slot;
   if (when) return s.etaKnownMsg(state, typeof when === "string" && when.includes("T") ? when.slice(0, 16).replace("T", " ") : when);
-  return s.etaUnknownMsg(state);
+  const phone = await loadShopPhone(state.repair_shop_id);
+  return s.etaUnknownMsg(state) + "\n" + s.callShopNow(phone);
 }
 
 // CANCEL_BOOKING (backend decision — the LLM never cancels on its own)
