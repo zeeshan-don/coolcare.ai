@@ -160,6 +160,29 @@
     .billing-toggle{font:600 12px 'Inter',sans-serif;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;transition:all 0.2s}
     .billing-toggle:hover{border-color:var(--border2);color:var(--ink)}
     .billing-toggle.active{background:#fff;color:#000;border-color:#fff}
+    /* Plan toggle */
+    .plan-toggle{font:600 13px 'Inter',sans-serif;color:var(--muted);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 18px;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;gap:8px;letter-spacing:0.3px}
+    .plan-toggle:hover{border-color:var(--border2);color:var(--ink)}
+    .plan-toggle.active{background:#fff;color:#000;border-color:#fff}
+    .plan-toggle .plan-badge{font-size:10px;font-weight:700;color:var(--green);background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:99px;padding:2px 8px}
+    .plan-toggle.active .plan-badge{color:#0a0a0a;background:rgba(10,10,10,0.08);border-color:rgba(10,10,10,0.15)}
+    /* Pricing card inner */
+    .cc-plan-card{background:var(--bg);border:1px solid var(--border2);border-radius:14px;padding:36px 32px;text-align:center;transition:opacity 0.2s ease,border-color 0.2s}
+    .cc-plan-card .cc-popular{display:inline-block;color:#0a0a0a;background:linear-gradient(135deg,#f7d774,#f0b429);border-radius:99px;padding:5px 14px;font-size:11px;font-weight:800;letter-spacing:0.5px;margin-bottom:14px;box-shadow:0 4px 14px rgba(240,180,41,0.25)}
+    .cc-plan-card h3{font-size:22px;margin-bottom:4px;color:#fff}
+    .cc-plan-card .cc-sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+    .cc-price{font-size:48px;font-weight:800;color:#fff;margin:12px 0;letter-spacing:-1px}
+    .cc-save{display:inline-block;color:var(--green);font-size:12px;font-weight:700;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:99px;padding:4px 12px;margin-bottom:8px}
+    .cc-upsell{display:flex;flex-direction:column;gap:2px;justify-content:center;align-items:center;margin:6px auto 20px;padding:12px 16px;border:1px solid rgba(34,197,94,0.25);background:rgba(34,197,94,0.06);border-radius:12px;font-size:13px;color:var(--ink2);font-weight:600}
+    .cc-upsell b{color:var(--green);font-weight:700}
+    .cc-features{text-align:left;margin:0 auto 24px;max-width:300px;display:flex;flex-direction:column;gap:8px}
+    .cc-plus{text-align:left;margin:0 auto 24px;max-width:300px;border:1px solid var(--border2);border-radius:12px;padding:16px 18px;background:var(--bg2)}
+    .cc-plus-line{font-size:14px;font-weight:700;color:#fff;margin-bottom:8px}
+    .cc-plus-line::before{content:'✓';color:var(--green);font-weight:800;margin-right:8px}
+    .cc-plus-label{font-size:10px;font-weight:800;letter-spacing:1.5px;color:var(--green);margin:10px 0 10px;display:flex;align-items:center;gap:10px}
+    .cc-plus-label::before,.cc-plus-label::after{content:'';flex:1;height:1px;background:var(--border2)}
+    .cc-plus-features{display:flex;flex-direction:column;gap:8px}
+    .cc-plus-features .pf::before{content:'✓';color:var(--green);font-weight:800;font-size:12px;flex-shrink:0}
     /* FAQ */
     .faq{max-width:700px;margin:0 auto}
     .faq-item{border-bottom:1px solid var(--border);padding:20px 0}
@@ -346,6 +369,10 @@
   <!-- ── Pricing ── -->
   <section class="section" id="pricing">
     <div style="text-align:center;margin-bottom:24px;">
+      <div id="planSelector" style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;flex-wrap:wrap">
+        <button class="plan-toggle" data-plan="starter" onclick="switchPlan('starter')">CoolCare Starter</button>
+        <button class="plan-toggle active" data-plan="pro" onclick="switchPlan('pro')">CoolCare Pro <span class="plan-badge">⭐ Most Popular</span></button>
+      </div>
       <div style="display:flex;gap:6px;justify-content:center;margin-bottom:16px;flex-wrap:wrap">
         <button class="billing-toggle active" data-cycle="monthly" onclick="switchBilling('monthly')">Monthly</button>
         <button class="billing-toggle" data-cycle="quarterly" onclick="switchBilling('quarterly')">Quarterly <span style="color:var(--green);font-size:10px">-10%</span></button>
@@ -362,7 +389,7 @@
     <div class="price" style="max-width:520px;">
       <div class="tag">Pricing</div>
       <h2>Simple, honest pricing.</h2>
-      <p class="price-sub">One plan. Everything included.</p>
+      <p class="price-sub">Two simple plans — upgrade anytime.</p>
       <div id="pricingCard" style="margin-top:28px;">
         <!-- Filled dynamically -->
       </div>
@@ -459,7 +486,20 @@
   setInterval(loadQueue, 15000);
 
   // ── Currency & Dynamic Pricing ──
-  const PRO_FEATURES = [
+  // Exact pricing per plan (USD & INR are the published prices).
+  // Other currencies fall back to the API's Pro pricing; Starter is derived as 80%.
+  const PLAN_PRICING = {
+    starter: {
+      USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
+      INR: { monthly: 1300, quarterly: 3500, halfyearly: 6600, yearly: 12500 },
+    },
+    pro: {
+      USD: { monthly: 25, quarterly: 68, halfyearly: 128, yearly: 240 },
+      INR: { monthly: 1700, quarterly: 4600, halfyearly: 8700, yearly: 16500 },
+    },
+  };
+
+  const STARTER_FEATURES = [
     'WhatsApp AI assistant',
     'Live booking dashboard',
     'Unlimited technicians',
@@ -468,6 +508,15 @@
     'Growth analytics',
     'Priority support',
     'Custom AI responses',
+  ];
+
+  const PRO_EXTRA_FEATURES = [
+    'Hosted AI Website',
+    'AI Website Chat',
+    'Public Online Booking Page',
+    'Website Hosting',
+    'Custom Website Address (Slug)',
+    'Website Branding & Customization',
   ];
 
   const cycleLabels = { monthly: '/mo', quarterly: '/qtr', halfyearly: '/6mo', yearly: '/yr' };
@@ -491,6 +540,9 @@
   let currentCurrency = localStorage.getItem('cc_currency') || 'USD';
   let currentCountry = localStorage.getItem('cc_country') || null;
   let currentCycle = 'monthly';
+  let currentPlan = 'pro';
+  let apiPricingCache = null;
+  let pricingSeq = 0; // guards against stale renders when switching quickly
   const currencySelect = document.getElementById('currencySelect');
 
   // ── Auto-detect country from IP on first load ──
@@ -578,17 +630,102 @@
     loadPricing(currentCurrency);
   }
 
+  function switchPlan(plan) {
+    currentPlan = plan === 'starter' ? 'starter' : 'pro';
+    document.querySelectorAll('.plan-toggle').forEach((b) => b.classList.toggle('active', b.dataset.plan === currentPlan));
+    loadPricing(currentCurrency);
+  }
+
   function formatPrice(symbol, amount) {
     if (amount == null || Number.isNaN(amount)) return '—';
     const decimals = Number.isInteger(amount) ? 0 : 2;
-    return `${symbol}${amount.toFixed(decimals)}`;
+    const formatted = amount.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    return `${symbol}${formatted}`;
   }
 
   function getSignupUrl() {
-    let url = `/shop-signup.html?billing=${currentCycle}`;
+    let url = `/shop-signup.html?billing=${currentCycle}&plan=${currentPlan}`;
     if (currentCountry) url += `&country=${currentCountry}`;
     url += `&currency=${currentCurrency}`;
     return url;
+  }
+
+  // Pick exact published prices for USD/INR; other currencies fall back to the
+  // API's Pro pricing (Starter derived as 80% of Pro, rounded to 2 decimals).
+  function getPlanPrices(plan, data) {
+    const exact = PLAN_PRICING[plan]?.[currentCurrency];
+    if (exact) return exact;
+    const pro = data.pricing?.pro;
+    if (!pro) return null;
+    const num = (v) => { const n = parseFloat(v); return Number.isNaN(n) ? 0 : n; };
+    if (plan === 'pro') {
+      return { monthly: num(pro.monthly), quarterly: num(pro.quarterly), halfyearly: num(pro.halfyearly), yearly: num(pro.yearly) };
+    }
+    const starter = (v) => Math.round(num(v) * 0.8 * 100) / 100;
+    return { monthly: starter(pro.monthly), quarterly: starter(pro.quarterly), halfyearly: starter(pro.halfyearly), yearly: starter(pro.yearly) };
+  }
+
+  function buildPlanCard(plan, data) {
+    const prices = getPlanPrices(plan, data);
+    if (!prices) {
+      return `<div class="cc-plan-card"><div style="color:var(--muted);padding:24px">Pricing unavailable. Please try another currency.</div></div>`;
+    }
+    const symbol = data.symbol || '$';
+    const priceValue = parseFloat(prices[currentCycle]);
+    const displayPrice = `${formatPrice(symbol, priceValue)}${cycleLabels[currentCycle]}`;
+    const discount = cycleDiscounts[currentCycle] || 0;
+    const saveBadge = discount > 0
+      ? `<div class="cc-save">Save ${discount}% vs monthly</div>`
+      : '<div style="height:24px"></div>';
+    const isPro = plan === 'pro';
+
+    let body;
+    if (isPro) {
+      body = `
+        <span class="cc-popular">⭐ Most Popular</span>
+        <h3>CoolCare Pro</h3>
+        <p class="cc-sub">Everything in Starter, plus your own hosted website</p>
+        <div class="cc-price">${displayPrice}</div>
+        ${saveBadge}
+        <div class="cc-upsell">Everything in Starter <b>+ Hosted Website</b> <b>+ AI Website Chat</b></div>
+        <div class="cc-plus">
+          <div class="cc-plus-line">Everything in CoolCare Starter</div>
+          <div class="cc-plus-label">PLUS</div>
+          <div class="cc-plus-features">${PRO_EXTRA_FEATURES.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
+        </div>`;
+    } else {
+      body = `
+        <h3>CoolCare Starter</h3>
+        <p class="cc-sub">Everything you need to grow</p>
+        <div class="cc-price">${displayPrice}</div>
+        ${saveBadge}
+        <div class="cc-features">${STARTER_FEATURES.map((f) => `<div class="pf">${f}</div>`).join('')}</div>`;
+    }
+
+    return `
+      <div class="cc-plan-card">
+        ${body}
+        <a href="${getSignupUrl()}"><button class="btn-hero" style="width:100%;font-size:14px;padding:14px">${isPro ? 'Choose Pro →' : 'Choose Starter →'}</button></a>
+      </div>`;
+  }
+
+  // Prevent layout shift when switching plans: lock the card height to the
+  // tallest plan render (both plans measured at the current card width).
+  function lockCardHeight() {
+    const cardEl = document.getElementById('pricingCard');
+    if (!cardEl || !apiPricingCache) return;
+    const width = cardEl.clientWidth;
+    if (!width) return;
+    let max = 0;
+    ['starter', 'pro'].forEach((plan) => {
+      const probe = document.createElement('div');
+      probe.style.cssText = `position:absolute;visibility:hidden;left:-9999px;top:0;width:${width}px;`;
+      probe.innerHTML = buildPlanCard(plan, apiPricingCache);
+      document.body.appendChild(probe);
+      max = Math.max(max, probe.offsetHeight);
+      probe.remove();
+    });
+    cardEl.style.minHeight = max + 'px';
   }
 
   async function loadPricing(currency) {
@@ -597,34 +734,31 @@
     currencySelect.value = currentCurrency;
 
     const cardEl = document.getElementById('pricingCard');
+    const seq = ++pricingSeq;
 
     try {
       const res = await fetch(`/api/currency?currency=${encodeURIComponent(currentCurrency)}`);
       const data = await res.json();
-      const proPrices = data.pricing?.pro;
-      const symbol = data.symbol || '$';
+      apiPricingCache = data;
+      const content = buildPlanCard(currentPlan, data);
+      lockCardHeight();
 
-      if (!proPrices) {
-        cardEl.innerHTML = `<div style="color:var(--muted);padding:24px">Pricing unavailable. Please try another currency.</div>`;
-        return;
-      }
-
-      const priceValue = parseFloat(proPrices[currentCycle]);
-      const monthlyValue = parseFloat(proPrices.monthly);
-      const displayPrice = `${formatPrice(symbol, priceValue)}${cycleLabels[currentCycle]}`;
-      const discount = cycleDiscounts[currentCycle] || 0;
-
-      cardEl.innerHTML = `
-        <div style="background:var(--bg);border:1px solid var(--border2);border-radius:14px;padding:36px 32px;text-align:center;">
-          <h3 style="font-size:22px;margin-bottom:4px;color:#fff">CoolCare Pro</h3>
-          <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Everything you need to grow</p>
-          <div style="font-size:48px;font-weight:800;color:#fff;margin:12px 0;letter-spacing:-1px">${displayPrice}</div>
-          ${discount > 0 ? `<div style="display:inline-block;color:var(--green);font-size:12px;font-weight:700;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:99px;padding:4px 12px;margin-bottom:8px">Save ${discount}% vs monthly</div>` : '<div style="height:24px"></div>'}
-          <div style="text-align:left;margin:24px auto;max-width:260px;display:flex;flex-direction:column;gap:8px">${PRO_FEATURES.map((f) => `<div class="pf">${f}</div>`).join('')}</div>
-          <a href="${getSignupUrl()}"><button class="btn-hero" style="width:100%;font-size:14px;padding:14px">Get started →</button></a>
-        </div>`;
+      cardEl.style.transition = 'opacity 0.2s ease';
+      cardEl.style.opacity = '0';
+      setTimeout(() => {
+        if (seq !== pricingSeq) return; // a newer request superseded this one
+        cardEl.innerHTML = content;
+        cardEl.style.opacity = '1';
+      }, 200);
     } catch (err) {
-      cardEl.innerHTML = `<div style="color:var(--muted);padding:24px">Could not load pricing. Please refresh the page.</div>`;
+      apiPricingCache = null;
+      cardEl.style.transition = 'opacity 0.2s ease';
+      cardEl.style.opacity = '0';
+      setTimeout(() => {
+        if (seq !== pricingSeq) return;
+        cardEl.innerHTML = `<div style="color:var(--muted);padding:24px">Could not load pricing. Please refresh the page.</div>`;
+        cardEl.style.opacity = '1';
+      }, 200);
     }
   }
 
