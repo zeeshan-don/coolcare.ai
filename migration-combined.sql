@@ -1413,6 +1413,15 @@ CREATE INDEX IF NOT EXISTS idx_bookings_shop ON bookings(repair_shop_id, created
 CREATE INDEX IF NOT EXISTS idx_bookings_shop_status_created
   ON bookings(repair_shop_id, status, created_at DESC);
 
+-- 18cc. Payment & revenue tracking — completed_at is stamped when a job is
+-- marked completed; payment_status records whether the final amount has been
+-- collected. Revenue is ALWAYS computed from final_cost, never estimated_cost.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_bookings_completed_at
+  ON bookings(repair_shop_id, completed_at DESC);
+
 -- 18d. Subscription plan prices
 CREATE TABLE IF NOT EXISTS subscription_plan_prices (
   id                SERIAL PRIMARY KEY,

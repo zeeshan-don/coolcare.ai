@@ -186,46 +186,78 @@ async function loadRepairTimeline(sql, bookingId) {
 /**
  * Apply a repair status change — THE single place statuses move.
  *  1. Loads the booking (scoped to the shop by the caller beforehand).
- *  2. Updates bookings.status + updated_at.
+ *  2. Updates bookings.status + updated_at (atomically stamps completed_at
+ *     when the job is completed, and payment_status when a final amount is
+ *     captured or payment is received).
  *  3. Records a 'status_change' timeline event with actor + optional notes.
  *  4. (optionally) fires the customer notification (fire-and-forget) for
  *     meaningful milestones only.
  * Returns { booking, timeline } — the updated booking row + fresh timeline.
+ *
+ * @param {object} opts
+ * @param {number|null} [opts.finalCost]  Final amount actually paid. Saved to
+ *   final_cost (revenue source of truth) when provided. NEVER estimated_cost.
+ * @param {boolean} [opts.markPaid]       Force payment_status='paid' (e.g. the
+ *   owner confirms payment at completion time).
  */
-async function applyBookingStatusChange(sql, { bookingId, newStatus, actorType = ACTORS.SHOP, actorId = null, notes = null, notify = true, actorName = null }) {
+async function applyBookingStatusChange(sql, { bookingId, newStatus, actorType = ACTORS.SHOP, actorId = null, notes = null, notify = true, actorName = null, finalCost = null, markPaid = false }) {
   const rows = await sql`SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1`;
   if (rows.length === 0) return { ok: false, error: "Booking not found" };
   const booking = rows[0];
   const oldStatus = booking.status;
-  if (oldStatus === newStatus) {
+
+  // Compute payment semantics for the target status.
+  const finalCostValue = finalCost != null && finalCost !== "" ? parseFloat(finalCost) : null;
+  const isPaidStatus = newStatus === "payment_received";
+  const payAtCompletion = markPaid || (newStatus === "completed" && finalCostValue != null && finalCostValue >= 0);
+  const stampCompleted = newStatus === "completed";
+  // No-op if nothing about the booking actually changes.
+  const nothingToChange =
+    oldStatus === newStatus &&
+    !stampCompleted &&
+    !payAtCompletion &&
+    finalCostValue == null;
+  if (nothingToChange) {
     return { ok: true, changed: false, booking, timeline: await loadRepairTimeline(sql, bookingId) };
   }
 
-  await sql`UPDATE bookings SET status = ${newStatus}, updated_at = now() WHERE id = ${bookingId}`;
+  const setCols = [];
+  const setVals = [];
+  if (oldStatus !== newStatus) { setVals.push(newStatus); setCols.push(`status = $${setVals.length}`); }
+  if (stampCompleted) setCols.push(`completed_at = COALESCE(completed_at, now())`);
+  if (finalCostValue != null) { setVals.push(finalCostValue); setCols.push(`final_cost = $${setVals.length}`); }
+  if (payAtCompletion || isPaidStatus) setCols.push(`payment_status = 'paid'`);
+  setCols.push(`updated_at = now()`);
+  setVals.push(bookingId);
+  await sql(`UPDATE bookings SET ${setCols.join(", ")} WHERE id = $${setVals.length}`, setVals);
 
-  const notesWithActor = notes || (actorName ? `Status updated by ${actorName}` : null);
-  await insertTimelineEvent(sql, {
-    bookingId,
-    action: "status_change",
-    oldValue: oldStatus,
-    newValue: newStatus,
-    actorType,
-    actorId,
-    notes: notesWithActor,
-  });
+  if (oldStatus !== newStatus) {
+    const notesWithActor = notes || (actorName ? `Status updated by ${actorName}` : null);
+    await insertTimelineEvent(sql, {
+      bookingId,
+      action: "status_change",
+      oldValue: oldStatus,
+      newValue: newStatus,
+      actorType,
+      actorId,
+      notes: notesWithActor,
+    });
+  }
 
   const updated = (await sql`SELECT * FROM bookings WHERE id = ${bookingId} LIMIT 1`)[0] || booking;
 
   // Meaningful milestones only — never spam intermediate states.
   if (notify && NOTIFY_CUSTOMER_STATUSES.has(newStatus)) {
     let shopName = booking.shop_name;
-    if (!shopName && updated.repair_shop_id) {
+    let shopCurrency = updated.currency;
+    if (updated.repair_shop_id) {
       try {
-        const shops = await sql`SELECT shop_name FROM repair_shops WHERE id = ${updated.repair_shop_id} LIMIT 1`;
+        const shops = await sql`SELECT shop_name, currency FROM repair_shops WHERE id = ${updated.repair_shop_id} LIMIT 1`;
         shopName = shops[0]?.shop_name || null;
+        shopCurrency = shopCurrency || shops[0]?.currency || null;
       } catch (e) { /* ok */ }
     }
-    notifyStatusChange({ ...updated, shop_name: shopName }, newStatus)
+    notifyStatusChange({ ...updated, shop_name: shopName, currency: shopCurrency }, newStatus)
       .catch((err) => console.warn("[repair-lifecycle] notify failed:", err.message));
   }
 

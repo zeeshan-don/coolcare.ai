@@ -83,15 +83,16 @@ async function buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, t
     kpis.revenueDeltaPct = Math.max(-99, Math.min(199, delta)); // keep the number believable
   }
 
-  // Previous-month revenue for growth
+  // Previous-month revenue for growth (completion-time bucketing, both
+  // terminal revenue statuses so the digest matches the dashboard)
   let prevMonthRevenue = 0;
   try {
     const r = await sql`
       SELECT COALESCE(SUM(final_cost), 0) AS prev_month
       FROM bookings
-      WHERE repair_shop_id = ${shopId} AND status = 'completed'
-        AND created_at >= date_trunc('month', now()) - INTERVAL '1 month'
-        AND created_at < date_trunc('month', now())
+      WHERE repair_shop_id = ${shopId} AND status IN ('completed', 'payment_received')
+        AND COALESCE(completed_at, updated_at) >= date_trunc('month', now()) - INTERVAL '1 month'
+        AND COALESCE(completed_at, updated_at) < date_trunc('month', now())
     `;
     prevMonthRevenue = num(r[0]?.prev_month);
   } catch (e) { /* ok */ }
@@ -215,8 +216,8 @@ async function buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, t
   try {
     const rows = await sql`
       SELECT t.id, t.name, COALESCE(t.rating, 0) AS rating,
-             COUNT(CASE WHEN b.status = 'completed' AND b.created_at >= date_trunc('month', now()) THEN 1 END) AS repairs,
-             COALESCE(SUM(CASE WHEN b.status = 'completed' AND b.created_at >= date_trunc('month', now()) THEN b.final_cost ELSE 0 END), 0) AS revenue
+             COUNT(CASE WHEN b.status IN ('completed','payment_received') AND COALESCE(b.completed_at, b.updated_at) >= date_trunc('month', now()) THEN 1 END) AS repairs,
+             COALESCE(SUM(CASE WHEN b.status IN ('completed','payment_received') AND COALESCE(b.completed_at, b.updated_at) >= date_trunc('month', now()) THEN b.final_cost ELSE 0 END), 0) AS revenue
       FROM technicians t
       LEFT JOIN bookings b ON b.technician_id = t.id AND b.repair_shop_id = ${shopId}
       WHERE t.repair_shop_id = ${shopId} AND t.active = true
@@ -236,8 +237,8 @@ async function buildRealCommandCenter(sql, shopId, statusCounts, revenueChart, t
     try {
       const rows = await sql`
         SELECT t.id, t.name,
-               COUNT(CASE WHEN b.status = 'completed' AND b.created_at >= date_trunc('month', now()) THEN 1 END) AS repairs,
-               COALESCE(SUM(CASE WHEN b.status = 'completed' AND b.created_at >= date_trunc('month', now()) THEN b.final_cost ELSE 0 END), 0) AS revenue
+               COUNT(CASE WHEN b.status IN ('completed','payment_received') AND COALESCE(b.completed_at, b.updated_at) >= date_trunc('month', now()) THEN 1 END) AS repairs,
+               COALESCE(SUM(CASE WHEN b.status IN ('completed','payment_received') AND COALESCE(b.completed_at, b.updated_at) >= date_trunc('month', now()) THEN b.final_cost ELSE 0 END), 0) AS revenue
         FROM technicians t
         LEFT JOIN bookings b ON b.technician_id = t.id AND b.repair_shop_id = ${shopId}
         WHERE t.repair_shop_id = ${shopId} AND t.active = true
@@ -280,7 +281,7 @@ async function fetchCommandCenterInputs(sql, shopId) {
   } catch (e) { /* ok */ }
 
   try {
-    const rev = await sql`SELECT COALESCE(SUM(final_cost), 0) AS monthly_revenue FROM bookings WHERE repair_shop_id = ${shopId} AND status = 'completed' AND created_at >= date_trunc('month', now())`;
+    const rev = await sql`SELECT COALESCE(SUM(final_cost), 0) AS monthly_revenue FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('completed', 'payment_received') AND COALESCE(completed_at, updated_at) >= date_trunc('month', now())`;
     monthlyRevenue = parseFloat(rev[0]?.monthly_revenue || 0);
   } catch (e) { /* ok */ }
 
@@ -301,7 +302,8 @@ async function fetchCommandCenterInputs(sql, shopId) {
              COUNT(b.id) as bookings
       FROM generate_series(now() - INTERVAL '29 days', now(), '1 day') d(date)
       LEFT JOIN bookings b ON b.repair_shop_id = ${shopId}
-        AND b.created_at::date = d.date::date AND b.status = 'completed'
+        AND COALESCE(b.completed_at, b.updated_at)::date = d.date::date
+        AND b.status IN ('completed', 'payment_received')
       GROUP BY d.date ORDER BY d.date ASC
     `;
   } catch (e) { /* ok */ }

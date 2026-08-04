@@ -143,8 +143,8 @@
         <div class="info-row"><span class="info-label">Appliance / Service</span><span class="info-value" id="serviceType">—</span></div>
         <div class="info-row"><span class="info-label">Preferred Date</span><span class="info-value" id="urgency">—</span></div>
         <div class="info-row"><span class="info-label">Assigned Technician</span><span class="info-value" id="techName">—</span></div>
-        <div class="info-row"><span class="info-label">Estimated Cost</span><span class="info-value" id="estCost">—</span></div>
-        <div class="info-row"><span class="info-label">Final Cost</span><span class="info-value" id="finalCost">—</span></div>
+        <div class="info-row"><span class="info-label" id="estCostLabel">Estimated Cost</span><span class="info-value" id="estCost">—</span></div>
+        <div class="info-row"><span class="info-label" id="finalCostLabel">Final Cost</span><span class="info-value" id="finalCost">—</span></div>
       </div>
     </div>
 
@@ -185,11 +185,11 @@
           <div style="font-size:11.5px;color:var(--muted2);margin-top:5px">Pick from your team. Manage the roster in <a href="/shop-team.html" style="color:var(--ink2);text-decoration:underline">Technicians</a>.</div>
         </div>
         <div class="field">
-          <label for="estCostInput">Estimated Cost (₹)</label>
+          <label for="estCostInput">Estimated Cost (<span id="estCostInputCur">₹</span>)</label>
           <input id="estCostInput" type="number" placeholder="e.g. 500" min="0">
         </div>
         <div class="field">
-          <label for="finalCostInput">Final Cost (₹)</label>
+          <label for="finalCostInput">Final Cost (<span id="finalCostInputCur">₹</span>)</label>
           <input id="finalCostInput" type="number" placeholder="e.g. 650" min="0">
         </div>
       </div>
@@ -303,9 +303,26 @@
     document.getElementById('serviceType').textContent  = booking.service_type || '—';
     document.getElementById('urgency').textContent      = booking.urgency || '—';
     document.getElementById('techName').textContent     = booking.technician_name || booking.assigned_technician_name || '—';
-    const demoFmt = (val) => isDemo ? '₹' + Number(val).toLocaleString('en-IN') : Number(val).toLocaleString('en-US', { style:'currency', currency:'USD' });
-    document.getElementById('estCost').textContent      = booking.estimated_cost ? demoFmt(booking.estimated_cost) : '—';
-    document.getElementById('finalCost').textContent    = booking.final_cost ? demoFmt(booking.final_cost) : '—';
+    // Costs render in the SHOP's configured currency (from the shop row joined
+    // by the booking API) — never hardcoded USD. INR → ₹800 · AED → AED 120 ·
+    // KWD → KD 6 · GBP → £40 · SAR → SAR 150 · USD → $50
+    const shopCurrency = booking.shop_currency || booking.currency || 'USD';
+    const moneyFmt = (val) => {
+      const n = Number(val || 0);
+      if (isDemo || shopCurrency === 'INR') return '₹' + n.toLocaleString('en-IN');
+      if (shopCurrency === 'AED') return 'AED ' + n.toLocaleString('en-US');
+      if (shopCurrency === 'KWD') return 'KD ' + n.toLocaleString('en-US');
+      if (shopCurrency === 'GBP') return '£' + n.toLocaleString('en-GB');
+      if (shopCurrency === 'SAR') return 'SAR ' + n.toLocaleString('en-US');
+      return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+    const curSym = shopCurrency === 'INR' ? '₹' : shopCurrency === 'GBP' ? '£' : shopCurrency === 'AED' ? 'AED' : shopCurrency === 'KWD' ? 'KD' : shopCurrency === 'SAR' ? 'SAR' : '$';
+    document.getElementById('estCost').textContent      = booking.estimated_cost != null ? moneyFmt(booking.estimated_cost) : '—';
+    document.getElementById('finalCost').textContent    = booking.final_cost != null ? moneyFmt(booking.final_cost) : '—';
+    document.getElementById('estCostLabel').textContent     = `Estimated Cost (${shopCurrency})`;
+    document.getElementById('finalCostLabel').textContent   = `Final Cost (${shopCurrency})`;
+    const estCur = document.getElementById('estCostInputCur'); if (estCur) estCur.textContent = curSym;
+    const finCur = document.getElementById('finalCostInputCur'); if (finCur) finCur.textContent = curSym;
 
     if (booking.technician_notes) {
       document.getElementById('notesCard').style.display = 'block';

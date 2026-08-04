@@ -230,9 +230,9 @@ async function handleDashboard(request, response, sql, shopId, auth) {
 
   const revenueResult = await sql`
     SELECT COALESCE(SUM(final_cost), 0) as total_revenue,
-           COALESCE(SUM(CASE WHEN created_at >= date_trunc('month', now()) THEN final_cost ELSE 0 END), 0) as monthly_revenue,
-           COALESCE(SUM(CASE WHEN created_at >= date_trunc('week', now()) THEN final_cost ELSE 0 END), 0) as weekly_revenue
-    FROM bookings WHERE repair_shop_id = ${shopId} AND status = 'completed'
+           COALESCE(SUM(CASE WHEN COALESCE(completed_at, updated_at) >= date_trunc('month', now()) THEN final_cost ELSE 0 END), 0) as monthly_revenue,
+           COALESCE(SUM(CASE WHEN COALESCE(completed_at, updated_at) >= date_trunc('week', now()) THEN final_cost ELSE 0 END), 0) as weekly_revenue
+    FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('completed', 'payment_received')
   `;
   const revenue = revenueResult[0] || { total_revenue: 0, monthly_revenue: 0, weekly_revenue: 0 };
 
@@ -258,14 +258,17 @@ async function handleDashboard(request, response, sql, shopId, auth) {
   const monthResult = await sql`SELECT COUNT(*) as count FROM bookings WHERE repair_shop_id = ${shopId} AND created_at >= date_trunc('month', now())`;
   const monthBookings = parseInt(monthResult[0]?.count || '0', 10);
 
-  // Revenue chart data — daily for last 30 days
+  // Revenue chart data — daily for last 30 days, bucketed by COMPLETION time
+  // (completed_at) so a job completed today counts today even when the booking
+  // was created last week. 'payment_received' keeps counting (money collected).
   const revenueChart = await sql`
     SELECT d.date::date as date,
            COALESCE(SUM(b.final_cost), 0) as revenue,
            COUNT(b.id) as bookings
     FROM generate_series(now() - INTERVAL '29 days', now(), '1 day') d(date)
     LEFT JOIN bookings b ON b.repair_shop_id = ${shopId}
-      AND b.created_at::date = d.date::date AND b.status = 'completed'
+      AND COALESCE(b.completed_at, b.updated_at)::date = d.date::date
+      AND b.status IN ('completed', 'payment_received')
     GROUP BY d.date ORDER BY d.date ASC
   `;
 
@@ -286,7 +289,7 @@ async function handleDashboard(request, response, sql, shopId, auth) {
     SELECT customer_number, customer_name, COUNT(*) as visit_count,
            MAX(created_at) as last_visit, MIN(created_at) as first_visit,
            COALESCE(SUM(final_cost), 0) as total_spent
-    FROM bookings WHERE repair_shop_id = ${shopId} AND status = 'completed'
+    FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('completed', 'payment_received')
     GROUP BY customer_number, customer_name
     HAVING COUNT(*) >= 1
     ORDER BY visit_count DESC, last_visit DESC LIMIT 20
@@ -300,8 +303,8 @@ async function handleDashboard(request, response, sql, shopId, auth) {
       SELECT COALESCE(SUM(final_cost), 0) AS revenue_today,
              COUNT(*) AS completed_today
       FROM bookings
-      WHERE repair_shop_id = ${shopId} AND status = 'completed'
-        AND updated_at >= date_trunc('day', now())
+      WHERE repair_shop_id = ${shopId} AND status IN ('completed', 'payment_received')
+        AND COALESCE(completed_at, updated_at) >= date_trunc('day', now())
     `;
     revenueToday = parseFloat(todayRev[0]?.revenue_today || 0);
     completedToday = parseInt(todayRev[0]?.completed_today || "0", 10);
@@ -337,7 +340,7 @@ async function handleDashboard(request, response, sql, shopId, auth) {
   }
 
   const shopRows = await sql`
-    SELECT id, shop_name, owner_name, email, mobile, city, services_offered, service_areas, role
+    SELECT id, shop_name, owner_name, email, mobile, city, services_offered, service_areas, role, currency
     FROM repair_shops WHERE id = ${shopId} LIMIT 1
   `;
 
@@ -413,7 +416,8 @@ async function handleInsights(request, response, sql, shopId, auth) {
     counts.forEach((r) => { if (statusCounts[r.status] !== undefined) statusCounts[r.status] = parseInt(r.count, 10); });
   } catch (e) { /* ok */ }
 
-  // Revenue chart — daily for last 30 days
+  // Revenue chart — daily for last 30 days, bucketed by COMPLETION time so a
+  // job completed today counts today even when the booking was created earlier.
   let revenueChart = [];
   try {
     revenueChart = await sql`
@@ -422,7 +426,8 @@ async function handleInsights(request, response, sql, shopId, auth) {
              COUNT(b.id) as bookings
       FROM generate_series(now() - INTERVAL '29 days', now(), '1 day') d(date)
       LEFT JOIN bookings b ON b.repair_shop_id = ${shopId}
-        AND b.created_at::date = d.date::date AND b.status = 'completed'
+        AND COALESCE(b.completed_at, b.updated_at)::date = d.date::date
+        AND b.status IN ('completed', 'payment_received')
       GROUP BY d.date ORDER BY d.date ASC
     `;
   } catch (e) { /* ok */ }
@@ -435,7 +440,7 @@ async function handleInsights(request, response, sql, shopId, auth) {
 
   let monthlyRevenue = 0, monthBookings = 0;
   try {
-    const rev = await sql`SELECT COALESCE(SUM(final_cost), 0) AS monthly_revenue FROM bookings WHERE repair_shop_id = ${shopId} AND status = 'completed' AND created_at >= date_trunc('month', now())`;
+    const rev = await sql`SELECT COALESCE(SUM(final_cost), 0) AS monthly_revenue FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('completed', 'payment_received') AND COALESCE(completed_at, updated_at) >= date_trunc('month', now())`;
     monthlyRevenue = parseFloat(rev[0]?.monthly_revenue || 0);
   } catch (e) { /* ok */ }
   try {
@@ -466,20 +471,20 @@ async function handleInsights(request, response, sql, shopId, auth) {
     topCustomers = await sql`
       SELECT customer_name, customer_number, COUNT(*) AS visits,
              COALESCE(SUM(final_cost), 0) AS total_spent, MAX(created_at) AS last_visit
-      FROM bookings WHERE repair_shop_id = ${shopId} AND status = 'completed'
+      FROM bookings WHERE repair_shop_id = ${shopId} AND status IN ('completed', 'payment_received')
       GROUP BY customer_name, customer_number ORDER BY total_spent DESC LIMIT 10
     `;
   } catch (e) { /* ok */ }
 
-  // Monthly trend — last 6 months
+  // Monthly trend — last 6 months, bucketed by completion time
   let monthlyTrend = [];
   try {
     monthlyTrend = await sql`
-      SELECT date_trunc('month', created_at)::date AS month,
+      SELECT date_trunc('month', COALESCE(completed_at, created_at))::date AS month,
              COUNT(*) AS bookings,
-             COALESCE(SUM(CASE WHEN status = 'completed' THEN final_cost ELSE 0 END), 0) AS revenue
+             COALESCE(SUM(CASE WHEN status IN ('completed', 'payment_received') THEN final_cost ELSE 0 END), 0) AS revenue
       FROM bookings WHERE repair_shop_id = ${shopId} AND created_at >= now() - INTERVAL '6 months'
-      GROUP BY date_trunc('month', created_at)::date ORDER BY month ASC
+      GROUP BY date_trunc('month', COALESCE(completed_at, created_at))::date ORDER BY month ASC
     `;
   } catch (e) { /* ok */ }
 
@@ -488,10 +493,11 @@ async function handleInsights(request, response, sql, shopId, auth) {
     monthBookings,
   });
 
-  // Shop header — the page shows the shop name in the top bar.
+  // Shop header — the page shows the shop name in the top bar. currency is
+  // returned so the insights page formats every amount in the shop's currency.
   let shopRow = null;
   try {
-    const shopRows = await sql`SELECT id, shop_name, owner_name FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
+    const shopRows = await sql`SELECT id, shop_name, owner_name, currency FROM repair_shops WHERE id = ${shopId} LIMIT 1`;
     shopRow = shopRows[0] || null;
   } catch (e) { /* ok */ }
 
@@ -525,7 +531,7 @@ async function handleBookingDetail(request, response, sql, shopId, auth) {
   }
 
   const bookings = await sql`
-    SELECT b.*, rs.shop_name, t.name AS assigned_technician_name,
+    SELECT b.*, rs.shop_name, rs.currency AS shop_currency, t.name AS assigned_technician_name,
            t.phone AS assigned_technician_phone, t.email AS assigned_technician_email
     FROM bookings b LEFT JOIN repair_shops rs ON rs.id = b.repair_shop_id
     LEFT JOIN technicians t ON t.id = b.technician_id
@@ -592,34 +598,50 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
   if (data.technicianId !== undefined) updates.technician_id = data.technicianId ? parseInt(data.technicianId, 10) : null;
   if (data.technicianNotes !== undefined) updates.technician_notes = data.technicianNotes || null;
   if (data.estimatedCost !== undefined) updates.estimated_cost = data.estimatedCost != null ? parseFloat(data.estimatedCost) : null;
-  if (data.finalCost !== undefined) updates.final_cost = data.finalCost != null ? parseFloat(data.finalCost) : null;
+  // NOTE: final_cost is NOT written here — it is written atomically by
+  // applyBookingStatusChange() together with payment_status + completed_at so
+  // a payment capture can never leave the booking half-updated.
   if (data.priority) updates.priority = data.priority;
   if (data.rescheduleDate !== undefined) updates.reschedule_date = data.rescheduleDate || null;
   if (data.invoiceNumber !== undefined) updates.invoice_number = data.invoiceNumber || null;
   if (body.customerNotes !== undefined) updates.customer_notes = body.customerNotes || null;
   if (body.photoUrls !== undefined) updates.photo_urls = Array.isArray(body.photoUrls) ? body.photoUrls : null;
 
-  const ALLOWED_COLS = new Set(["technician_name","technician_id","technician_notes","estimated_cost","final_cost","priority","reschedule_date","invoice_number","customer_notes","photo_urls"]);
+  const ALLOWED_COLS = new Set(["technician_name","technician_id","technician_notes","estimated_cost","priority","reschedule_date","invoice_number","customer_notes","photo_urls"]);
   const setParts = []; const setValues = [];
   for (const [col, val] of Object.entries(updates)) { if (!ALLOWED_COLS.has(col)) continue; setValues.push(val); setParts.push(`${col} = $${setValues.length}`); }
+
+  // A final amount alone is a valid update — it goes through the lifecycle
+  // below (final_cost + payment_status + completed_at atomically), so it must
+  // NOT trip the "no fields to update" guard below.
+  const hasFinalCost = data.finalCost != null && data.finalCost !== "";
 
   if (setParts.length > 0) {
     setValues.push(data.bookingId, shopId);
     await sql(`UPDATE bookings SET ${setParts.join(", ")}, updated_at = now() WHERE id = $${setValues.length - 1} AND repair_shop_id = $${setValues.length}`, setValues);
-  } else if (!data.status) {
+  } else if (!data.status && !hasFinalCost) {
     return response.status(400).json({ error: "No fields to update were provided" });
   }
 
   // ── Repair lifecycle status change (single shared path) ──────────────────
   // Updates bookings.status, records the status_change timeline event with the
   // actor + optional notes, and notifies the customer on meaningful milestones.
-  if (data.status && data.status !== oldStatus) {
+  // When the owner supplies a FINAL AMOUNT (entered at "Mark Completed" or
+  // "Collect Payment"), it is saved here too — the lifecycle atomically writes
+  // final_cost + payment_status='paid' + completed_at so revenue updates the
+  // moment the payment is captured.
+  const statusChanged = !!(data.status && data.status !== oldStatus);
+  if (statusChanged || hasFinalCost) {
     await applyBookingStatusChange(sql, {
       bookingId: data.bookingId,
-      newStatus: data.status,
+      newStatus: data.status || oldStatus,
       actorType: ACTORS.SHOP,
       actorId: shopId,
       notes: data.notes || undefined,
+      finalCost: hasFinalCost ? parseFloat(data.finalCost) : null,
+      // Only ping the customer when the status actually moved — saving a final
+      // amount alone must never re-send a milestone message.
+      notify: statusChanged,
     });
   }
 
@@ -678,7 +700,7 @@ async function handleBookingUpdate(request, response, sql, shopId, body) {
     } catch (e) { console.warn("[shop/update] Payment notification failed:", e.message); }
   }
 
-  const updated = await sql`SELECT b.*, rs.shop_name FROM bookings b LEFT JOIN repair_shops rs ON rs.id = b.repair_shop_id WHERE b.id = ${data.bookingId} LIMIT 1`;
+  const updated = await sql`SELECT b.*, rs.shop_name, rs.currency AS shop_currency FROM bookings b LEFT JOIN repair_shops rs ON rs.id = b.repair_shop_id WHERE b.id = ${data.bookingId} LIMIT 1`;
   const timeline = await loadRepairTimeline(sql, data.bookingId);
 
   console.log(`[shop/update] booking #${data.bookingId} by shop #${shopId}:`, { status: data.status });

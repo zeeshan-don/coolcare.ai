@@ -6,6 +6,20 @@
 const { neon } = require("@neondatabase/serverless");
 const { htmlEscape } = require("./security");
 
+// ─── Money formatting (best-effort per shop currency) ───────────────────────
+// Revenue is ALWAYS displayed in the shop's configured currency — never a
+// hardcoded currency. INR → ₹800 · AED → AED 120 · USD → $50 · GBP → £40 · SAR → SAR 150
+function fmtMoney(amount, currency) {
+  const n = Number(amount || 0);
+  if (currency === "INR") return "₹" + n.toLocaleString("en-IN");
+  if (currency === "AED") return "AED " + n.toLocaleString("en-US");
+  if (currency === "KWD") return "KD " + n.toLocaleString("en-US");
+  if (currency === "GBP") return "£" + n.toLocaleString("en-GB");
+  if (currency === "SAR") return "SAR " + n.toLocaleString("en-US");
+  if (currency === "USD") return "$" + n.toLocaleString("en-US");
+  return currency ? `${currency} ${n.toLocaleString("en-US")}` : `$${n.toLocaleString("en-US")}`;
+}
+
 // ─── WhatsApp Message Templates ─────────────────────────────────────────────
 const STATUS_MESSAGES = {
   accepted: (b) =>
@@ -23,11 +37,11 @@ const STATUS_MESSAGES = {
   waiting_parts: (b) =>
     `⏳ *Waiting For Parts*\nHi ${b.customer_name}, your *${b.service_type}* repair needs a part that isn't in stock. We'll notify you the moment it arrives and the repair resumes. Ref #${b.id}`,
   completed: (b) =>
-    `🎉 *Repair Completed!*\nHi ${b.customer_name}, your *${b.service_type}* repair has been completed by ${b.shop_name}.${b.final_cost ? ` Total: ₹${b.final_cost}` : ""} Thank you for choosing CoolCare! 🙏`,
+    `🎉 *Repair Completed!*\nHi ${b.customer_name}, your *${b.service_type}* repair has been completed by ${b.shop_name}.${b.final_cost ? ` Total: ${fmtMoney(b.final_cost, b.currency)}` : ""} Thank you for choosing CoolCare! 🙏`,
   cancelled: (b) =>
     `🚫 *Booking Cancelled*\nHi ${b.customer_name}, your booking for *${b.service_type}* (Ref #${b.id}) has been cancelled. Please contact us if you'd like to rebook.`,
   payment_received: (b) =>
-    `💰 *Payment Received*\nHi ${b.customer_name}, we've received your payment for the *${b.service_type}* repair${b.final_cost ? ` (${b.final_cost})` : ""}. Thank you for choosing ${b.shop_name || "CoolCare"}! Ref #${b.id}`,
+    `💰 *Payment Received*\nHi ${b.customer_name}, we've received your payment for the *${b.service_type}* repair${b.final_cost ? ` (${fmtMoney(b.final_cost, b.currency)})` : ""}. Thank you for choosing ${b.shop_name || "CoolCare"}! Ref #${b.id}`,
   rescheduled: (b) =>
     `📅 *Booking Rescheduled*\nHi ${b.customer_name}, your booking for *${b.service_type}* (Ref #${b.id}) has been rescheduled to ${b.reschedule_date || "a new date"}. We'll confirm the new time shortly.`,
 };

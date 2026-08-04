@@ -407,9 +407,20 @@
     window.open(`/api/shop?action=export&${params}`, '_blank');
   }
 
-  // ── Formatting ─────────────────────────────────────────────────────────────
-  function fmt(val) { return '₹' + Number(val || 0).toLocaleString('en-IN'); }
-  function fmtMoney(val) { return isDemo ? fmt(val) : '$' + Number(val || 0).toFixed(2); }
+  // ── Formatting (shop-configured currency — never hardcoded USD) ───────────
+  // Demo sessions always render INR; real shops render their own currency:
+  // INR → ₹800 · AED → AED 120 · KWD → KD 6 · GBP → £40 · SAR → SAR 150 · USD → $50
+  let shopCurrency = (shopData.currency) || localStorage.getItem('cc_shop_currency') || 'USD';
+  function fmtMoney(val) {
+    const n = Number(val || 0);
+    if (isDemo) return '₹' + n.toLocaleString('en-IN');
+    if (shopCurrency === 'INR') return '₹' + n.toLocaleString('en-IN');
+    if (shopCurrency === 'AED') return 'AED ' + n.toLocaleString('en-US');
+    if (shopCurrency === 'KWD') return 'KD ' + n.toLocaleString('en-US');
+    if (shopCurrency === 'GBP') return '£' + n.toLocaleString('en-GB');
+    if (shopCurrency === 'SAR') return 'SAR ' + n.toLocaleString('en-US');
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
 
   // ── Unified dashboard loader ───────────────────────────────────────────────
   async function loadDashboard() {
@@ -460,6 +471,11 @@
 
       if (data.shop) {
         document.getElementById('shopName').textContent = data.shop.shop_name || '';
+        // Capture the shop's configured currency so every revenue card renders in it
+        if (data.shop.currency) {
+          shopCurrency = data.shop.currency;
+          localStorage.setItem('cc_shop_currency', shopCurrency);
+        }
         localStorage.setItem('cc_shop', JSON.stringify({ shopName: data.shop.shop_name, websiteUrl: data.websiteUrl || '' }));
         setGreeting(data.shop.owner_name || data.shop.shop_name);
       }
