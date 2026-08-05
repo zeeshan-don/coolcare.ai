@@ -154,11 +154,11 @@
       <div class="section-label">Choose Your Plan</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px">
         <button type="button" class="plan-chip" data-signup-plan="starter" onclick="selectSignupPlan('starter')" style="width:100%;background:var(--bg);border:2px solid var(--border2);border-radius:12px;padding:16px;cursor:pointer;text-align:left;transition:all 0.2s">
-          <div style="font-weight:700;color:#fff;font-size:15px">Starter <span style="color:var(--ink2);font-weight:400">$20/mo</span></div>
+          <div style="font-weight:700;color:#fff;font-size:15px">Starter <span id="chipPriceStarter" style="color:var(--ink2);font-weight:400">$20/mo</span></div>
           <div style="font-size:12px;color:var(--muted);margin-top:4px">Dashboard, WhatsApp AI, team, analytics</div>
         </button>
         <button type="button" class="plan-chip" data-signup-plan="pro" onclick="selectSignupPlan('pro')" style="width:100%;background:var(--bg);border:2px solid var(--border2);border-radius:12px;padding:16px;cursor:pointer;text-align:left;transition:all 0.2s">
-          <div style="font-weight:700;color:#fff;font-size:15px">Pro <span style="color:var(--ink2);font-weight:400">$25/mo</span></div>
+          <div style="font-weight:700;color:#fff;font-size:15px">Pro <span id="chipPricePro" style="color:var(--ink2);font-weight:400">$25/mo</span></div>
           <div style="font-size:12px;color:var(--muted);margin-top:4px">Everything in Starter, plus hosted website + chat</div>
         </button>
       </div>
@@ -220,8 +220,11 @@
   // Redirect if already logged in
   if (localStorage.getItem('cc_token')) window.location.href = '/shop-dashboard.html';
   
-  // Render country selector after detecting country
-  detectUserCountry().then(() => {
+  // Render country selector after detecting country; fetch live prices from
+  // the single backend pricing source so display and checkout always agree.
+  detectUserCountry().then(async () => {
+    await fetchPricing(detectedCurrency || urlCurrency || 'USD');
+    updateChipPrices();
     const container = document.getElementById('countrySelectorContainer');
     if (container) container.innerHTML = getCountrySelector();
   });
@@ -230,23 +233,48 @@
   const submitBtn = document.getElementById('submitBtn');
   const alert   = document.getElementById('alert');
 
-  // Plan pricing for promo code display (frontend calculates for display only)
-  const PLAN_PRICING = {
-    starter: {
-      USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
-      INR: { monthly: 1300, quarterly: 3500, halfyearly: 6600, yearly: 12500 },
-      AED: { monthly: 72, quarterly: 194.4, halfyearly: 367.2, yearly: 691.2 },
-      KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
-    },
-    pro: {
-      USD: { monthly: 25, quarterly: 68, halfyearly: 128, yearly: 240 },
-      INR: { monthly: 1700, quarterly: 4600, halfyearly: 8700, yearly: 16500 },
-      AED: { monthly: 90, quarterly: 244.8, halfyearly: 460.8, yearly: 864 },
-      KWD: { monthly: 7.5, quarterly: 20.4, halfyearly: 38.4, yearly: 72 },
-    },
-  };
+  // ── Pricing: fetched from the single backend source (api/_lib/pricing.js) ──
+  // NO prices are hardcoded on this page. /api/currency returns the exact same
+  // numbers the backend will charge, so the promo preview, the displayed price
+  // and the Razorpay order always agree.
+  let PRICING_CACHE = null; // { starter: {monthly,quarterly,halfyearly,yearly}, pro: {...} }
+
+  async function fetchPricing(currency) {
+    try {
+      const res = await fetch('/api/currency?currency=' + encodeURIComponent(currency || 'USD'));
+      if (res.ok) {
+        const data = await res.json();
+        PRICING_CACHE = data.pricing || null;
+        return data;
+      }
+    } catch (e) { /* keep the previous cache */ }
+    return null;
+  }
+
+  // Prices for the currently selected plan (cycle-first, current currency).
   function signupPlanPrices() {
-    return PLAN_PRICING[selectedSignupPlan] || PLAN_PRICING.pro;
+    const p = PRICING_CACHE && PRICING_CACHE[selectedSignupPlan];
+    if (p && p.monthly != null) return p;
+    return PRICING_CACHE && PRICING_CACHE.pro ? PRICING_CACHE.pro : null;
+  }
+
+  const CURRENCY_SYMBOLS = { USD: '$', INR: '₹', AED: 'د.إ ', KWD: 'KD ' };
+  function fmtCompact(n) {
+    const num = parseFloat(n);
+    if (Number.isNaN(num)) return '—';
+    const decimals = Number.isInteger(num) ? 0 : 2;
+    return num.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  // Show the detected currency's monthly price on the plan chips.
+  function updateChipPrices() {
+    const sym = CURRENCY_SYMBOLS[detectedCurrency] || detectedCurrency + ' ';
+    const st = PRICING_CACHE && PRICING_CACHE.starter;
+    const pr = PRICING_CACHE && PRICING_CACHE.pro;
+    const el1 = document.getElementById('chipPriceStarter');
+    const el2 = document.getElementById('chipPricePro');
+    if (el1 && st && st.monthly != null) el1.textContent = sym + fmtCompact(st.monthly) + '/mo';
+    if (el2 && pr && pr.monthly != null) el2.textContent = sym + fmtCompact(pr.monthly) + '/mo';
   }
 
   function showAlert(msg, type) {
@@ -358,6 +386,8 @@
       detectedCountry = null;
       detectedCurrency = urlCurrency || 'USD';
     }
+    // Refresh prices whenever the country/currency changes
+    fetchPricing(detectedCurrency).then(updateChipPrices);
   }
 
   // ── Load Razorpay script dynamically ──
@@ -379,7 +409,7 @@
       order_id: data.orderId,
       currency: data.currency,
       name: 'CoolCare',
-      description: 'CoolCare Pro — ' + (data.billingCycle || urlBilling || 'monthly'),
+      description: 'CoolCare ' + (selectedSignupPlan === 'starter' ? 'Starter' : 'Pro') + ' — ' + (data.billingCycle || urlBilling || 'monthly'),
       handler: function () {
         window.location.href = '/payment-success.html';
       },
@@ -395,7 +425,7 @@
         name: shop && shop.owner_name ? shop.owner_name : 'Owner',
       },
       notes: {
-        plan: 'pro',
+        plan: selectedSignupPlan,
         billing_cycle: data.billingCycle || urlBilling || 'monthly',
       },
     };
@@ -428,10 +458,16 @@
     breakdown.style.display = 'none';
     appliedPromoData = null;
     
-    // Get the display price for this billing cycle
-    const prices = signupPlanPrices()[detectedCurrency || 'USD'] || signupPlanPrices().USD;
-    const amount = prices[urlBilling] || prices.monthly;
-    
+    // The backend computes the original price from the single pricing config
+    // (frontend never sends a price). Just make sure pricing loaded for display.
+    if (!signupPlanPrices()) {
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<span style="color:var(--red);font-size:13px">Pricing unavailable. Please refresh the page.</span>';
+      btn.disabled = false;
+      btn.textContent = 'Apply';
+      return;
+    }
+
     try {
       const res = await fetch('/api/promotions', {
         method: 'POST',
@@ -439,8 +475,8 @@
         body: JSON.stringify({
           action: 'validate',
           code: code,
+          planName: selectedSignupPlan,
           billingCycle: urlBilling,
-          amount: amount,
           currency: detectedCurrency || urlCurrency,
         }),
       });
@@ -609,6 +645,31 @@
       sessionStorage.setItem('cc_checkout_shop', JSON.stringify(shopData));
 
       if (data.checkoutRequired && data.orderId && data.keyId) {
+        // ── STEP 6: verify displayed price == backend-calculated price ──
+        // If they disagree, DO NOT open Razorpay — surface an error instead.
+        // `data.baseAmount` is the pre-discount price computed by the backend
+        // from the single pricing source, so this check applies to plain and
+        // discounted checkouts alike. The discount itself is backend-computed
+        // against the same config, so `data.amount` (the order amount) stays
+        // consistent with `data.baseAmount`.
+        const cmpCurrency = data.currency || detectedCurrency || urlCurrency || 'USD';
+        // Compare in the BACKEND's chosen currency (IP detection may pick a
+        // different currency than the frontend's initial guess).
+        if (cmpCurrency !== (detectedCurrency || urlCurrency)) {
+          await fetchPricing(cmpCurrency);
+          updateChipPrices();
+        }
+        const prices = signupPlanPrices();
+        const expected = prices ? (prices[urlBilling] != null ? prices[urlBilling] : prices.monthly) : null;
+        const baseActual = Number(data.baseAmount != null ? data.baseAmount : data.amount);
+        console.log('[signup] Price verification:', { planName, billingCycle, currency: data.currency, expected, baseActual, orderAmount: data.amount, orderId: data.orderId });
+        if (expected == null || !(Math.abs(baseActual - Number(expected)) <= 0.011)) {
+          console.error('[signup] PRICE MISMATCH — refusing to open Razorpay', { expected, baseActual });
+          showAlert('Price verification failed. Please refresh and try again, or contact support.', 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create Account →';
+          return;
+        }
         console.log('[signup] Opening Razorpay checkout');
         showAlert('Account created! Opening payment...', 'success');
         await loadRazorpayScript();

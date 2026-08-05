@@ -13,6 +13,7 @@ const { requireAuth, requirePlatformAdmin, requireSuperAdmin, logAdminAction } =
 const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
+const { getPrice } = require("./_lib/pricing");
 const { z } = require("zod");
 
 // ─── Validation schemas ─────────────────────────────────────────────────────
@@ -63,7 +64,9 @@ const redeemSchema = z.object({
   planName: z.string().optional().default("pro"),
   billingCycle: z.enum(["monthly", "quarterly", "halfyearly", "yearly"]).optional().default("monthly"),
   planId: z.coerce.number().int().positive().optional(),
-  amount: z.coerce.number().min(0),
+  // Frontend never sends a price — the backend resolves it from the central
+  // pricing config (resolveOriginalAmount). Kept optional for legacy callers.
+  amount: z.coerce.number().min(0).optional(),
   currency: z.string().max(10).optional().default("INR"),
   paymentId: z.coerce.number().int().positive().nullable().optional(),
   subscriptionId: z.coerce.number().int().positive().nullable().optional(),
@@ -72,6 +75,20 @@ const redeemSchema = z.object({
 // ─── Hash a support token for storage ───────────────────────────────────────
 function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Resolve the plan's real price from the CENTRAL pricing config
+ * (api/_lib/pricing.js). Never trust a frontend-supplied amount for the
+ * original price — it only ever served as a display hint in the past.
+ */
+function resolveOriginalAmount(v) {
+  try {
+    const plan = String(v.planName || "pro").toLowerCase() === "starter" ? "starter" : "pro";
+    const amount = getPrice(plan, v.billingCycle || "monthly", v.currency || "USD");
+    if (typeof amount === "number" && amount > 0) return amount;
+  } catch (e) { /* fall through */ }
+  return v.amount || 0;
 }
 
 // ─── Check if promotion_codes table exists (handles missing table gracefully) ─
@@ -615,9 +632,9 @@ async function handleValidatePublic(request, response, sql, body) {
     }
   }
 
-  // Calculate discount
+  // Calculate discount — the base price comes from the CENTRAL pricing config.
   let discountAmount = 0;
-  const originalAmount = v.amount || 0;
+  const originalAmount = resolveOriginalAmount(v);
 
   if (code.type === "percentage_discount" && code.discount_percent !== null) {
     discountAmount = Math.round((originalAmount * code.discount_percent / 100) * 100) / 100;
@@ -775,10 +792,10 @@ async function handleValidate(request, response, sql, auth, body) {
     }
   }
 
-  // Calculate discount
+  // Calculate discount — the base price comes from the CENTRAL pricing config.
   let discountAmount = 0;
-  let finalAmount = v.amount || 0;
-  const originalAmount = v.amount || 0;
+  const originalAmount = resolveOriginalAmount(v);
+  let finalAmount = originalAmount;
 
   if (code.type === "percentage_discount" && code.discount_percent !== null) {
     discountAmount = Math.round((originalAmount * code.discount_percent / 100) * 100) / 100;
@@ -867,7 +884,7 @@ async function handleRedeem(request, response, sql, auth, body) {
           plan_name, billing_cycle, original_amount, discount_amount, final_amount, currency, status, metadata)
         VALUES (${code.id}, ${shopId}, ${request.headers["x-forwarded-for"]?.split(",")[0] || request.headers["x-real-ip"] || null},
           ${request.headers["user-agent"] || null},
-          ${v.planName}, ${v.billingCycle}, ${v.amount}, 0, ${v.amount}, ${v.currency}, 'failed',
+          ${v.planName}, ${v.billingCycle}, ${resolveOriginalAmount(v)}, 0, ${resolveOriginalAmount(v)}, ${v.currency}, 'failed',
           ${JSON.stringify({ error: validationError })}::jsonb)
       `;
     } catch (e) { /* log silently */ }
@@ -875,12 +892,13 @@ async function handleRedeem(request, response, sql, auth, body) {
     return response.status(400).json({ error: validationError });
   }
 
-  // Calculate discount
+  // Calculate discount — the base price comes from the CENTRAL pricing config.
+  const originalAmount = resolveOriginalAmount(v);
   let discountAmount = 0;
-  let finalAmount = v.amount;
+  let finalAmount = originalAmount;
 
   if (code.type === "percentage_discount" && code.discount_percent !== null) {
-    discountAmount = Math.round((v.amount * code.discount_percent / 100) * 100) / 100;
+    discountAmount = Math.round((originalAmount * code.discount_percent / 100) * 100) / 100;
   } else if (code.type === "fixed_discount" && code.discount_amount !== null) {
     discountAmount = code.discount_amount;
   }
@@ -890,7 +908,7 @@ async function handleRedeem(request, response, sql, auth, body) {
     discountAmount = code.max_discount_amount;
   }
 
-  finalAmount = Math.max(0, Math.round((v.amount - discountAmount) * 100) / 100);
+  finalAmount = Math.max(0, Math.round((originalAmount - discountAmount) * 100) / 100);
 
   // For support token: immediately activate (skip payment)
   if (code.type === "support_token") {
@@ -937,7 +955,7 @@ async function handleRedeem(request, response, sql, auth, body) {
         (SELECT email FROM repair_shops WHERE id = ${shopId}),
         ${request.headers["x-forwarded-for"]?.split(",")[0] || request.headers["x-real-ip"] || null},
         ${request.headers["user-agent"] || null},
-        ${v.planName}, ${v.billingCycle}, ${v.amount}, ${discountAmount}, ${finalAmount}, ${v.currency},
+        ${v.planName}, ${v.billingCycle}, ${originalAmount}, ${discountAmount}, ${finalAmount}, ${v.currency},
         ${v.paymentId || null}, ${v.subscriptionId || null}, 'active'
       )
       RETURNING id
@@ -950,7 +968,7 @@ async function handleRedeem(request, response, sql, auth, body) {
       redemptionId: redemption[0].id,
       discountAmount,
       finalAmount,
-      originalAmount: v.amount,
+      originalAmount,
     });
   } catch (e) {
     await sql`ROLLBACK`.catch(() => {});
@@ -1014,8 +1032,8 @@ async function validateForRedemption(sql, code, shopId, v) {
     }
   }
 
-  // Check min purchase
-  if (code.min_purchase_amount > 0 && v.amount < code.min_purchase_amount) {
+  // Check min purchase — against the CENTRAL config price, not a client hint.
+  if (code.min_purchase_amount > 0 && resolveOriginalAmount(v) < code.min_purchase_amount) {
     return `Minimum purchase amount of ${code.discount_currency} ${code.min_purchase_amount} required`;
   }
 
@@ -1064,7 +1082,7 @@ async function activateViaSupportToken(sql, code, shopId, v, discountAmount, fin
         (SELECT email FROM repair_shops WHERE id = ${shopId}),
         ${request.headers["x-forwarded-for"]?.split(",")[0] || request.headers["x-real-ip"] || null},
         ${request.headers["user-agent"] || null},
-        ${v.planName}, ${v.billingCycle}, ${v.amount}, ${discountAmount}, ${finalAmount}, ${v.currency},
+        ${v.planName}, ${v.billingCycle}, ${resolveOriginalAmount(v)}, ${discountAmount}, ${finalAmount}, ${v.currency},
         ${sub[0].id}, 'active'
       )
     `;
@@ -1128,7 +1146,7 @@ async function activateFreeTrial(sql, code, shopId, v, request) {
         (SELECT email FROM repair_shops WHERE id = ${shopId}),
         ${request.headers["x-forwarded-for"]?.split(",")[0] || request.headers["x-real-ip"] || null},
         ${request.headers["user-agent"] || null},
-        ${v.planName}, ${v.billingCycle}, ${v.amount || 0}, 0, 0, ${v.currency},
+        ${v.planName}, ${v.billingCycle}, ${resolveOriginalAmount(v)}, 0, 0, ${v.currency},
         ${sub[0].id}, 'active'
       )
     `;
@@ -1191,7 +1209,7 @@ async function activateLifetimeAccess(sql, code, shopId, v, request) {
         (SELECT email FROM repair_shops WHERE id = ${shopId}),
         ${request.headers["x-forwarded-for"]?.split(",")[0] || request.headers["x-real-ip"] || null},
         ${request.headers["user-agent"] || null},
-        ${v.planName}, 'lifetime', ${v.amount || 0}, 0, 0, ${v.currency},
+        ${v.planName}, 'lifetime', ${resolveOriginalAmount(v)}, 0, 0, ${v.currency},
         ${sub[0].id}, 'active'
       )
     `;

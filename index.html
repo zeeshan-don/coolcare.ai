@@ -486,18 +486,10 @@
   setInterval(loadQueue, 15000);
 
   // ── Currency & Dynamic Pricing ──
-  // Exact pricing per plan (USD & INR are the published prices).
-  // Other currencies fall back to the API's Pro pricing; Starter is derived as 80%.
-  const PLAN_PRICING = {
-    starter: {
-      USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
-      INR: { monthly: 1300, quarterly: 3500, halfyearly: 6600, yearly: 12500 },
-    },
-    pro: {
-      USD: { monthly: 25, quarterly: 68, halfyearly: 128, yearly: 240 },
-      INR: { monthly: 1700, quarterly: 4600, halfyearly: 8700, yearly: 16500 },
-    },
-  };
+  // NO prices are stored in this file. All prices come from GET /api/currency,
+  // which is served from the single pricing config (api/_lib/pricing.js) via
+  // the subscription_plan_prices DB mirror. The pricing page, checkout,
+  // signup and Razorpay therefore all read the SAME numbers.
 
   const STARTER_FEATURES = [
     'WhatsApp AI assistant',
@@ -650,19 +642,13 @@
     return url;
   }
 
-  // Pick exact published prices for USD/INR; other currencies fall back to the
-  // API's Pro pricing (Starter derived as 80% of Pro, rounded to 2 decimals).
+  // Prices for the selected plan+currency come straight from the backend
+  // (/api/currency) — the exact same numbers the checkout will charge.
   function getPlanPrices(plan, data) {
-    const exact = PLAN_PRICING[plan]?.[currentCurrency];
-    if (exact) return exact;
-    const pro = data.pricing?.pro;
-    if (!pro) return null;
+    const prices = data?.pricing?.[plan];
+    if (!prices) return null;
     const num = (v) => { const n = parseFloat(v); return Number.isNaN(n) ? 0 : n; };
-    if (plan === 'pro') {
-      return { monthly: num(pro.monthly), quarterly: num(pro.quarterly), halfyearly: num(pro.halfyearly), yearly: num(pro.yearly) };
-    }
-    const starter = (v) => Math.round(num(v) * 0.8 * 100) / 100;
-    return { monthly: starter(pro.monthly), quarterly: starter(pro.quarterly), halfyearly: starter(pro.halfyearly), yearly: starter(pro.yearly) };
+    return { monthly: num(prices.monthly), quarterly: num(prices.quarterly), halfyearly: num(prices.halfyearly), yearly: num(prices.yearly) };
   }
 
   function buildPlanCard(plan, data) {

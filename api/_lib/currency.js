@@ -1,8 +1,16 @@
 // api/_lib/currency.js
 // Multi-currency support with live exchange rates and IP-based country detection.
-// Single CoolCare Pro plan with exact per-currency pricing.
-// IMPORTANT: Production pricing is read from subscription_plan_prices DB table.
-// PLAN_PRICING constant is a fallback only.
+//
+// PRICING: All plan prices live in ./pricing (the single source of truth).
+// Production amount calculations read subscription_plan_prices (DB mirror)
+// first and fall back to ./pricing — never to a local constant.
+
+const {
+  CURRENCIES: PRICING_CURRENCIES,
+  FALLBACK_RATES,
+  BILLING_CYCLE_DISCOUNTS,
+  getPricingForCurrency,
+} = require("./pricing");
 
 // Country → Currency mapping (used for IP-based detection)
 const COUNTRY_CURRENCY_MAP = {
@@ -12,41 +20,11 @@ const COUNTRY_CURRENCY_MAP = {
   // All other countries → USD
 };
 
-// Currency metadata (symbols, names, locales)
-const CURRENCIES = {
-  USD: { symbol: "$", name: "US Dollar", locale: "en-US" },
-  INR: { symbol: "₹", name: "Indian Rupee", locale: "en-IN" },
-  KWD: { symbol: "KD", name: "Kuwaiti Dinar", locale: "ar-KW" },
-  AED: { symbol: "د.إ", name: "UAE Dirham", locale: "ar-AE" },
-};
+// Currency metadata (symbols, names, locales) — from the single pricing config
+const CURRENCIES = { ...PRICING_CURRENCIES };
 
-// Billing cycle discounts (applied to total cycle amounts)
-const BILLING_DISCOUNTS = {
-  monthly: 0,       // 0% discount (base price)
-  quarterly: 10,    // -10%
-  halfyearly: 15,   // -15%
-  yearly: 20,       // -20%
-};
-
-// CoolCare Pro — exact prices per currency per billing cycle.
-// These are used as fallback if the DB lookup fails.
-// The authoritative source is the subscription_plan_prices table.
-// Quarterly = monthly × 3 × 0.90, Half-Yearly = × 6 × 0.85, Yearly = × 12 × 0.80
-const PLAN_PRICING = {
-  USD: { monthly: 20, quarterly: 54, halfyearly: 102, yearly: 192 },
-  INR: { monthly: 1299, quarterly: 3156, halfyearly: 6625, yearly: 12470 },
-  AED: { monthly: 75, quarterly: 202.5, halfyearly: 382.5, yearly: 720 },
-  KWD: { monthly: 6, quarterly: 16.2, halfyearly: 30.6, yearly: 57.6 },
-};
-
-// Fallback exchange rates (updated periodically via API)
-// These are used if the live rate fetch fails
-const FALLBACK_RATES = {
-  USD: 1,
-  INR: 83.5,
-  KWD: 0.31,
-  AED: 3.67,
-};
+// Billing cycle discounts (display-only; actual prices are fixed in ./pricing)
+const BILLING_DISCOUNTS = { ...BILLING_CYCLE_DISCOUNTS };
 
 // Cache for live rates (in-memory, refreshed every hour)
 let rateCache = { rates: null, fetchedAt: 0 };
@@ -113,22 +91,11 @@ async function convertPrice(amountUsd, targetCurrency = "USD") {
 }
 
 /**
- * Get CoolCare Pro pricing for a target currency.
- * Returns exact prices from PLAN_PRICING if available, otherwise converts from USD.
+ * Get pricing for a target currency from the central config.
+ * Returns { starter: {monthly,...}, pro: {monthly,...} } for the currency.
  */
 async function getPricing(currency = "USD") {
-  const prices = PLAN_PRICING[currency];
-  if (prices) {
-    return { pro: prices };
-  }
-  // Unknown currency — convert from USD base
-  const usd = PLAN_PRICING.USD;
-  const converted = {};
-  for (const [cycle, amount] of Object.entries(usd)) {
-    const result = await convertPrice(amount, currency);
-    converted[cycle] = result.amount;
-  }
-  return { pro: converted };
+  return getPricingForCurrency(currency);
 }
 
 /**
@@ -210,10 +177,10 @@ function detectCurrency(request) {
 }
 
 /**
- * Fetch pricing for a plan from the database.
- * Falls back to PLAN_PRICING constant.
+ * Fetch pricing for a plan from the database (runtime mirror).
+ * Falls back to the central ./pricing config (single source of truth).
  */
-async function getPlanPricingFromDB(sql, planId, currency) {
+async function getPlanPricingFromDB(sql, planId, currency, planName = "pro") {
   try {
     const rows = await sql`
       SELECT price_monthly, price_quarterly, price_halfyearly, price_yearly
@@ -232,13 +199,18 @@ async function getPlanPricingFromDB(sql, planId, currency) {
   } catch (err) {
     console.warn("[currency] DB pricing lookup failed:", err.message);
   }
-  // Fallback to hardcoded pricing
-  return PLAN_PRICING[currency] || PLAN_PRICING.USD;
+  // Fallback to the central pricing config
+  const c = String(currency || "USD").toUpperCase();
+  const p = getPricingForCurrency(c)[normalizePlanName(planName)];
+  return p || getPricingForCurrency("USD").pro;
+}
+
+function normalizePlanName(name) {
+  return String(name || "pro").toLowerCase() === "starter" ? "starter" : "pro";
 }
 
 module.exports = {
   CURRENCIES,
-  PLAN_PRICING,
   FALLBACK_RATES,
   BILLING_DISCOUNTS,
   COUNTRY_CURRENCY_MAP,

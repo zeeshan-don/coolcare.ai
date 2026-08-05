@@ -186,12 +186,17 @@ CREATE TABLE IF NOT EXISTS subscription_plans (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- NOTE: Prices below mirror the SINGLE pricing config (api/_lib/pricing.js).
+-- The published product has exactly two plans: starter & pro.
 INSERT INTO subscription_plans (name, display_name, price_monthly_usd, price_yearly_usd, max_bookings, max_technicians, features)
 VALUES
-  ('starter',      'Starter',      29.00,  290.00,  100, 3,  '{"whatsapp_bot": true, "dashboard": true, "notifications": true}'),
+  ('starter',      'Starter',      20.00,  192.00,  100, 3,  '{"whatsapp_bot": true, "dashboard": true, "notifications": true}'),
   ('professional', 'Professional', 59.00,  590.00,  500, 10, '{"whatsapp_bot": true, "dashboard": true, "notifications": true, "analytics": true, "priority_support": true}'),
   ('enterprise',   'Enterprise',   149.00, 1490.00, NULL, NULL,'{"whatsapp_bot": true, "dashboard": true, "notifications": true, "analytics": true, "priority_support": true, "custom_branding": true, "api_access": true}')
 ON CONFLICT (name) DO NOTHING;
+
+-- Legacy plans are obsolete — deactivate so they can never be purchased.
+UPDATE subscription_plans SET is_active = false WHERE name IN ('professional', 'enterprise');
 
 -- 3b. SUBSCRIPTIONS
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -574,7 +579,7 @@ ON CONFLICT (key) DO NOTHING;
 -- Section 6 (after that table is created) so this file runs cleanly from
 -- scratch on a fresh database.
 INSERT INTO subscription_plans (name, display_name, price_monthly_usd, price_yearly_usd, max_bookings, max_technicians, features, description, max_staff, whatsapp_conversations, ai_credits, trial_days, currency)
-VALUES ('pro', 'CoolCare Pro', 20.00, 192.00, NULL, NULL,
+VALUES ('pro', 'CoolCare Pro', 25.00, 240.00, NULL, NULL,
   '{"whatsapp_bot": true, "dashboard": true, "notifications": true, "analytics": true, "priority_support": true, "custom_ai": true, "unlimited_bookings": true}',
   'Everything you need to run your repair shop with AI-powered automation.',
   NULL, NULL, NULL, 14, 'USD')
@@ -607,31 +612,24 @@ INSERT INTO subscription_plan_prices (plan_id, currency, price_monthly, price_qu
 SELECT sp.id, v.currency, v.price_monthly, v.price_quarterly, v.price_halfyearly, v.price_yearly
 FROM subscription_plans sp
 CROSS JOIN (VALUES
-  ('INR', 1299.00, 3156.00, 6625.00, 12470.00),
-  ('USD', 20.00, 54.00, 102.00, 192.00),
-  ('AED', 75.00, 202.50, 382.50, 720.00),
-  ('KWD', 6.00, 16.20, 30.60, 57.60)
+  ('INR', 1700.00, 4600.00, 8700.00, 16500.00),
+  ('USD', 25.00, 68.00, 128.00, 240.00),
+  ('AED', 90.00, 244.80, 460.80, 864.00),
+  ('KWD', 7.50, 20.40, 38.40, 72.00)
 ) AS v(currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
 WHERE sp.name = 'pro'
 ON CONFLICT (plan_id, currency) DO NOTHING;
 
--- Seed pricing values for all core plans and supported currencies
+-- Seed pricing values for the active plans (only starter + pro are sold).
+-- Values mirror api/_lib/pricing.js — the single source of truth.
 WITH plans AS (
-  SELECT id, name FROM subscription_plans WHERE name IN ('starter','professional','enterprise')
+  SELECT id, name FROM subscription_plans WHERE name IN ('starter')
 ), prices AS (
   SELECT * FROM (VALUES
-    ('starter','INR',1299.00,3156.00,6625.00,12470.00),
-    ('professional','INR',3499.00,9447.00,17845.00,33590.00),
-    ('enterprise','INR',6499.00,17547.00,33145.00,62390.00),
+    ('starter','INR',1300.00,3500.00,6600.00,12500.00),
     ('starter','USD',20.00,54.00,102.00,192.00),
-    ('professional','USD',60.00,162.00,306.00,576.00),
-    ('enterprise','USD',100.00,270.00,510.00,960.00),
-    ('starter','AED',75.00,202.50,382.50,720.00),
-    ('professional','AED',220.00,594.00,1122.00,2112.00),
-    ('enterprise','AED',370.00,999.00,1887.00,3552.00),
-    ('starter','KWD',6.00,16.20,30.60,57.60),
-    ('professional','KWD',18.00,48.60,91.80,172.80),
-    ('enterprise','KWD',30.00,81.00,153.00,288.00)
+    ('starter','AED',72.00,194.40,367.20,691.20),
+    ('starter','KWD',6.00,16.20,30.60,57.60)
   ) AS v(name,currency,price_monthly,price_quarterly,price_halfyearly,price_yearly)
 )
 INSERT INTO subscription_plan_prices (plan_id, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
@@ -654,7 +652,7 @@ ALTER TABLE repair_shops ADD COLUMN IF NOT EXISTS selected_currency TEXT;
 
 -- 7c. Ensure 'pro' plan exists with proper settings
 INSERT INTO subscription_plans (name, display_name, price_monthly_usd, price_yearly_usd, features, description, trial_days, currency, is_active)
-VALUES ('pro', 'CoolCare Pro', 20.00, 192.00,
+VALUES ('pro', 'CoolCare Pro', 25.00, 240.00,
   '{"whatsapp_bot": true, "dashboard": true, "notifications": true, "analytics": true, "priority_support": true, "custom_ai": true, "unlimited_bookings": true}',
   'Everything you need to run your repair shop with AI-powered automation.',
   0, 'USD', true)
@@ -664,15 +662,18 @@ ON CONFLICT (name) DO UPDATE SET
   price_yearly_usd = EXCLUDED.price_yearly_usd,
   is_active = true;
 
--- Seed/update pricing for all supported currencies
+-- Seed/update pricing for all supported currencies.
+-- IMPORTANT: these values mirror api/_lib/pricing.js and are RE-APPLIED on
+-- every migration run — they must stay in sync with that config (and with
+-- scripts/sync-pricing.js).
 INSERT INTO subscription_plan_prices (plan_id, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly, active)
 SELECT sp.id, v.currency, v.price_monthly, v.price_quarterly, v.price_halfyearly, v.price_yearly, true
 FROM subscription_plans sp
 CROSS JOIN (VALUES
-  ('INR', 1299.00, 3156.00, 6625.00, 12470.00),
-  ('USD', 20.00, 54.00, 102.00, 192.00),
-  ('AED', 75.00, 202.50, 382.50, 720.00),
-  ('KWD', 6.00, 16.20, 30.60, 57.60)
+  ('INR', 1700.00, 4600.00, 8700.00, 16500.00),
+  ('USD', 25.00, 68.00, 128.00, 240.00),
+  ('AED', 90.00, 244.80, 460.80, 864.00),
+  ('KWD', 7.50, 20.40, 38.40, 72.00)
 ) AS v(currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
 WHERE sp.name = 'pro'
 ON CONFLICT (plan_id, currency) DO UPDATE SET
@@ -1851,19 +1852,24 @@ WHERE name = 'pro';
 UPDATE subscription_plans SET is_active = false
 WHERE name IN ('professional', 'enterprise');
 
--- 24c. Multi-currency pricing (Starter $20 / Pro $25)
+-- 24c. Multi-currency pricing (Starter $20 / Pro $25).
+-- IMPORTANT: values mirror api/_lib/pricing.js — the SINGLE source of truth.
+-- This block RE-APPLIES on every migration run (ON CONFLICT DO UPDATE), so it
+-- must stay in sync with that config and scripts/sync-pricing.js.
+-- (Previous version carried stale prices 1199/6115/11508 & 1499/7644/14390
+--  that Razorpay charged instead of the published prices — fixed here.)
 INSERT INTO subscription_plan_prices (plan_id, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly, active)
 SELECT sp.id, v.currency, v.price_monthly, v.price_quarterly, v.price_halfyearly, v.price_yearly, true
 FROM subscription_plans sp
 CROSS JOIN (VALUES
   ('starter', 'USD', 20.00, 54.00, 102.00, 192.00),
-  ('starter', 'INR', 1199.00, 3237.00, 6115.00, 11508.00),
-  ('starter', 'AED', 75.00, 202.50, 382.50, 720.00),
+  ('starter', 'INR', 1300.00, 3500.00, 6600.00, 12500.00),
+  ('starter', 'AED', 72.00, 194.40, 367.20, 691.20),
   ('starter', 'KWD', 6.00, 16.20, 30.60, 57.60),
-  ('pro',     'USD', 25.00, 67.50, 127.50, 240.00),
-  ('pro',     'INR', 1499.00, 4047.00, 7644.00, 14390.00),
-  ('pro',     'AED', 90.00, 243.00, 459.00, 864.00),
-  ('pro',     'KWD', 7.50, 20.25, 38.25, 72.00)
+  ('pro',     'USD', 25.00, 68.00, 128.00, 240.00),
+  ('pro',     'INR', 1700.00, 4600.00, 8700.00, 16500.00),
+  ('pro',     'AED', 90.00, 244.80, 460.80, 864.00),
+  ('pro',     'KWD', 7.50, 20.40, 38.40, 72.00)
 ) AS v(name, currency, price_monthly, price_quarterly, price_halfyearly, price_yearly)
 WHERE sp.name = v.name
 ON CONFLICT (plan_id, currency) DO UPDATE SET

@@ -47,6 +47,27 @@
     return planName === 'starter' ? 'Starter' : 'Pro';
   }
 
+  // STEP 6 — verify the backend price against the single pricing source
+  // (GET /api/currency, backed by api/_lib/pricing.js) BEFORE Razorpay opens.
+  async function verifyBackendPrice(planName, billingCycle, currency, backendAmount) {
+    try {
+      const res = await fetch('/api/currency?currency=' + encodeURIComponent(currency || 'USD'));
+      if (!res.ok) return { ok: true }; // API down — don't block on a hard failure, but log
+      const data = await res.json();
+      const planPrices = data.pricing && data.pricing[planName === 'starter' ? 'starter' : 'pro'];
+      const expected = planPrices ? (planPrices[billingCycle] != null ? planPrices[billingCycle] : planPrices.monthly) : null;
+      const actual = Number(backendAmount);
+      console.log('[checkout] Price verification:', { planName, billingCycle, currency, expected, backendAmount: actual });
+      if (expected == null) return { ok: true }; // no config price — let the gateway decide
+      if (Math.abs(actual - Number(expected)) > 0.011) {
+        return { ok: false, expected, actual };
+      }
+      return { ok: true };
+    } catch (err) {
+      return { ok: true }; // network error — don't block, gateway amount is still backend-derived
+    }
+  }
+
   function openRazorpay(data, shop) {
     var options = {
       key: data.keyId,
@@ -147,6 +168,24 @@
       }
 
       if (data.gateway === 'razorpay' && data.orderId && data.keyId) {
+        // STEP 6 — verify Displayed/Backend price == Razorpay order amount.
+        // If the numbers disagree, DO NOT open Razorpay.
+        // `data.baseAmount` is the pre-discount price computed by the backend
+        // from the single pricing source, so this check applies to plain and
+        // discounted checkouts alike. The discount itself is backend-computed
+        // against the same config, so `data.amount` (order amount) stays
+        // consistent with `data.baseAmount`.
+        var baseToVerify = data.baseAmount != null ? data.baseAmount : data.amount;
+        var check = await verifyBackendPrice(planName, billingCycle, data.currency || currency, baseToVerify);
+        if (!check.ok) {
+          console.error('[checkout] PRICE MISMATCH — refusing to open Razorpay', check);
+          onError('Price verification failed. Please refresh and try again, or contact support.');
+          return;
+        }
+        console.log('[checkout] Price chain verified — opening Razorpay.', {
+          planName, billingCycle, currency: data.currency || currency,
+          baseAmount: baseToVerify, orderAmount: data.amount, discount: data.discount,
+        });
         await loadRazorpayScript();
         var shop = null;
         try { shop = JSON.parse(localStorage.getItem('cc_shop') || 'null'); } catch (e) { /* ok */ }

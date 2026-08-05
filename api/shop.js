@@ -1649,6 +1649,11 @@ async function adminSavePlanPricing(sql, response, body, actorType, actorId, ip)
           updated_at = now()
       WHERE id = ${existing[0].id}
     `;
+    // Keep the USD display columns on subscription_plans in sync so the
+    // admin "Plans" view never shows a different price than what is charged.
+    if (currency === "USD") {
+      await sql`UPDATE subscription_plans SET price_monthly_usd = ${data.price_monthly}, price_yearly_usd = ${data.price_yearly}, updated_at = now() WHERE id = ${data.planId}`;
+    }
     await logAdminAction(sql, { actorType, actorId, action: "update_plan_pricing", targetType: "plan_pricing", targetId: existing[0].id, ip });
     return response.status(200).json({ message: "Pricing updated" });
   }
@@ -1659,6 +1664,9 @@ async function adminSavePlanPricing(sql, response, body, actorType, actorId, ip)
     VALUES (${data.planId}, ${data.currency}, ${data.price_monthly}, ${data.price_quarterly}, ${data.price_halfyearly}, ${data.price_yearly})
     RETURNING id
   `;
+  if (currency === "USD") {
+    await sql`UPDATE subscription_plans SET price_monthly_usd = ${data.price_monthly}, price_yearly_usd = ${data.price_yearly}, updated_at = now() WHERE id = ${data.planId}`;
+  }
   await logAdminAction(sql, { actorType, actorId, action: "create_plan_pricing", targetType: "plan_pricing", targetId: rows[0].id, ip });
   return response.status(201).json({ message: "Pricing saved" });
 }

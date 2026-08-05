@@ -13,7 +13,8 @@ const { withErrorHandler, allowMethods } = require("../_lib/errors");
 const { validate, z } = require("../_lib/validate");
 const { apiLimiter, webhookLimiter, applyLimit } = require("../_lib/rate-limit");
 const { setSecurityHeaders, verifyWebhookSignature, htmlEscape } = require("../_lib/security");
-const { PLAN_PRICING, detectCurrency, detectCountry, getCountryCurrency, CURRENCIES, getPlanPricingFromDB } = require("../_lib/currency");
+const { detectCurrency, detectCountry, getCountryCurrency } = require("../_lib/currency");
+const { getPlanLabel } = require("../_lib/pricing");
 const { createOrder, calculateAmount, getActiveGateway, getGateway } = require("../_lib/gateway");
 const { notifyAdmin, sendEmail } = require("../_lib/notify");
 const { getAppBaseUrl } = require("../_lib/config");
@@ -204,9 +205,22 @@ async function handleCheckout(request, response, sql, shopId, body) {
   }
   if (!planId) planId = 1; // fallback to plan ID 1
 
-  // ── FETCH AMOUNT FROM DATABASE (authoritative source) ──
+  // ── FETCH AMOUNT FROM DB MIRROR / CENTRAL CONFIG (authoritative source) ──
   // NEVER trust any amount from the frontend
-  const { amount: baseAmount } = await calculateAmount(sql, currency, billingCycle, planId);
+  const calc = await calculateAmount(sql, currency, billingCycle, planId, planName);
+  const baseAmount = calc.amount;
+
+  // STEP 7 LOGGING — the displayed price, backend price and gateway order
+  // amount must all be identical. This log makes the chain auditable.
+  console.log("[payments/checkout] Pricing chain:", {
+    planName,
+    planId,
+    billingCycle,
+    currency,
+    selectedCountry,
+    backendAmount: baseAmount,
+    source: calc.source,
+  });
 
   // Apply promo code if provided
   let discount = 0;
@@ -319,7 +333,7 @@ async function handleCheckout(request, response, sql, shopId, body) {
   const payment = await sql`
     INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description, metadata)
     VALUES (${shopId}, 'pending', ${currency}, ${finalAmount}, 'pending', ${invoiceNumber},
-            ${`CoolCare ${planName === "pro" ? "Pro" : "Starter"} — ${billingCycle}`},
+            ${`${getPlanLabel(planName)} — ${billingCycle}`},
             ${JSON.stringify({ billingCycle, planName, promoCodeId, discount })}::jsonb)
     RETURNING id
   `;
@@ -333,7 +347,7 @@ async function handleCheckout(request, response, sql, shopId, body) {
     `;
   } catch (e) { /* table may not exist */ }
 
-  // Create order via gateway library
+  // Create order via gateway library (plan name rides along for webhook notes)
   const originUrl = request.headers["origin"] || getAppBaseUrl();
   const orderResult = await createOrder({
     shopId,
@@ -343,6 +357,7 @@ async function handleCheckout(request, response, sql, shopId, body) {
     invoiceNumber,
     paymentDbId: payment[0].id,
     originUrl,
+    planName,
   });
 
   if (orderResult.error) {
@@ -363,8 +378,19 @@ async function handleCheckout(request, response, sql, shopId, body) {
     await sql`UPDATE payments SET gateway = ${orderResult.gateway}, payment_id = ${gatewayId} WHERE id = ${payment[0].id}`;
   }
 
+  console.log("[payments/checkout] Order created:", {
+    planName,
+    billingCycle,
+    currency,
+    baseAmount,
+    displayAmount: finalAmount,
+    orderAmount: orderResult.amount,
+  });
+
   return response.status(200).json({
     ...orderResult,
+    planName,
+    baseAmount, // pre-discount price — lets the frontend verify the base price chain
     paymentId: payment[0].id,
   });
 }

@@ -93,7 +93,8 @@ const signupSchema = z.object({
   serviceAreas: z.array(z.string().trim()).max(20).default([]),
   servicesOffered: z.array(z.string().trim()).min(1, "Select at least one service").max(20),
   // Plan info from pricing page (always paid — no free trial)
-  planName: z.enum(["pro"]).optional().default("pro"),
+  // Both published plans come from the single pricing config (api/_lib/pricing.js).
+  planName: z.enum(["starter", "pro"]).optional().default("pro"),
   billingCycle: z.enum(["monthly", "quarterly", "halfyearly", "yearly"]).optional().default("monthly"),
   currency: z.string().min(1).max(10).optional(),
   // Country detection and selection

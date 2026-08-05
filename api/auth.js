@@ -251,8 +251,24 @@ async function handleSignup(request, response, body) {
     ? getCountryCurrency(selectedCountry)
     : (data.currency || 'USD').toUpperCase();
 
+  // Resolve the REAL plan row by name (never hardcode an id — plan ids
+  // depend on seed order and drift between environments).
+  let planId = null;
+  try {
+    const planRows = await sql`SELECT id FROM subscription_plans WHERE name = ${planName} AND is_active = true LIMIT 1`;
+    if (planRows.length > 0) planId = planRows[0].id;
+  } catch (e) { /* table may not exist yet */ }
+  if (!planId) {
+    try {
+      const planRows = await sql`SELECT id FROM subscription_plans WHERE name = ${planName} LIMIT 1`;
+      if (planRows.length > 0) planId = planRows[0].id;
+    } catch (e) { /* table may not exist yet */ }
+  }
+  if (!planId) planId = 1; // last-resort fallback only
+
   console.log("[auth/signup] Decision path:", {
     planName,
+    planId,
     billingCycle,
     currency,
     selectedCountry,
@@ -323,7 +339,6 @@ async function handleSignup(request, response, body) {
       `;
       
       // Create subscription (10 years)
-      const planId = 1;
       const subEnd = new Date();
       subEnd.setFullYear(subEnd.getFullYear() + 10);
       
@@ -394,7 +409,6 @@ async function handleSignup(request, response, body) {
       const trialDays = appliedPromo.free_trial_days || 14;
       const trialEnd = new Date();
       trialEnd.setDate(trialEnd.getDate() + trialDays);
-      const planId = 1;
       
       await sql`
         UPDATE repair_shops
@@ -455,7 +469,6 @@ async function handleSignup(request, response, body) {
     try {
       await sql`BEGIN`;
       
-      const planId = 1;
       const farFuture = new Date('2099-12-31');
       
       await sql`
@@ -519,9 +532,9 @@ async function handleSignup(request, response, body) {
   console.log("[auth/signup] Creating payment order for shop #" + shop.id);
 
   try {
-    // Calculate the amount from DB (authoritative source, don't trust frontend)
-    const planId = 1; // 'pro' plan
-    let { amount } = await calculateAmount(sql, currency, billingCycle, planId);
+    // Calculate the amount from the DB mirror / central config (authoritative,
+    // never trust a frontend-supplied price).
+    let { amount } = await calculateAmount(sql, currency, billingCycle, planId, planName);
     let fullAmount = amount;
     
     // Apply discount from promo code
@@ -538,7 +551,7 @@ async function handleSignup(request, response, body) {
       amount = Math.max(0, Math.round((amount - discountAmount) * 100) / 100);
     }
     
-    console.log("[auth/signup] Amount calculated from DB:", { amount, currency, billingCycle, planId, discountAmount });
+    console.log("[auth/signup] Amount chain:", { planName, planId, billingCycle, currency, amount, discountAmount });
 
     // ── ZERO AMOUNT (100% Discount): Skip Razorpay, activate immediately ──
     if (amount === 0 && appliedPromo && (appliedPromo.type === 'percentage_discount' || appliedPromo.type === 'fixed_discount')) {
@@ -613,7 +626,7 @@ async function handleSignup(request, response, body) {
     const payment = await sql`
       INSERT INTO payments (repair_shop_id, gateway, currency, amount, status, invoice_number, description, metadata)
       VALUES (${shop.id}, 'pending', ${currency}, ${amount}, 'pending', ${invoiceNumber},
-              ${`CoolCare Pro — ${billingCycle}`},
+              ${`CoolCare ${planName === 'starter' ? 'Starter' : 'Pro'} — ${billingCycle}`},
               ${JSON.stringify({ billingCycle, planName, source: 'signup', discountAmount, promoCodeId: appliedPromo?.id || null })}::jsonb)
       RETURNING id
     `;
@@ -631,6 +644,7 @@ async function handleSignup(request, response, body) {
       invoiceNumber,
       paymentDbId,
       originUrl,
+      planName,
     });
 
     console.log("[auth/signup] Gateway order result:", orderResult);
@@ -663,6 +677,18 @@ async function handleSignup(request, response, body) {
 
     console.log("[auth/signup] Returning checkout payload for shop #" + shop.id);
 
+    // STEP 7 LOGGING — everything the frontend/Razorpay will see, from one chain.
+    console.log("[auth/signup] Checkout payload:", {
+      planName,
+      billingCycle,
+      currency,
+      baseAmount: fullAmount,
+      amount,
+      discountAmount,
+      orderId: orderResult.orderId || null,
+      razorpayAmount: (orderResult.amount || amount) * 100,
+    });
+
     return response.status(201).json({
       shopId: shop.id,
       checkoutRequired: true,
@@ -670,8 +696,10 @@ async function handleSignup(request, response, body) {
       orderId: orderResult.orderId || null,
       keyId: orderResult.keyId || null,
       amount: orderResult.amount || amount,
+      baseAmount: fullAmount, // pre-discount price — lets the frontend verify the base price chain
       currency: orderResult.currency || currency,
       invoiceNumber: orderResult.invoiceNumber || invoiceNumber,
+      planName,
       billingCycle,
       subscriptionStatus: "inactive",
       subscriptionRequired: true,
@@ -1166,13 +1194,13 @@ async function handleDemoPreload(request, response) {
           await sql`INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
             gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
             VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
-              'demo-sub-001', 12470, 'INR', now(), ${subEnd.toISOString()}, now())`;
+              'demo-sub-001', 16500, 'INR', now(), ${subEnd.toISOString()}, now())`;
         }
 
         // Insert payment
         await sql`INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
           invoice_number, description, created_at)
-          VALUES (${demoShopId}, 'demo', 'INR', 12470, 'completed',
+          VALUES (${demoShopId}, 'demo', 'INR', 16500, 'completed',
             'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())`;
 
         // Insert conversations (batched for speed)
@@ -1388,13 +1416,13 @@ async function handleDemoLogin(request, response) {
           await sql`INSERT INTO subscriptions (repair_shop_id, plan_id, status, billing_cycle, gateway,
             gateway_sub_id, amount_paid, currency, current_period_start, current_period_end, created_at)
             VALUES (${demoShopId}, ${planRows[0].id}, 'active', 'yearly', 'demo',
-              'demo-sub-001', 12470, 'INR', now(), ${subEnd.toISOString()}, now())`;
+              'demo-sub-001', 16500, 'INR', now(), ${subEnd.toISOString()}, now())`;
         }
 
         // Insert payment
         await sql`INSERT INTO payments (repair_shop_id, gateway, currency, amount, status,
           invoice_number, description, created_at)
-          VALUES (${demoShopId}, 'demo', 'INR', 12470, 'completed',
+          VALUES (${demoShopId}, 'demo', 'INR', 16500, 'completed',
             'INV-DEMO-0000', 'CoolCare Pro — Yearly Subscription (Demo)', now())`;
 
         // Insert conversations

@@ -7,7 +7,8 @@
 
 const { neon } = require("@neondatabase/serverless");
 const { decrypt } = require("./encrypt");
-const { PLAN_PRICING, getPlanPricingFromDB } = require("./currency");
+const { getPlanPricingFromDB } = require("./currency");
+const { getPrice } = require("./pricing");
 const { getAppBaseUrl } = require("./config");
 
 // ─── Config cache (5 min TTL) ───────────────────────────────────────────────
@@ -114,34 +115,38 @@ async function getActiveGateway() {
 
 /**
  * Calculate the payment amount for a given plan, billing cycle, and currency.
- * Uses the subscription_plan_prices DB table as authoritative source.
- * Falls back to PLAN_PRICING constant if DB is unavailable.
+ * Reads the subscription_plan_prices DB table (runtime mirror) first and
+ * falls back to the central ./pricing config — the single source of truth.
  *
- * @param {object} sql - Neon database client (optional, falls back to constant without it)
+ * @param {object} sql - Neon database client (optional, falls back to config without it)
  * @param {string} currency - Currency code (INR, USD, AED, KWD)
  * @param {string} billingCycle - Billing cycle (monthly, quarterly, halfyearly, yearly)
- * @param {number} planId - Plan ID (defaults to 1 for 'pro' plan)
- * @returns {Promise<{ amount: number, currency: string }>}
+ * @param {number} planId - Plan ID (for DB lookup)
+ * @param {string} planName - Plan name ('starter' | 'pro', for config fallback)
+ * @returns {Promise<{ amount: number, currency: string, planName: string, source: string }>}
  */
-async function calculateAmount(sql, currency, billingCycle, planId = 1) {
-  // If we have a DB connection, try to fetch from DB first
+async function calculateAmount(sql, currency, billingCycle, planId = 1, planName = "pro") {
+  const normalizedPlan = String(planName || "pro").toLowerCase() === "starter" ? "starter" : "pro";
+  const cycle = billingCycle || "monthly";
+
+  // If we have a DB connection, try to fetch from the DB mirror first
   if (sql && typeof sql === 'function') {
     try {
-      const prices = await getPlanPricingFromDB(sql, planId, currency);
-      if (prices) {
-        return { amount: prices[billingCycle] || prices.monthly, currency };
+      const prices = await getPlanPricingFromDB(sql, planId, currency, normalizedPlan);
+      if (prices && prices.monthly != null) {
+        const amount = prices[cycle] != null ? prices[cycle] : prices.monthly;
+        console.log("[gateway/calculateAmount] DB:", { planName: normalizedPlan, billingCycle: cycle, currency, amount, source: "db" });
+        return { amount, currency, planName: normalizedPlan, source: "db" };
       }
     } catch (err) {
-      console.warn("[gateway] DB calculateAmount failed, using fallback:", err.message);
+      console.warn("[gateway] DB calculateAmount failed, using config fallback:", err.message);
     }
   }
 
-  // Fallback to hardcoded PLAN_PRICING constant
-  const prices = PLAN_PRICING[currency];
-  if (!prices) {
-    return { amount: PLAN_PRICING.USD[billingCycle] || PLAN_PRICING.USD.monthly, currency: "USD" };
-  }
-  return { amount: prices[billingCycle] || prices.monthly, currency };
+  // Fallback to the central pricing config (single source of truth)
+  const amount = getPrice(normalizedPlan, cycle, currency);
+  console.log("[gateway/calculateAmount] CONFIG:", { planName: normalizedPlan, billingCycle: cycle, currency, amount, source: "config" });
+  return { amount, currency, planName: normalizedPlan, source: "config" };
 }
 
 /**
@@ -163,7 +168,7 @@ function toRazorpayAmount(amount, currency) {
  *
  * Returns: { gateway, checkoutUrl | orderId, amount, currency, keyId, invoiceNumber }
  */
-async function createOrder({ shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, originUrl }) {
+async function createOrder({ shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, originUrl, planName }) {
   const gw = await getActiveGateway();
   if (!gw) {
     return { gateway: "none", message: "No payment gateway configured." };
@@ -177,19 +182,31 @@ async function createOrder({ shopId, billingCycle, currency, amount, invoiceNumb
     return { gateway: gw.provider, error: "Internal configuration error" };
   }
 
+  // STEP 7 LOGGING — the full pricing chain must agree:
+  // selected plan + billing cycle + currency + amount → gateway order amount.
+  console.log("[gateway/createOrder]", {
+    planName: planName || "pro",
+    billingCycle,
+    currency,
+    amount,
+    gateway: gw.provider,
+  });
+
   switch (gw.provider) {
     case "razorpay":
-      return createRazorpayOrder(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId });
+      return createRazorpayOrder(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, planName });
     case "stripe":
-      return createStripeSession(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, originUrl });
+      return createStripeSession(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, originUrl, planName });
     default:
       return { gateway: gw.provider, message: `${gw.displayName} integration not yet implemented.` };
   }
 }
 
 // ─── Razorpay Strategy ──────────────────────────────────────────────────────
-async function createRazorpayOrder(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId }) {
+async function createRazorpayOrder(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, planName }) {
   const razorpayAmount = toRazorpayAmount(amount, currency);
+  // The order amount IS the verified backend amount (in paise for INR, cents otherwise).
+  console.log("[gateway/razorpay] Order amount:", { amount, razorpayAmount, currency, billingCycle, planName: planName || "pro" });
   try {
     const res = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
@@ -203,7 +220,7 @@ async function createRazorpayOrder(gw, { shopId, billingCycle, currency, amount,
         receipt: invoiceNumber,
         notes: {
           shop_id: String(shopId),
-          plan: "pro",
+          plan: planName || "pro",
           payment_id: String(paymentDbId),
           billing_cycle: billingCycle,
           invoice: invoiceNumber,
@@ -232,8 +249,9 @@ async function createRazorpayOrder(gw, { shopId, billingCycle, currency, amount,
 }
 
 // ─── Stripe Strategy ────────────────────────────────────────────────────────
-async function createStripeSession(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, originUrl }) {
+async function createStripeSession(gw, { shopId, billingCycle, currency, amount, invoiceNumber, paymentDbId, originUrl, planName }) {
   const baseUrl = originUrl || getAppBaseUrl();
+  console.log("[gateway/stripe] Session amount:", { amount, currency, billingCycle, planName: planName || "pro" });
   try {
     const intervalMap = { monthly: "month", quarterly: "month", halfyearly: "month", yearly: "year" };
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {
@@ -248,7 +266,7 @@ async function createStripeSession(gw, { shopId, billingCycle, currency, amount,
         "line_items[0][price_data][unit_amount]": String(Math.round(amount * 100)),
         "line_items[0][quantity]": "1",
         "metadata[shop_id]": String(shopId),
-        "metadata[plan]": "pro",
+        "metadata[plan]": planName || "pro",
         "metadata[payment_id]": String(paymentDbId),
         "metadata[invoice]": invoiceNumber,
         "metadata[billing_cycle]": billingCycle,

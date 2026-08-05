@@ -18,7 +18,13 @@ const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 
-const { CURRENCIES, PLAN_PRICING, getExchangeRates, detectCurrency, detectCountry, getCountryCurrency, getPlanPricingFromDB } = require("./_lib/currency");
+const { CURRENCIES, getExchangeRates, detectCurrency, detectCountry, getCountryCurrency, getPlanPricingFromDB } = require("./_lib/currency");
+const {
+  PLANS,
+  getSupportedCurrencies,
+  getCurrencyMeta,
+  getPrice,
+} = require("./_lib/pricing");
 
 // ─── DASHBOARD (public widget) ─────────────────────────────────────────────
 // Mask a name: "Jane Doe" -> "Jane D."
@@ -169,18 +175,13 @@ async function handleHealth(request, response) {
 // GET /api/currency?currency=INR — get pricing in the requested currency
 // GET /api/currency?rates=true — get live exchange rates
 
-const currencyMeta = (code) => ({
-  code,
-  symbol: CURRENCIES[code]?.symbol || code,
-  name: CURRENCIES[code]?.name || code,
-});
-
 async function handleCurrency(request, response) {
   const sql = neon(process.env.DATABASE_URL);
   const requestedCurrency = (request.query?.currency || detectCurrency(request)).toUpperCase();
-  const currency = CURRENCIES[requestedCurrency] ? requestedCurrency : requestedCurrency || "USD";
+  const currency = CURRENCIES[requestedCurrency] ? requestedCurrency : (requestedCurrency || "USD");
 
-  const supportedCodes = new Set(Object.keys(CURRENCIES));
+  // Supported currencies = central config ∪ any currency rows in the DB mirror
+  const supportedCodes = new Set(getSupportedCurrencies());
   try {
     const currencyRows = await sql`SELECT DISTINCT currency FROM subscription_plan_prices ORDER BY currency`;
     currencyRows.forEach((row) => { if (row.currency) supportedCodes.add(row.currency.toUpperCase()); });
@@ -188,71 +189,46 @@ async function handleCurrency(request, response) {
     console.warn("[currency] Could not load supported currencies from DB:", err.message);
   }
 
-  const supported = [...supportedCodes].sort().map(currencyMeta);
-
-  let pricing = { pro: null };
-  let detectedCountry = null;
+  const supported = [...supportedCodes].sort().map(getCurrencyMeta);
 
   // Detect country from request
   const reqCountry = detectCountry(request);
   const reqCurrency = reqCountry ? getCountryCurrency(reqCountry) : null;
 
-  // Try to load pricing from DB first, fall back to PLAN_PRICING constant
+  // ── Build pricing for EVERY active plan from the same source ─────────────
+  // DB mirror first (admin-editable at runtime), central config as fallback.
+  let pricing = { starter: null, pro: null };
+  let source = "config";
   try {
-    const planRows = await sql`SELECT id FROM subscription_plans WHERE name = 'pro' AND is_active = true LIMIT 1`;
+    const planRows = await sql`SELECT id, name FROM subscription_plans WHERE name IN ('starter','pro') AND is_active = true ORDER BY id`;
     if (planRows.length > 0) {
-      const planId = planRows[0].id;
-      const dbPrices = await getPlanPricingFromDB(sql, planId, currency);
-      if (dbPrices) {
-        pricing.pro = { ...dbPrices };
-
-        // Also load all supported currencies for the frontend country selector
-        const allPrices = await sql`
-          SELECT spp.currency, spp.price_monthly, spp.price_quarterly, spp.price_halfyearly, spp.price_yearly
-          FROM subscription_plan_prices spp
-          JOIN subscription_plans sp ON sp.id = spp.plan_id
-          WHERE sp.name = 'pro' AND spp.active = true
-          ORDER BY spp.currency
-        `;
-        if (allPrices.length > 0) {
-          pricing.all = {};
-          allPrices.forEach(row => {
-            pricing.all[row.currency] = {
-              monthly: parseFloat(row.price_monthly),
-              quarterly: parseFloat(row.price_quarterly),
-              halfyearly: parseFloat(row.price_halfyearly),
-              yearly: parseFloat(row.price_yearly),
-            };
-          });
+      for (const plan of Object.keys(PLANS)) {
+        const planRow = planRows.find((r) => r.name === plan);
+        const planId = planRow ? planRow.id : null;
+        if (!planId) {
+          pricing[plan] = getPricingForCurrencySafe(plan, currency);
+          continue;
+        }
+        const dbPrices = await getPlanPricingFromDB(sql, planId, currency, plan);
+        if (dbPrices) {
+          pricing[plan] = dbPrices;
+          source = "db";
+        } else {
+          pricing[plan] = getPricingForCurrencySafe(plan, currency);
         }
       }
+    } else {
+      // Plans table missing/empty — serve straight from the central config
+      pricing = getAllPricingForCurrency(currency);
     }
   } catch (err) {
-    console.warn("[currency] DB pricing load failed, using fallback:", err.message);
+    console.warn("[currency] DB pricing load failed, using central config:", err.message);
+    pricing = getAllPricingForCurrency(currency);
   }
 
-  // Fallback: use PLAN_PRICING constant if DB failed
-  if (!pricing.pro) {
-    const prices = PLAN_PRICING[currency];
-    if (prices) {
-      pricing.pro = { ...prices };
-    } else {
-      // Unknown currency — derive from USD using live exchange rates
-      try {
-        const { convertPrice } = require("./_lib/currency");
-        const usd = PLAN_PRICING.USD;
-        const [monthly, quarterly, halfyearly, yearly] = await Promise.all([
-          convertPrice(usd.monthly, currency),
-          convertPrice(usd.quarterly, currency),
-          convertPrice(usd.halfyearly, currency),
-          convertPrice(usd.yearly, currency),
-        ]);
-        pricing.pro = { monthly: monthly.amount, quarterly: quarterly.amount, halfyearly: halfyearly.amount, yearly: yearly.amount };
-      } catch (err) {
-        console.error("[currency] Conversion failed for unknown currency:", currency, err.message);
-        pricing.pro = { ...PLAN_PRICING.USD };
-      }
-    }
+  // Safety: never return null pricing for a plan
+  for (const plan of Object.keys(PLANS)) {
+    if (!pricing[plan]) pricing[plan] = getPricingForCurrencySafe(plan, currency);
   }
 
   let rates = null;
@@ -262,13 +238,37 @@ async function handleCurrency(request, response) {
 
   return response.status(200).json({
     currency,
-    symbol: CURRENCIES[currency]?.symbol || currency,
-    pricing,
+    symbol: getCurrencyMeta(currency).symbol,
+    pricing, // { starter: {...}, pro: {...} } — same object the backend charges from
     rates,
     supported,
+    source, // "db" | "config" — for debugging the pricing chain
     detectedCountry: reqCountry,
     detectedCurrency: reqCurrency,
   });
+}
+
+// Pricing for every currency per plan, from the central config.
+function getAllPricingForCurrency(currency) {
+  const out = {};
+  for (const plan of Object.keys(PLANS)) {
+    out[plan] = {
+      monthly: getPrice(plan, "monthly", currency),
+      quarterly: getPrice(plan, "quarterly", currency),
+      halfyearly: getPrice(plan, "halfyearly", currency),
+      yearly: getPrice(plan, "yearly", currency),
+    };
+  }
+  return out;
+}
+
+function getPricingForCurrencySafe(plan, currency) {
+  return {
+    monthly: getPrice(plan, "monthly", currency),
+    quarterly: getPrice(plan, "quarterly", currency),
+    halfyearly: getPrice(plan, "halfyearly", currency),
+    yearly: getPrice(plan, "yearly", currency),
+  };
 }
 
 // ─── ROUTER ────────────────────────────────────────────────────────────────
