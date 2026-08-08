@@ -120,6 +120,7 @@
     </div>
     <div class="ch-meta" id="waMeta">
       <div class="meta-tile"><div class="mt-label">Business number</div><div class="mt-val" id="waNumber">—</div></div>
+      <div class="meta-tile"><div class="mt-label">WABA ID</div><div class="mt-val" id="waWaba">—</div></div>
       <div class="meta-tile"><div class="mt-label">Webhook</div><div class="mt-val" id="waWebhook">—</div></div>
       <div class="meta-tile"><div class="mt-label">Last sync</div><div class="mt-val" id="waLastSync">—</div></div>
     </div>
@@ -252,17 +253,171 @@ async function loadWhatsApp() {
     waConnected = !!d.connected;
     setPill('waPill', 'waText', waConnected, waConnected ? 'Connected' : 'Not Connected');
     document.getElementById('waNumber').textContent = d.number || '—';
+    document.getElementById('waWaba').textContent = d.wabaId || '—';
     document.getElementById('waWebhook').textContent = d.webhookConfigured ? 'Configured ✓' : 'Not set';
     document.getElementById('waLastSync').textContent = d.lastSync ? new Date(d.lastSync).toLocaleString() : '—';
     document.getElementById('waConnect').style.display = waConnected ? 'none' : 'inline-flex';
     document.getElementById('waReconnect').style.display = waConnected ? 'inline-flex' : 'none';
     document.getElementById('waDisconnect').style.display = waConnected ? 'inline-flex' : 'none';
     document.getElementById('waNote').textContent = waConnected
-      ? 'WhatsApp is live. Incoming messages are answered by the same AI engine that powers Website Chat.'
+      ? (d.businessName ? `WhatsApp is live for ${d.businessName}. ` : 'WhatsApp is live. ') +
+        (d.webhookStatus === 'pending' ? 'Webhook subscription is pending — messages will flow once subscribed. ' : 'Incoming messages are answered by the same AI engine that powers Website Chat.')
       : 'Not connected yet. Click Connect to begin the Meta signup flow.';
   } catch (err) {
     setPill('waPill', 'waText', false, 'Unavailable', true);
   }
+}
+
+// ── Meta Embedded Signup (JS SDK / v4) ───────────────────────────────────────
+// Meta returns the auth code and the customer's asset IDs to THIS window, so no
+// page redirect / redirect_uri is involved. The code is exchanged server-side;
+// the access token never reaches the browser.
+let fbReady = false;
+let waSession = null;   // captured from the WA_EMBEDDED_SIGNUP message event
+let signupState = null; // signed state from initiate, echoed back on complete
+
+// Meta posts the customer's asset IDs (phone_number_id, waba_id) to the window
+// that spawned the flow. Capture them so they can be sent to our API.
+window.addEventListener('message', (event) => {
+  if (!event.origin || !event.origin.endsWith('facebook.com')) return;
+  let data;
+  try { data = JSON.parse(event.data); } catch (e) { return; }
+  if (!data || data.type !== 'WA_EMBEDDED_SIGNUP') return;
+
+  if (data.event === 'ERROR') {
+    waSession = null;
+    showToast('⚠️ Meta signup error: ' + (data.data?.error_message || 'Unknown error'));
+    resetWaButtons();
+    return;
+  }
+  if (data.event === 'CANCEL') {
+    waSession = null;
+    showToast('Signup cancelled.');
+    resetWaButtons();
+    return;
+  }
+
+  // FINISH / FINISH_ONLY_WABA / FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING ...
+  waSession = {
+    phoneNumberId: data.data?.phone_number_id || null,
+    wabaId: data.data?.waba_id || null,
+    businessId: data.data?.business_id || null,
+  };
+});
+
+function initFbSdk(appId, apiVersion, cb) {
+  let done = false;
+  const finish = () => { if (!done) { done = true; cb(); } };
+
+  if (window.FB) { // script already loaded — (re-)init with this app's IDs
+    FB.init({ appId: appId, xfbml: true, version: apiVersion });
+    fbReady = true;
+    finish();
+    return;
+  }
+
+  window.fbAsyncInit = function () {
+    FB.init({ appId: appId, xfbml: true, version: apiVersion });
+    fbReady = true;
+    finish();
+  };
+  if (!document.getElementById('fb-jssdk')) {
+    const s = document.createElement('script');
+    s.id = 'fb-jssdk';
+    s.src = 'https://connect.facebook.net/en_US/sdk.js';
+    s.async = true; s.defer = true; s.crossOrigin = 'anonymous';
+    document.head.appendChild(s);
+  }
+  // Fallback in case fbAsyncInit was already consumed (e.g. cached SDK) and
+  // never fires again — poll for window.FB instead of hanging the button.
+  const started = Date.now();
+  const iv = setInterval(() => {
+    if (window.FB) {
+      clearInterval(iv);
+      FB.init({ appId: appId, xfbml: true, version: apiVersion });
+      fbReady = true;
+      finish();
+    } else if (Date.now() - started > 10000) {
+      clearInterval(iv);
+      if (!done) {
+        showToast('⚠️ Could not load the Meta SDK. Please try again.');
+        resetWaButtons();
+      }
+    }
+  }, 200);
+}
+
+function launchFbLogin(configId) {
+  FB.login(function (response) {
+    if (response.authResponse && response.authResponse.code) {
+      // The exchangeable code has a ~30s TTL — send it to the server now.
+      completeConnection(response.authResponse.code);
+    } else {
+      waSession = null;
+      resetWaButtons();
+      showToast('⚠️ Meta signup: ' + (response.error_message || response.status || 'cancelled'));
+    }
+  }, {
+    config_id: configId,
+    response_type: 'code',
+    override_default_response_type: true,
+    extras: { setup: {} },
+  });
+}
+
+// The asset-ID message event can arrive slightly after the code callback.
+function waitForSession(ms) {
+  if (waSession && waSession.phoneNumberId && waSession.wabaId) return Promise.resolve(waSession);
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const iv = setInterval(() => {
+      if ((waSession && waSession.phoneNumberId && waSession.wabaId) || Date.now() - started > ms) {
+        clearInterval(iv);
+        resolve(waSession);
+      }
+    }, 100);
+  });
+}
+
+async function completeConnection(code) {
+  const session = await waitForSession(3000);
+  if (!session || !session.phoneNumberId || !session.wabaId) {
+    showToast('⚠️ Meta did not return a phone number. Please reconnect and choose a business phone number.');
+    resetWaButtons();
+    loadWhatsApp();
+    return;
+  }
+  const btn = document.getElementById('waConnect');
+  if (btn) { btn.disabled = true; btn.textContent = 'Finalizing…'; }
+  try {
+    const res = await fetch('/api/whatsapp-connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: 'complete', code: code, state: signupState, ...session }),
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      showToast('⚠️ ' + (d.error || 'Connection failed'));
+    } else {
+      showToast('✅ ' + (d.message || 'WhatsApp connected!'));
+    }
+  } catch (err) {
+    showToast('Network error');
+  } finally {
+    waSession = null;
+    loadWhatsApp();
+  }
+}
+
+function resetWaButtons() {
+  ['waConnect', 'waReconnect', 'waDisconnect'].forEach((id) => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.disabled = false;
+    if (id === 'waConnect') b.textContent = 'Connect';
+    else if (id === 'waReconnect') b.textContent = '↻ Reconnect';
+    else b.textContent = '✕ Disconnect';
+  });
 }
 
 // ── WhatsApp actions (Meta Embedded Signup) ───────────────────────────────────
@@ -276,24 +431,26 @@ async function waAction(action) {
     const res = await fetch('/api/whatsapp-connect', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({ action: action === 'connect' ? 'initiate' : action }),
     });
     const d = await res.json();
-    if (!res.ok) { showToast('⚠️ ' + (d.error || 'Action failed')); return; }
+    if (!res.ok) { showToast('⚠️ ' + (d.error || 'Action failed')); resetWaButtons(); return; }
     if (action === 'disconnect') {
       showToast('✅ WhatsApp disconnected');
       loadWhatsApp();
-    } else if (d.signupUrl) {
-      showToast('Redirecting to Meta…');
-      window.location.href = d.signupUrl;
+    } else if (action === 'refresh') {
+      showToast('✅ ' + (d.message || 'Token refreshed'));
+      loadWhatsApp();
+    } else if (d.configId) {
+      // initiate / reconnect — launch the Meta signup window via the JS SDK
+      signupState = d.state || null;
+      showToast('Opening Meta signup window…');
+      initFbSdk(d.appId, d.apiVersion, () => launchFbLogin(d.configId));
     } else {
       showToast('✅ Done');
       loadWhatsApp();
     }
-  } catch (err) { showToast('Network error'); }
-  finally {
-    if (btn) { btn.disabled = false; btn.textContent = action === 'disconnect' ? '✕ Disconnect' : action === 'reconnect' ? '↻ Reconnect' : 'Connect'; }
-  }
+  } catch (err) { showToast('Network error'); resetWaButtons(); }
 }
 
 // ── Website Chat status ───────────────────────────────────────────────────────

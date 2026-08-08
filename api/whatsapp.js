@@ -52,7 +52,7 @@ async function lookupConnection(phoneNumberId) {
         return {
           accessToken,
           phoneNumberId: row.phone_number_id,
-          apiVersion: process.env.META_API_VERSION || process.env.WHATSAPP_API_VERSION || "v19.0",
+          apiVersion: process.env.META_API_VERSION || process.env.WHATSAPP_API_VERSION || "v25.0",
           repairShopId: row.repair_shop_id,
           wabaId: row.waba_id,
         };
@@ -69,7 +69,7 @@ async function lookupConnection(phoneNumberId) {
       return {
         accessToken: globalToken,
         phoneNumberId: globalPhoneId,
-        apiVersion: process.env.META_API_VERSION || process.env.WHATSAPP_API_VERSION || "v19.0",
+        apiVersion: process.env.META_API_VERSION || process.env.WHATSAPP_API_VERSION || "v25.0",
         repairShopId: null,
         wabaId: null,
       };

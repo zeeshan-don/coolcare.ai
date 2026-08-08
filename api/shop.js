@@ -2029,9 +2029,7 @@ async function handleSaveAiSettings(request, response, sql, shopId, body) {
 // WHATSAPP MONITORING
 // ═══════════════════════════════════════════════════════════════════════════════
 async function handleWhatsAppStatus(request, response, sql, shopId) {
-  const hasToken = !!process.env.WHATSAPP_ACCESS_TOKEN;
   const hasVerifyToken = !!process.env.META_WEBHOOK_VERIFY_TOKEN;
-  const hasPhoneId = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   let lastSync = null;
   let messageCount = 0;
@@ -2042,12 +2040,48 @@ async function handleWhatsAppStatus(request, response, sql, shopId) {
     messageCount = parseInt(cnt[0]?.cnt || '0', 10);
   } catch (e) { /* table may not exist */ }
 
+  // The per-shop repair_shop_whatsapp row is the ONLY source of truth for
+  // "connected". Platform-level env vars (WHATSAPP_ACCESS_TOKEN /
+  // WHATSAPP_PHONE_NUMBER_ID) are a separate legacy/test feature and must
+  // never make a shop look connected when no Embedded Signup has happened.
+  let connection = null;
+  try {
+    const rows = await sql`SELECT * FROM repair_shop_whatsapp WHERE repair_shop_id = ${shopId} LIMIT 1`;
+    if (rows.length > 0) {
+      const row = rows[0];
+      const tokenExpired = row.token_expiry ? new Date(row.token_expiry) < new Date() : false;
+      const status = tokenExpired ? 'expired' : (row.webhook_status || 'pending');
+      if (tokenExpired && status !== row.webhook_status) {
+        await sql`UPDATE repair_shop_whatsapp SET webhook_status = 'expired', updated_at = now() WHERE repair_shop_id = ${shopId}`;
+      }
+      connection = {
+        number: row.phone_number || null,
+        businessName: row.business_name || null,
+        wabaId: row.waba_id || null,
+        phoneNumberId: row.phone_number_id || null,
+        webhookStatus: status,
+        lastSync: row.last_sync_at || lastSync,
+        whatsappConnectedAt: row.whatsapp_connected_at || null,
+        tokenExpiry: row.token_expiry || null,
+        connected: status === 'active' || status === 'subscribed',
+      };
+    }
+  } catch (e) { /* table may not exist */ }
+
+  const connected = !!(connection && connection.connected);
   return response.status(200).json({
-    connected: hasToken && hasPhoneId,
+    connected,
+    number: connection?.number || null,
+    businessName: connection?.businessName || null,
+    wabaId: connection?.wabaId || null,
+    phoneNumberId: connection?.phoneNumberId || null,
+    webhookStatus: connection?.webhookStatus || null,
     webhookConfigured: hasVerifyToken,
-    accessTokenStatus: hasToken ? 'configured' : 'missing',
-    lastSync,
+    lastSync: connection?.lastSync || lastSync,
+    whatsappConnectedAt: connection?.whatsappConnectedAt || null,
+    tokenExpiry: connection?.tokenExpiry || null,
     totalMessages: messageCount,
+    canDisconnect: connected,
   });
 }
 

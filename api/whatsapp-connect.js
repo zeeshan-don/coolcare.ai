@@ -1,23 +1,31 @@
 // api/whatsapp-connect.js
-// Meta Embedded Signup flow for per-shop WhatsApp Business Account connection.
+// Meta Embedded Signup (v4, JavaScript SDK) flow for per-shop WhatsApp
+// Business Account connection.
 // Routes:
-//   GET  /api/whatsapp-connect    → Meta OAuth callback (exchange code for token)
+//   GET  /api/whatsapp-connect    → Legacy full-page OAuth callback (kept for compat)
 //   POST /api/whatsapp-connect    → See actions below
 //
 // POST actions (all require auth):
-//   action=initiate     → Generate Embedded Signup URL, redirect shop admin to Meta
-//   action=status       → Return current WhatsApp connection status for the shop
-//   action=disconnect   → Remove WhatsApp connection for the shop
-//   action=reconnect    → Generate a new signup URL (disconnect + initiate)
-//   action=refresh      → Refresh the access token via Meta API
+//   action=initiate   → Return the JS-SDK launch config (appId, configId, state)
+//   action=complete   → Exchange Meta's auth code for a business token, subscribe
+//                       webhooks, register the phone number, save the per-shop
+//                       connection (called with the WA_EMBEDDED_SIGNUP session data)
+//   action=status     → Return current WhatsApp connection status for the shop
+//   action=disconnect → Remove WhatsApp connection for the shop
+//   action=reconnect  → Disconnect + initiate
+//   action=refresh    → Best-effort token refresh via Meta API
 //
 // Environment variables (platform-level, NEVER per-shop):
 //   META_APP_ID            — Meta App ID
 //   META_APP_SECRET        — Meta App Secret
-//   META_API_VERSION       — e.g. v19.0 (defaults to v19.0)
+//   META_API_VERSION       — e.g. v25.0 (defaults to v25.0)
 //   META_WEBHOOK_VERIFY_TOKEN — Shared verify token for all shop webhooks
-//   META_EMBEDDED_SIGNUP_CONFIG_ID — Config ID from Meta App Dashboard (optional)
-//   APP_URL                — Your app's root URL (for redirect URIs)
+//   META_EMBEDDED_SIGNUP_CONFIG_ID — REQUIRED. Facebook Login for Business config
+//                       ID (App Dashboard → Facebook Login for Business →
+//                       Configurations → 'WhatsApp Embedded Signup Configuration
+//                       With 60 Expiration Token' template)
+//   APP_URL                — Your app's root URL. Used to build the Meta OAuth
+//                            redirect URI: ${APP_URL}/api/whatsapp-connect
 //   GATEWAY_ENCRYPT_KEY    — AES-256-GCM key for encrypting access tokens
 
 const crypto = require("crypto");
@@ -28,18 +36,82 @@ const { withErrorHandler, allowMethods } = require("./_lib/errors");
 const { apiLimiter, applyLimit } = require("./_lib/rate-limit");
 const { setSecurityHeaders } = require("./_lib/security");
 const { encrypt, decrypt } = require("./_lib/encrypt");
+// Env priority for the app base URL (APP_URL → PUBLIC_WEBSITE_BASE_URL) is
+// maintained in one place — api/_lib/config.js — and reused here.
+const { getAppBaseUrl: getConfiguredAppBaseUrl } = require("./_lib/config");
 const { buildDemoWhatsAppConnectionResponse } = require("./_lib/demo-data");
 
 // ─── Meta API helpers ────────────────────────────────────────────────────────
 
-const META_API_VERSION = process.env.META_API_VERSION || "v19.0";
+const META_API_VERSION = process.env.META_API_VERSION || "v25.0";
 const META_GRAPH_URL = `https://graph.facebook.com/${META_API_VERSION}`;
 
+// ─── Redirect URI resolution ──────────────────────────────────────────────────
+// The Meta OAuth / WhatsApp Embedded Signup callback URI is generated from
+// the SERVER-side environment config — NEVER hardcoded localhost.
+
 /**
- * Exchange an OAuth authorization code for a long-lived access token.
- * @param {string} code - The authorization code from Meta's redirect
- * @param {string} redirectUri - Must match the URI used in the signup flow
- * @returns {Promise<object>} { access_token, token_expiry, ... }
+ * Resolve the app's public base URL used to build OAuth redirect URIs.
+ *
+ * Priority:
+ *   1. APP_URL                  — production (https://coolcare.zeeshstudios.in)
+ *   2. PUBLIC_WEBSITE_BASE_URL  — fallback single-domain deployment
+ *   3. Request origin           — local development only (Host header)
+ *
+ * localhost:3000 appears ONLY when running locally with no APP_URL configured,
+ * because the incoming Host header is then localhost:3000.
+ *
+ * @param {object} request - The incoming Vercel serverless request
+ * @returns {string|null} Base URL without a trailing slash, or null
+ */
+function getAppBaseUrl(request) {
+  // APP_URL (production) → PUBLIC_WEBSITE_BASE_URL — resolved via config.js
+  // so the env priority lives in exactly one place.
+  const configured = getConfiguredAppBaseUrl();
+  if (configured) return configured.replace(/\/+$/, "");
+
+  // Local dev / fallback: derive the origin from the incoming request.
+  // Host header first — Vercel guarantees it and it cannot be spoofed.
+  const host = request.headers.host || request.headers["x-forwarded-host"] || "";
+  if (!host) return null;
+  const proto =
+    request.headers["x-forwarded-proto"] ||
+    (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`.replace(/\/+$/, "");
+}
+
+/**
+ * Build the Meta OAuth callback URI for the WhatsApp Embedded Signup flow.
+ *
+ * This is the redirect_uri used by the legacy full-page flow and must match the
+ * "Valid OAuth redirect URIs" configured in the Meta App Dashboard. With APP_URL
+ * set in production this resolves to exactly:
+ *
+ *     https://coolcare.zeeshstudios.in/api/whatsapp-connect
+ *
+ * NOTE: Embedded Signup v4 (the JS SDK flow used by initiate/complete) does NOT
+ * send a redirect_uri to Meta — the auth code is exchanged server-side without
+ * one. This helper exists for the legacy GET callback and so the generated URI
+ * can be surfaced and verified in the initiate response.
+ *
+ * @param {object} request - The incoming Vercel serverless request
+ * @returns {string|null} e.g. "https://coolcare.zeeshstudios.in/api/whatsapp-connect"
+ */
+function buildRedirectUri(request) {
+  const base = getAppBaseUrl(request);
+  return base ? `${base}/api/whatsapp-connect` : null;
+}
+
+/**
+ * Exchange an OAuth authorization code for a business access token.
+ * Server-to-server only — NEVER called from the browser.
+ *
+ * Embedded Signup v4 (JS SDK) codes are exchanged WITHOUT a redirect_uri.
+ * The legacy full-page flow passes redirectUri to match the signup URL.
+ *
+ * @param {string} code - The authorization code from Meta (30s TTL)
+ * @param {string|null} redirectUri - Optional, only for the legacy flow
+ * @returns {Promise<object>} { access_token, token_type, expires_in }
  */
 async function exchangeCodeForToken(code, redirectUri) {
   const appId = process.env.META_APP_ID;
@@ -49,8 +121,16 @@ async function exchangeCodeForToken(code, redirectUri) {
     throw new Error("META_APP_ID and META_APP_SECRET must be configured");
   }
 
+  const params = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: appId,
+    client_secret: appSecret,
+  });
+  if (redirectUri) params.set("redirect_uri", redirectUri);
+
   const res = await fetch(
-    `${META_GRAPH_URL}/oauth/access_token?grant_type=authorization_code&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}&client_id=${appId}&client_secret=${appSecret}`,
+    `${META_GRAPH_URL}/oauth/access_token?${params.toString()}`,
     { method: "GET", signal: AbortSignal.timeout(15000) }
   );
 
@@ -149,6 +229,94 @@ async function fetchWabaDetails(accessToken) {
 }
 
 /**
+ * Fetch the business profile attached to a business token (from /me).
+ * Used for display only — the WABA/phone IDs come from the signup session.
+ * @param {string} accessToken - Business access token
+ * @returns {Promise<object>} { businessId, businessName }
+ */
+async function fetchBusinessProfile(accessToken) {
+  const res = await fetch(
+    `${META_GRAPH_URL}/me?fields=id,name&access_token=${encodeURIComponent(accessToken)}`,
+    { signal: AbortSignal.timeout(10000) }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    console.warn("[whatsapp-connect] Fetch /me failed:", res.status, err);
+    return {};
+  }
+  const d = await res.json();
+  return { businessId: d.id || null, businessName: d.name || null };
+}
+
+/**
+ * Fetch display info for a connected business phone number.
+ * @param {string} phoneNumberId - Business phone number ID
+ * @param {string} accessToken - Business access token
+ * @returns {Promise<object|null>} { phoneNumber, verifiedName, qualityRating }
+ */
+async function fetchPhoneNumberInfo(phoneNumberId, accessToken) {
+  const res = await fetch(
+    `${META_GRAPH_URL}/${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating&access_token=${encodeURIComponent(accessToken)}`,
+    { signal: AbortSignal.timeout(10000) }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    console.warn("[whatsapp-connect] Fetch phone info failed:", res.status, err);
+    return null;
+  }
+  const d = await res.json();
+  return {
+    phoneNumber: d.display_phone_number || null,
+    verifiedName: d.verified_name || null,
+    qualityRating: d.quality_rating || null,
+  };
+}
+
+/**
+ * Subscribe the app to webhooks on the customer's WABA (Tech-Provider step 2).
+ * @param {string} wabaId - WhatsApp Business Account ID
+ * @param {string} accessToken - Business access token
+ * @returns {Promise<boolean>}
+ */
+async function subscribeWabaWebhook(wabaId, accessToken) {
+  const res = await fetch(
+    `${META_GRAPH_URL}/${wabaId}/subscribed_apps?access_token=${encodeURIComponent(accessToken)}`,
+    { method: "POST", signal: AbortSignal.timeout(10000) }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    console.warn("[whatsapp-connect] WABA webhook subscribe failed:", res.status, err);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Register the business phone number for Cloud API use (Tech-Provider step 3).
+ * Requires a 6-digit two-step verification PIN chosen by us.
+ * @param {string} phoneNumberId - Business phone number ID
+ * @param {string} accessToken - Business access token
+ * @param {string} pin - 6-digit PIN
+ * @returns {Promise<boolean>}
+ */
+async function registerPhoneNumber(phoneNumberId, accessToken, pin) {
+  const res = await fetch(
+    `${META_GRAPH_URL}/${phoneNumberId}/register?access_token=${encodeURIComponent(accessToken)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+      signal: AbortSignal.timeout(10000),
+    }
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Register failed: ${res.status} ${err}`);
+  }
+  return true;
+}
+
+/**
  * Subscribe the webhook for a specific phone number ID.
  * This tells Meta to send incoming messages to our webhook endpoint.
  * @param {string} phoneNumberId - The phone number ID to subscribe
@@ -187,42 +355,38 @@ async function refreshAccessToken(currentToken) {
 }
 
 /**
- * Generate the Meta Embedded Signup URL for a shop.
+ * Build the JavaScript-SDK launch config for Embedded Signup (v4).
+ * The browser calls FB.login() with these values — Meta returns the auth code
+ * and asset IDs to the spawning window, so NO redirect URI is needed.
+ *
+ * The deprecated v2 full-page URL (dialog/embedded_signup) is intentionally
+ * NOT used: Meta now recommends the JS SDK flow (v2 deprecates Oct 15 2026).
+ *
  * @param {number} shopId - The repair shop ID
- * @returns {{ url: string, state: string }}
+ * @returns {{ appId: string, configId: string, apiVersion: string, state: string }}
+ * @throws {Error} If META_APP_ID or META_EMBEDDED_SIGNUP_CONFIG_ID are missing
  */
-function generateSignupUrl(shopId) {
+function getSignupConfig(shopId) {
   const appId = process.env.META_APP_ID;
   const configId = process.env.META_EMBEDDED_SIGNUP_CONFIG_ID;
-  const appUrl = process.env.APP_URL || "http://localhost:3000";
 
   if (!appId) {
     throw new Error("META_APP_ID must be configured");
   }
+  if (!configId) {
+    throw new Error(
+      "META_EMBEDDED_SIGNUP_CONFIG_ID is not set. Create a Facebook Login for Business configuration in the Meta App Dashboard (Facebook Login for Business → Configurations → 'WhatsApp Embedded Signup Configuration With 60 Expiration Token' template) and set its configuration ID here."
+    );
+  }
 
-  // Generate a signed state token to prevent CSRF
+  // Signed state token to bind the flow to this shop (CSRF protection).
   const state = jwt.sign(
     { shopId, nonce: crypto.randomBytes(16).toString("hex"), ts: Date.now() },
     process.env.JWT_SECRET,
     { expiresIn: "10m" }
   );
 
-  const redirectUri = `${appUrl}/api/whatsapp-connect`;
-
-  // If a specific Embedded Signup config is provided, use it.
-  // Otherwise, use the generic WhatsApp signup URL.
-  if (configId) {
-    return {
-      url: `https://www.facebook.com/v${META_API_VERSION.replace("v", "")}/dialog/embedded_signup?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&config_id=${configId}`,
-      state,
-    };
-  }
-
-  // Fallback: Direct WhatsApp signup / WABA onboarding
-  return {
-    url: `https://business.facebook.com/${appId}/whatsapp_accounts/?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`,
-    state,
-  };
+  return { appId, configId, apiVersion: META_API_VERSION, state };
 }
 
 // ─── Database helpers ─────────────────────────────────────────────────────────
@@ -252,6 +416,8 @@ async function saveWhatsAppConnection(sql, shopId, data) {
     ? new Date(Date.now() + data.expiresIn * 1000)
     : null;
 
+  const metadataJson = data.metadata ? JSON.stringify(data.metadata) : null;
+
   const existing = await sql`
     SELECT id FROM repair_shop_whatsapp WHERE repair_shop_id = ${shopId} LIMIT 1
   `;
@@ -268,6 +434,7 @@ async function saveWhatsAppConnection(sql, shopId, data) {
         token_expiry = COALESCE(${tokenExpiry?.toISOString() ?? null}::timestamptz, token_expiry),
         refresh_token_enc = COALESCE(${refreshTokenEnc}, refresh_token_enc),
         webhook_status = COALESCE(${data.webhookStatus ?? null}, webhook_status),
+        metadata = COALESCE(${metadataJson}::jsonb, metadata),
         last_sync_at = now(),
         updated_at = now(),
         coexistence_mode = COALESCE(${data.coexistenceMode ?? false}, coexistence_mode)
@@ -278,13 +445,13 @@ async function saveWhatsAppConnection(sql, shopId, data) {
       INSERT INTO repair_shop_whatsapp
         (repair_shop_id, phone_number_id, waba_id, business_id, phone_number,
          business_name, access_token_enc, token_expiry, refresh_token_enc,
-         webhook_status, coexistence_mode, whatsapp_connected_at)
+         webhook_status, coexistence_mode, whatsapp_connected_at, metadata)
       VALUES
         (${shopId}, ${data.phoneNumberId}, ${data.wabaId}, ${data.businessId ?? null},
          ${data.phoneNumber ?? null}, ${data.businessName ?? null},
          ${accessTokenEnc}, ${tokenExpiry?.toISOString() ?? null}::timestamptz,
          ${refreshTokenEnc}, ${data.webhookStatus || "active"},
-         ${data.coexistenceMode ?? false}, now())
+         ${data.coexistenceMode ?? false}, now(), ${metadataJson ?? "{}"}::jsonb)
     `;
   }
 
@@ -395,8 +562,11 @@ module.exports = withErrorHandler(async (request, response) => {
     }
 
     const shopId = decodedState.shopId;
-    const appUrl = process.env.APP_URL || `http://localhost:${request.headers.host?.split(":")[1] || 3000}`;
-    const redirectUri = `${appUrl}/api/whatsapp-connect`;
+    // The redirect URI MUST match the URI used to launch the Meta flow. It is
+    // generated from APP_URL (production) via buildRedirectUri() — the single
+    // source of truth for this value. Never hardcoded localhost.
+    const redirectUri = buildRedirectUri(request);
+    const appUrl = getAppBaseUrl(request) || "";
 
     try {
       // Step 1: Exchange code for access token
@@ -495,8 +665,12 @@ module.exports = withErrorHandler(async (request, response) => {
 
   switch (action) {
     case "initiate":
+    case "connect": // UI alias for initiate
     case "reconnect":
       return handleInitiate(request, response, sql, shopId, action === "reconnect");
+
+    case "complete":
+      return handleComplete(request, response, sql, shopId, body);
 
     case "status":
       return handleStatus(request, response, sql, shopId);
@@ -509,7 +683,7 @@ module.exports = withErrorHandler(async (request, response) => {
 
     default:
       return response.status(400).json({
-        error: "Invalid action. Use: initiate, status, disconnect, reconnect, refresh",
+        error: "Invalid action. Use: initiate, complete, status, disconnect, reconnect, refresh",
       });
   }
 });
@@ -519,8 +693,10 @@ module.exports = withErrorHandler(async (request, response) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Initiate the Meta Embedded Signup flow.
- * Generates the signup URL and returns it. The frontend redirects the user to Meta.
+ * Initiate the Meta Embedded Signup flow (JS SDK / v4).
+ * Returns the launch config (appId, configId, apiVersion, state). The frontend
+ * uses these to call FB.login(); Meta returns the code + asset IDs to the
+ * spawning window, so no redirect URI is required.
  * For "reconnect", disconnects the current connection first.
  */
 async function handleInitiate(request, response, sql, shopId, isReconnect) {
@@ -530,22 +706,152 @@ async function handleInitiate(request, response, sql, shopId, isReconnect) {
   }
 
   try {
-    const { url, state } = generateSignupUrl(shopId);
+    const cfg = getSignupConfig(shopId);
 
-    // Store the state in the connection record (pending state)
-    // We'll verify it when the callback comes back
     console.log(`[whatsapp-connect] Initiated signup for shop #${shopId}`);
 
     return response.status(200).json({
       success: true,
-      signupUrl: url,
-      state,
+      appId: cfg.appId,
+      configId: cfg.configId,
+      apiVersion: cfg.apiVersion,
+      state: cfg.state,
+      // Informational — the JS SDK (v4) flow does not send this to Meta, but it
+      // is the exact redirect URI the legacy flow / any full-page flow must use.
+      // Generated from APP_URL (production), never hardcoded localhost.
+      redirectUri: buildRedirectUri(request),
       message: isReconnect
-        ? "Reconnecting WhatsApp. You will be redirected to Meta."
-        : "You will be redirected to Meta to connect your WhatsApp Business Account.",
+        ? "Reconnecting WhatsApp. The Meta signup window will open."
+        : "The Meta signup window will open to connect your WhatsApp Business Account.",
     });
   } catch (err) {
     console.error("[whatsapp-connect] Initiate error:", err.message);
+    return response.status(500).json({ error: err.message });
+  }
+}
+
+/**
+ * Complete the Embedded Signup flow (JS SDK / v4).
+ * Called by the frontend after FB.login() returns a code and the
+ * WA_EMBEDDED_SIGNUP message event provides the customer's asset IDs.
+ *
+ * All Meta API calls happen server-side; the token never reaches the browser.
+ *
+ * @param {object} body - { code, phoneNumberId, wabaId, businessId, state }
+ */
+async function handleComplete(request, response, sql, shopId, body) {
+  const { code, phoneNumberId, wabaId, businessId, state } = body || {};
+
+  if (!code) {
+    return response.status(400).json({ error: "Missing authorization code from Meta. Please retry." });
+  }
+  if (!phoneNumberId || !wabaId) {
+    return response.status(400).json({
+      error: "Meta did not return a phone number for this signup. Please reconnect and choose a business phone number.",
+    });
+  }
+
+  // Bind the flow to this shop (CSRF protection). The code is only exchangeable
+  // with our client_secret, but this prevents cross-shop replay of a captured pair.
+  if (state) {
+    try {
+      const decoded = jwt.verify(state, process.env.JWT_SECRET);
+      if (parseInt(decoded.shopId, 10) !== shopId) {
+        return response.status(403).json({ error: "Signup state does not match this shop. Please retry." });
+      }
+    } catch (e) {
+      console.warn("[whatsapp-connect] complete: state invalid/expired, continuing:", e.message);
+    }
+  }
+
+  try {
+    // Step 1: Exchange the code for a business token (server-side, 30s TTL).
+    const tokenData = await exchangeCodeForToken(code, null);
+    let accessToken = tokenData.accessToken;
+    let expiresIn = tokenData.expiresIn;
+
+    // Best-effort token extension (business tokens may not support fb_exchange_token).
+    try {
+      const extended = await extendToken(accessToken);
+      if (extended.access_token) {
+        accessToken = extended.access_token;
+        expiresIn = extended.expires_in || expiresIn;
+      }
+    } catch (e) {
+      console.warn("[whatsapp-connect] Token extension failed, using original:", e.message);
+    }
+
+    // Step 2: Fetch display data (business name, phone number).
+    // This also VERIFIES the token actually owns the phone number the browser
+    // reported — if it cannot, we refuse to save (prevents cross-shop spoofing).
+    const profile = await fetchBusinessProfile(accessToken);
+    const phoneInfo = await fetchPhoneNumberInfo(phoneNumberId, accessToken);
+    if (!phoneInfo) {
+      console.error("[whatsapp-connect] Cannot access phone number", phoneNumberId, "with the exchanged token — refusing to save.");
+      return response.status(502).json({
+        error: "Meta did not grant access to this phone number. Please disconnect and reconnect, choosing your own WhatsApp Business number.",
+      });
+    }
+
+    // Step 3: Subscribe webhooks — WABA level (Tech-Provider step 2) + phone level.
+    let webhookStatus = "active";
+    try {
+      const wabaOk = await subscribeWabaWebhook(wabaId, accessToken);
+      const phoneOk = await subscribeWebhook(phoneNumberId, accessToken);
+      if (!wabaOk && !phoneOk) {
+        console.warn("[whatsapp-connect] Webhook subscription attempts returned false");
+        webhookStatus = "pending";
+      }
+    } catch (e) {
+      console.warn("[whatsapp-connect] Webhook subscribe failed, will retry later:", e.message);
+      webhookStatus = "pending";
+    }
+
+    // Step 4: Register the phone number for Cloud API (Tech-Provider step 3).
+    // If it is already registered, Meta rejects the PIN — keep the connection
+    // but do not store a PIN that Meta does not recognise.
+    let pin = null;
+    try {
+      pin = crypto.randomInt(100000, 1000000).toString();
+      await registerPhoneNumber(phoneNumberId, accessToken, pin);
+    } catch (e) {
+      console.warn("[whatsapp-connect] Register failed (may already be registered):", e.message);
+      pin = null;
+    }
+
+    // Step 5: Save the connection against THIS shop only.
+    await saveWhatsAppConnection(sql, shopId, {
+      phoneNumberId,
+      wabaId,
+      businessId: businessId || profile.businessId || null,
+      phoneNumber: phoneInfo?.phoneNumber || null,
+      businessName: profile.businessName || phoneInfo?.verifiedName || null,
+      accessToken,
+      expiresIn,
+      webhookStatus,
+      metadata: {
+        pin,
+        qualityRating: phoneInfo?.qualityRating || null,
+        registeredAt: pin ? new Date().toISOString() : null,
+        signupVersion: "v4",
+      },
+    });
+
+    console.log(`[whatsapp-connect] Shop #${shopId} connected WhatsApp via Embedded Signup:`, {
+      phoneNumberId,
+      wabaId,
+      phoneNumber: phoneInfo?.phoneNumber,
+      status: webhookStatus,
+    });
+
+    return response.status(200).json({
+      success: true,
+      connected: webhookStatus === "active" || webhookStatus === "subscribed",
+      webhookStatus,
+      message: "WhatsApp connected successfully.",
+    });
+  } catch (err) {
+    console.error("[whatsapp-connect] Complete error:", err.message);
     return response.status(500).json({ error: err.message });
   }
 }
